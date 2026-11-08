@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Goal;
+use App\Http\Resources\GoalResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -11,7 +11,9 @@ class GoalController extends Controller
 {
     public function show(Request $request): JsonResponse
     {
-        return response()->json(['data' => $this->payload($request->user()->goal ?? $request->user()->ensureGoals())]);
+        $goal = $request->user()->goal ?? $request->user()->ensureGoals();
+
+        return response()->json(['data' => (new GoalResource($goal))->toArray($request)]);
     }
 
     public function update(Request $request): JsonResponse
@@ -28,18 +30,7 @@ class GoalController extends Controller
         $goal = $request->user()->goal ?? $request->user()->ensureGoals();
         $goal->update($validated);
 
-        return response()->json(['data' => $this->payload($goal->fresh())]);
+        return response()->json(['data' => (new GoalResource($goal->fresh()))->toArray($request)]);
     }
 
-    private function payload(Goal $goal): array
-    {
-        return [
-            'daily_calories' => $goal->daily_calories,
-            'daily_distance_km' => (float) $goal->daily_distance_km,
-            'daily_active_min' => $goal->daily_active_min,
-            'weekly_calories' => $goal->weekly_calories,
-            'weekly_distance_km' => (float) $goal->weekly_distance_km,
-            'carb_target_g' => $goal->carb_target_g,
-        ];
-    }
 }

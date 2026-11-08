@@ -25,7 +25,7 @@ class RetrainModel extends Command
     {
         $command = (string) env(
             'ML_TRAIN_COMMAND',
-            'cd ../ml-service && .venv/bin/python -m training.train --source=supabase'
+            'cd ../ml && .venv/bin/python -m duration_model.train --source=supabase'
         );
 
         if ($source = $this->option('source')) {
