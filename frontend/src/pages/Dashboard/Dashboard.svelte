@@ -144,10 +144,17 @@
     </div>
 
     <div class="flex items-center gap-2 self-start rounded-2xl border border-white/80 bg-white/80 px-4 py-2.5 shadow-soft">
-      <MapPin size={15} class="text-brand-500" />
-      <span class="text-xs font-bold text-ink-700">
-        {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
-      </span>
+      <MapPin size={15} class="shrink-0 text-brand-500" />
+      <div class="min-w-0 max-w-[15rem]">
+        {#if $profile?.city?.trim()}
+          <p class="truncate text-xs font-extrabold text-ink-700" title={$profile.city}>{$profile.city}</p>
+        {:else}
+          <button class="text-xs font-extrabold text-brand-600 hover:underline" onclick={() => navigate('/profile')}>Add city / region</button>
+        {/if}
+        <p class="text-[10px] font-semibold text-ink-400">
+          {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+        </p>
+      </div>
     </div>
   </div>
 

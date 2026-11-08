@@ -1,10 +1,11 @@
 <script>
-  import { Lock, Mail, Sparkles, ArrowRight, LoaderCircle, Flame, Timer, Salad } from 'lucide-svelte';
+  import { Lock, Mail, Eye, EyeOff, Sparkles, ArrowRight, LoaderCircle, Flame, Timer, Salad } from 'lucide-svelte';
   import { login, notify, profile } from '../../stores/index.js';
   import { navigate } from '../../lib/router.js';
 
   let email = $state('');
   let password = $state('');
+  let showPassword = $state(false);
   let loading = $state(false);
   let error = $state('');
 
@@ -102,12 +103,21 @@
             <Lock size={16} class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink-400" />
             <input
               id="password"
-              type="password"
-              class="input pl-11"
+              type={showPassword ? 'text' : 'password'}
+              class="input pl-11 pr-24"
               bind:value={password}
               placeholder="••••••••"
               autocomplete="current-password"
             />
+            <button
+              type="button"
+              class="absolute inset-y-0 right-1 inline-flex items-center justify-center gap-1 rounded-xl px-3 text-xs font-bold text-ink-500 transition hover:text-brand-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-200"
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              aria-controls="password"
+              onclick={() => (showPassword = !showPassword)}
+            >
+              {#if showPassword}<EyeOff size={16} aria-hidden="true" /> Hide{:else}<Eye size={16} aria-hidden="true" /> Show{/if}
+            </button>
           </div>
         </div>
 

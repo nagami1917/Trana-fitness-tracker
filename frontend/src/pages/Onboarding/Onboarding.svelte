@@ -4,6 +4,7 @@
   import { api } from '../../services/client.js';
   import { navigate } from '../../lib/router.js';
   import Segmented from '../../components/common/Segmented.svelte';
+  import CityRegionInput from '../../components/common/CityRegionInput.svelte';
 
   const STEPS = [
     { id: 0, label: 'You', Icon: User },
@@ -13,10 +14,11 @@
 
   let step = $state(0);
   let saving = $state(false);
+  let locating = $state(false);
   let form = $state({
     weight_kg: $profile?.weight_kg ?? 60,
-    height_cm: $profile?.height_cm ?? 168,
-    birth_year: $profile?.birth_year ?? 1998,
+    height_cm: $profile?.height_cm ?? '',
+    birth_year: $profile?.birth_year ?? '',
     sex: $profile?.sex ?? 'other',
     city: $profile?.city ?? '',
     experience_level: $profile?.experience_level ?? 2,
@@ -28,16 +30,27 @@
   });
 
   const canContinue = $derived.by(() => {
-    if (step === 0) return Number(form.weight_kg) >= 25 && Number(form.birth_year) > 1930;
+    if (step === 0) {
+      const year = form.birth_year;
+      const validYear = year == null || year === '' || (Number(year) >= 1930 && Number(year) <= new Date().getFullYear());
+      return !locating && Number(form.weight_kg) >= 25 && Number(form.weight_kg) <= 250 && validYear;
+    }
     if (step === 1) return Number(form.experience_level) >= 1;
     return true;
   });
 
   async function finish(target = '/plan') {
+    if (saving || locating) return;
     saving = true;
     let written = false;
     try {
-      const updated = await api.profile.update({ ...form, onboarded: true });
+      const updated = await api.profile.update({
+        ...form,
+        height_cm: form.height_cm == null || form.height_cm === '' ? null : Number(form.height_cm),
+        birth_year: form.birth_year == null || form.birth_year === '' ? null : Number(form.birth_year),
+        city: form.city.trim() || null,
+        onboarded: true,
+      });
       written = true;
       profile.set(updated);
       await refresh();
@@ -95,17 +108,14 @@
             <input class="input" type="number" step="0.5" min="25" max="250" bind:value={form.weight_kg} />
           </div>
           <div>
-            <span class="label">Height (cm)</span>
+            <span class="label">Height (cm, optional)</span>
             <input class="input" type="number" step="1" min="100" max="250" bind:value={form.height_cm} />
           </div>
           <div>
-            <span class="label">Birth year</span>
-            <input class="input" type="number" min="1930" max="2020" bind:value={form.birth_year} />
+            <span class="label">Birth year (optional)</span>
+            <input class="input" type="number" min="1930" max={new Date().getFullYear()} bind:value={form.birth_year} />
           </div>
-          <div>
-            <span class="label">City / region</span>
-            <input class="input" placeholder="Quezon City, PH" bind:value={form.city} />
-          </div>
+          <CityRegionInput id="onboarding-city" bind:value={form.city} bind:busy={locating} disabled={saving} />
         </div>
 
         <div class="mt-3">
@@ -195,11 +205,11 @@
         {#if step > 0}
           <button class="btn-ghost" onclick={() => (step -= 1)}>Back</button>
         {:else}
-          <button class="btn-ghost" onclick={() => finish('/')}>Skip for now</button>
+          <button class="btn-ghost" onclick={() => finish('/')} disabled={saving || locating}>Skip for now</button>
         {/if}
 
         {#if step < STEPS.length - 1}
-          <button class="btn-primary ml-auto" disabled={!canContinue} onclick={() => (step += 1)}>
+          <button class="btn-primary ml-auto" disabled={saving || !canContinue} onclick={() => (step += 1)}>
             Continue <ArrowRight size={16} />
           </button>
         {:else}
