@@ -42,6 +42,21 @@ database/seeders/         DemoSeeder — 8 weeks of realistic history
 * **Deploy**: `vercel.json` + `api/index.php` give a serverless PHP entry point;
   any Laravel host works too.
 
+## Testing
+
+```bash
+composer install
+php artisan test
+```
+
+The suite runs against in-memory SQLite (`phpunit.xml`) and fakes the FastAPI
+service at the HTTP boundary (`Http::fake()`), so it needs no Python process or
+network. See `tests/Feature/PredictionCreationTest.php` — it locks in the
+contract that saved predictions persist the *effective* distance (a drawn route
+wins over a typed one), and that prediction outages return 503 without storing
+half-finished rows. Production still targets PostgreSQL; SQLite is only used to
+run the tests fast in CI.
+
 ## Useful commands
 
 ```bash

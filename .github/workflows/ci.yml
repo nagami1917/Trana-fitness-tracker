@@ -49,7 +49,7 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: "8.2"
-          extensions: mbstring, pdo_pgsql, pgsql
+          extensions: mbstring, pdo_pgsql, pgsql, pdo_sqlite, sqlite3
           coverage: none
       - name: Lint every PHP file
         run: |
@@ -58,3 +58,9 @@ jobs:
           echo "PHP lint clean"
       - name: Validate composer.json
         run: composer validate --no-check-publish --working-dir=backend
+      - name: Install dependencies
+        working-directory: backend
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Run backend tests
+        working-directory: backend
+        run: php artisan test
