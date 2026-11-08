@@ -4,9 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StorePredictionRequest;
+use App\Http\Resources\PredictionResource;
 use App\Models\Prediction;
+use App\Services\ActivityService;
 use App\Services\MlClient;
 use App\Services\PredictionService;
+use App\Services\RouteService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use RuntimeException;
@@ -16,6 +19,8 @@ class PredictionController extends Controller
     public function __construct(
         private readonly PredictionService $predictions,
         private readonly MlClient $ml,
+        private readonly RouteService $routes,
+        private readonly ActivityService $activities,
     ) {
     }
 
@@ -32,7 +37,7 @@ class PredictionController extends Controller
             ->limit($validated['limit'] ?? 30)
             ->get();
 
-        return response()->json(['data' => $rows->map(fn (Prediction $p) => $p->toApiArray())->values()]);
+        return response()->json(['data' => $rows->map(fn (Prediction $p) => (new PredictionResource($p))->toArray($request))->values()]);
     }
 
     public function store(StorePredictionRequest $request): JsonResponse
@@ -46,14 +51,14 @@ class PredictionController extends Controller
             ], 503);
         }
 
-        return response()->json(['data' => $prediction->fresh()->toApiArray()], 201);
+        return response()->json(['data' => (new PredictionResource($prediction->fresh()))->toArray($request)], 201);
     }
 
     public function show(Request $request, Prediction $prediction): JsonResponse
     {
         abort_unless($prediction->user_id === $request->user()->id, 404);
 
-        return response()->json(['data' => $prediction->toApiArray()]);
+        return response()->json(['data' => (new PredictionResource($prediction))->toArray($request)]);
     }
 
     public function destroy(Request $request, Prediction $prediction): JsonResponse
@@ -71,11 +76,10 @@ class PredictionController extends Controller
             // distance_km may be omitted when a route is drawn; resolve the
             // effective distance the same way PredictionService does, because
             // the ML service rejects distance_km <= 0.
-            $distance = (float) ($request->input('distance_km') ?? 0);
-            $route = $request->input('route');
-            if ($distance <= 0 && is_array($route) && count($route) > 1) {
-                $distance = $this->predictions->routeLengthKm($route);
-            }
+            $distance = $this->routes->effectiveContext([
+                'distance_km' => $request->input('distance_km'),
+                'route' => $request->input('route'),
+            ])['distance_km'];
 
             $result = $this->ml->predict([
                 'activity_type' => $request->input('activity_type'),
@@ -85,7 +89,7 @@ class PredictionController extends Controller
                 'experience_level' => (int) ($request->user()->fitnessProfile?->experience_level ?? 3),
                 'sweat_profile' => $request->user()->fitnessProfile?->sweat_profile ?? 'normal',
                 'temperature_c' => (float) $request->input('temperature_c', 26),
-                'history' => $this->predictions->history($request->user()),
+                'history' => $this->activities->history($request->user()),
             ]);
         } catch (RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 503);

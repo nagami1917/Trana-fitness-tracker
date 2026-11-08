@@ -119,7 +119,7 @@ class PredictionCreationTest extends TestCase
         $response = $this->postJson('/api/predictions', [
             'activity_type' => 'run',
             'distance_km' => 50, // typed…
-            'route' => self::ROUTE, // …but the drawn route wins (docs/API.md contract)
+            'route' => self::ROUTE, // …but the drawn route wins (docs/api.md contract)
             'elevation_gain_m' => 40,
         ]);
 

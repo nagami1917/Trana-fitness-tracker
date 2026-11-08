@@ -4,15 +4,19 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreActivityRequest;
+use App\Http\Resources\ActivityResource;
 use App\Models\Activity;
+use App\Services\ActivityService;
 use App\Services\AnalyticsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ActivityController extends Controller
 {
-    public function __construct(private readonly AnalyticsService $analytics)
-    {
+    public function __construct(
+        private readonly AnalyticsService $analytics,
+        private readonly ActivityService $activities,
+    ) {
     }
 
     public function index(Request $request): JsonResponse
@@ -39,55 +43,22 @@ class ActivityController extends Controller
             ->limit($validated['limit'] ?? 200)
             ->get();
 
-        return response()->json(['data' => $activities->map(fn (Activity $a) => $this->payload($a))->values()]);
+        return response()->json(['data' => ActivityResource::collection($activities)->toArray($request)]);
     }
 
     public function store(StoreActivityRequest $request): JsonResponse
     {
         $validated = $request->validated();
-        $user = $request->user();
+        $activity = $this->activities->store($request->user(), $validated);
 
-        $calories = $validated['calories']
-            ?? $this->estimateCalories(
-                $validated['activity_type'],
-                (float) $validated['distance_km'],
-                (float) $validated['duration_min'],
-                (int) ($validated['elevation_gain_m'] ?? 0),
-                (float) ($user->fitnessProfile?->weight_kg ?? 60),
-            );
-
-        $activity = $user->activities()->create([
-            'activity_type' => $validated['activity_type'],
-            'distance_km' => $validated['distance_km'],
-            'duration_min' => $validated['duration_min'],
-            'elevation_gain_m' => $validated['elevation_gain_m'] ?? 0,
-            'calories' => $calories,
-            'avg_heart_rate' => $validated['avg_heart_rate'] ?? null,
-            'started_at' => $validated['started_at'],
-            'route' => $validated['route'] ?? null,
-            'notes' => $validated['notes'] ?? null,
-            'source' => $validated['source'] ?? 'manual',
-        ]);
-
-        // Keep the athlete's experience bucket in sync with their real history.
-        $count = $user->activities()->count();
-        $level = match (true) {
-            $count >= 40 => 5,
-            $count >= 24 => 4,
-            $count >= 12 => 3,
-            $count >= 5 => 2,
-            default => 1,
-        };
-        $user->fitnessProfile?->update(['experience_level' => $level]);
-
-        return response()->json(['data' => $this->payload($activity->fresh())], 201);
+        return response()->json(['data' => (new ActivityResource($activity->fresh()))->toArray($request)], 201);
     }
 
     public function show(Request $request, Activity $activity): JsonResponse
     {
         abort_unless($activity->user_id === $request->user()->id, 404);
 
-        return response()->json(['data' => $this->payload($activity)]);
+        return response()->json(['data' => (new ActivityResource($activity))->toArray($request)]);
     }
 
     public function destroy(Request $request, Activity $activity): JsonResponse
@@ -103,37 +74,5 @@ class ActivityController extends Controller
         return response()->json(['data' => $this->analytics->summary($request->user())]);
     }
 
-    private function payload(Activity $activity): array
-    {
-        return [
-            'id' => $activity->id,
-            'activity_type' => $activity->activity_type,
-            'distance_km' => (float) $activity->distance_km,
-            'elevation_gain_m' => (int) $activity->elevation_gain_m,
-            'duration_min' => (float) $activity->duration_min,
-            'calories' => (int) $activity->calories,
-            'avg_heart_rate' => $activity->avg_heart_rate,
-            'started_at' => $activity->started_at?->toIso8601String(),
-            'route' => $activity->route,
-            'notes' => $activity->notes,
-            'source' => $activity->source,
-        ];
-    }
 
-    /** MET-based estimate; mirrors the client and the Python fueling module. */
-    private function estimateCalories(string $type, float $km, float $minutes, int $elevation, float $weightKg): int
-    {
-        $hours = max($minutes, 1) / 60;
-        $speed = $km / max($hours, 0.01);
-        $climb = min(2.6, ($km > 0 ? $elevation / $km : 0) * 0.045);
-
-        $met = match ($type) {
-            'run' => $speed * 1.03,
-            'ride' => 3.2 + $speed * 0.29,
-            'walk' => 2.0 + $speed * 0.45,
-            default => 3.6 + $speed * 0.60,
-        };
-
-        return (int) round(max(1.6, $met + $climb) * $weightKg * $hours);
-    }
 }

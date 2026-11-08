@@ -1,6 +1,6 @@
 /**
  * Fueling recommendation engine — JavaScript mirror of
- * `ml-service/app/fueling.py`.
+ * `ml/fueling_model/predict.py`.
  *
  *   calories = MET × body mass (kg) × hours
  *   carbs/h  = f(duration band, intensity)      → 0 … 90 g

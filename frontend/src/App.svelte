@@ -1,42 +1,31 @@
 <script>
   import { onMount } from 'svelte';
   import { route, navigate } from './lib/router.js';
-  import { bootstrap, session, booting, ready, profile } from './lib/stores.js';
-  import AppShell from './lib/components/AppShell.svelte';
-  import Toaster from './lib/components/Toaster.svelte';
-  import Login from './lib/routes/Login.svelte';
-  import Onboarding from './lib/routes/Onboarding.svelte';
-  import Dashboard from './lib/routes/Dashboard.svelte';
-  import Plan from './lib/routes/Plan.svelte';
-  import Activities from './lib/routes/Activities.svelte';
-  import Analytics from './lib/routes/Analytics.svelte';
-  import Goals from './lib/routes/Goals.svelte';
-  import Settings from './lib/routes/Settings.svelte';
-  import NotFound from './lib/routes/NotFound.svelte';
-
-  const PAGES = {
-    '/': Dashboard,
-    '/plan': Plan,
-    '/activities': Activities,
-    '/analytics': Analytics,
-    '/goals': Goals,
-    '/settings': Settings,
-  };
+  import { bootstrap, session, booting, ready, profile } from './stores/index.js';
+  import AppShell from './components/common/AppShell.svelte';
+  import Toaster from './components/common/Toaster.svelte';
+  import Login from './pages/Login/Login.svelte';
+  import Register from './pages/Register/Register.svelte';
+  import Onboarding from './pages/Onboarding/Onboarding.svelte';
+  import NotFound from './pages/NotFound/NotFound.svelte';
+  import { ROUTES } from './routes/index.js';
 
   onMount(bootstrap);
 
   const isLoginRoute = $derived($route === '/login');
+  const isRegisterRoute = $derived($route === '/register');
+  const isPublicRoute = $derived(isLoginRoute || isRegisterRoute);
   const isOnboardingRoute = $derived($route === '/onboarding');
   const needsOnboarding = $derived(Boolean($session && $profile && $profile.onboarded === false));
-  const Page = $derived(PAGES[$route] ?? NotFound);
+  const Page = $derived(ROUTES[$route] ?? NotFound);
 
   $effect(() => {
     if (!$ready) return;
-    if (!$session && !isLoginRoute) {
+    if (!$session && !isPublicRoute) {
       navigate('/login', { replace: true });
       return;
     }
-    if ($session && isLoginRoute) {
+    if ($session && isPublicRoute) {
       navigate(needsOnboarding ? '/onboarding' : '/', { replace: true });
       return;
     }
@@ -56,7 +45,11 @@
     </div>
   </div>
 {:else if !$session}
-  <Login />
+  {#if isRegisterRoute}
+    <Register />
+  {:else}
+    <Login />
+  {/if}
 {:else if isOnboardingRoute}
   <Onboarding />
 {:else}

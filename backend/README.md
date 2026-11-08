@@ -9,7 +9,7 @@ php artisan migrate --seed
 php artisan serve --port=8001
 ```
 
-Base URL: `http://localhost:8001/api` · full reference in [`../docs/API.md`](../docs/API.md).
+Base URL: `http://localhost:8001/api` · full reference in [`../docs/api.md`](../docs/api.md).
 
 ## Layout
 

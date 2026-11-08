@@ -56,7 +56,7 @@ Set these environment variables in the Vercel dashboard (Production + Preview):
 | `DB_CONNECTION` / `DB_HOST` / `DB_PORT` / `DB_DATABASE` / `DB_USERNAME` / `DB_PASSWORD` / `DB_SSLMODE` | from Supabase (§1) |
 | `CACHE_STORE` / `SESSION_DRIVER` | `database` (run the cache/sessions migrations once) |
 | `CORS_ALLOWED_ORIGINS` | `https://<your-frontend>.vercel.app` |
-| `ML_API_URL` | `https://<ml-service>.onrender.com` |
+| `ML_API_URL` | `https://<ml>.onrender.com` |
 | `ML_TIMEOUT` | `12` |
 | `DEMO_MODE` | `false` (or `true` to keep the sandbox login) |
 
@@ -81,23 +81,23 @@ The folder contains a `Dockerfile`.
 
 **Render**
 
-* New → Web Service → Docker → repo `ml-service` directory.
+* New → Web Service → Docker → repo `ml` directory.
 * Port `8000`. Health check path `/health`.
 * Env: `ALLOWED_ORIGINS=https://<api>.vercel.app`, `ADMIN_TOKEN=<random long string>`.
-* Optional persistent disk mounted at `/app/artifacts` if you retrain in place.
+* Optional persistent disk mounted at `/app/duration_model` if you retrain in place.
 
 **Railway**
 
 ```bash
 railway init
-railway up            # builds ml-service/Dockerfile
+railway up            # builds ml/Dockerfile
 railway variables set ALLOWED_ORIGINS=https://<api>.vercel.app
 ```
 
 **Fly.io**
 
 ```bash
-cd ml-service
+cd ml
 fly launch --dockerfile Dockerfile --name trana-ml
 fly secrets set ALLOWED_ORIGINS=https://<api>.vercel.app
 fly deploy
@@ -106,17 +106,17 @@ fly deploy
 **Cloud Run**
 
 ```bash
-cd ml-service
+cd ml
 gcloud run deploy trana-ml --source . --port 8000 --allow-unauthenticated --region asia-southeast1
 ```
 
-Verify: `curl https://<ml-service>/health` → `{ "status": "ok", "model_ready": true }`.
+Verify: `curl https://<ml>/health` → `{ "status": "ok", "model_ready": true }`.
 
 Retraining in production:
 
 ```bash
-DATABASE_URL="postgresql://…" python -m training.train --source supabase
-curl -X POST https://<ml-service>/model/reload -H "X-Admin-Token: $ADMIN_TOKEN"
+DATABASE_URL="postgresql://…" python -m duration_model.train --source supabase
+curl -X POST https://<ml>/model/reload -H "X-Admin-Token: $ADMIN_TOKEN"
 ```
 
 ---
@@ -169,7 +169,7 @@ open https://<frontend>.vercel.app
 
 ## 6. Environment matrix
 
-| Variable | frontend | backend | ml-service |
+| Variable | frontend | backend | ml |
 | --- | :---: | :---: | :---: |
 | `VITE_API_BASE_URL` | ✅ | | |
 | `APP_KEY`, `APP_ENV`, `APP_DEBUG`, `APP_URL` | | ✅ | |

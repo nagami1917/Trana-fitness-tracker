@@ -1,0 +1,96 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\Activity;
+use App\Models\User;
+
+/**
+ * Activity log access: ML-shaped history for predictions, plus the
+ * create/experience-sync logic used by the activities API.
+ */
+class ActivityService
+{
+    /** The athlete's session history, newest first, shaped for the ML service. */
+    public function history(User $user, int $limit = 300): array
+    {
+        return $user->activities()
+            ->orderByDesc('started_at')
+            ->limit($limit ?: (int) config('ml.history_limit', 300))
+            ->get(['id', 'activity_type', 'distance_km', 'duration_min', 'elevation_gain_m', 'calories', 'started_at'])
+            ->map(fn (Activity $activity) => [
+                'activity_type' => $activity->activity_type,
+                'distance_km' => (float) $activity->distance_km,
+                'duration_min' => (float) $activity->duration_min,
+                'elevation_gain_m' => (int) $activity->elevation_gain_m,
+                'calories' => $activity->calories,
+                'started_at' => $activity->started_at?->toIso8601String(),
+            ])
+            ->all();
+    }
+
+    /**
+     * Create an activity, estimating calories from MET when omitted, and keep
+     * the athlete's experience bucket in sync with their real history.
+     *
+     * @param  array<string, mixed>  $validated
+     */
+    public function store(User $user, array $validated): Activity
+    {
+        $calories = $validated['calories']
+            ?? $this->estimateCalories(
+                $validated['activity_type'],
+                (float) $validated['distance_km'],
+                (float) $validated['duration_min'],
+                (int) ($validated['elevation_gain_m'] ?? 0),
+                (float) ($user->fitnessProfile?->weight_kg ?? 60),
+            );
+
+        $activity = $user->activities()->create([
+            'activity_type' => $validated['activity_type'],
+            'distance_km' => $validated['distance_km'],
+            'duration_min' => $validated['duration_min'],
+            'elevation_gain_m' => $validated['elevation_gain_m'] ?? 0,
+            'calories' => $calories,
+            'avg_heart_rate' => $validated['avg_heart_rate'] ?? null,
+            'started_at' => $validated['started_at'],
+            'route' => $validated['route'] ?? null,
+            'notes' => $validated['notes'] ?? null,
+            'source' => $validated['source'] ?? 'manual',
+        ]);
+
+        $this->syncExperienceLevel($user);
+
+        return $activity;
+    }
+
+    /** Mirror of the client and the Python fueling module's MET estimate. */
+    public function estimateCalories(string $type, float $km, float $minutes, int $elevation, float $weightKg): int
+    {
+        $hours = max($minutes, 1) / 60;
+        $speed = $km / max($hours, 0.01);
+        $climb = min(2.6, ($km > 0 ? $elevation / $km : 0) * 0.045);
+
+        $met = match ($type) {
+            'run' => $speed * 1.03,
+            'ride' => 3.2 + $speed * 0.29,
+            'walk' => 2.0 + $speed * 0.45,
+            default => 3.6 + $speed * 0.60,
+        };
+
+        return (int) round(max(1.6, $met + $climb) * $weightKg * $hours);
+    }
+
+    private function syncExperienceLevel(User $user): void
+    {
+        $count = $user->activities()->count();
+        $level = match (true) {
+            $count >= 40 => 5,
+            $count >= 24 => 4,
+            $count >= 12 => 3,
+            $count >= 5 => 2,
+            default => 1,
+        };
+        $user->fitnessProfile?->update(['experience_level' => $level]);
+    }
+}

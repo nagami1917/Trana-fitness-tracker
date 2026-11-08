@@ -5,7 +5,7 @@
  *
  * Exercises the demo backend + the ported ML engine exactly as the UI does,
  * without a browser. Useful in CI and for comparing the JS port against the
- * Python service (see ml-service/training/sanity_check.py).
+ * Python service (see ml/evaluation/sanity_check.py).
  */
 
 import { readFileSync } from 'node:fs';
@@ -30,7 +30,7 @@ globalThis.fetch = async (url) => {
   return { ok: true, json: async () => JSON.parse(body), text: async () => body };
 };
 
-const { demoApi } = await import('../src/lib/api/demo.js');
+const { demoApi } = await import('../src/services/demo.js');
 const { predictPlan, loadModel } = await import('../src/lib/ml/index.js');
 const { loadModelCard } = await import('../src/lib/ml/index.js');
 

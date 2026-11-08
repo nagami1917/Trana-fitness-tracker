@@ -1,0 +1,100 @@
+# TRANA ML service (FastAPI + scikit-learn)
+
+Duration prediction + fueling guidance for TRANA. Pure stateless worker — no
+database access at inference time.
+
+## Run
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+python -m duration_model.train            # writes duration_model/{duration_model.joblib,duration_model.json,model_card.json}
+python -m evaluation.sanity_check         # physical plausibility asserts (exit 1 on failure)
+uvicorn api.main:app --reload --port 8000
+```
+
+Interactive docs: <http://localhost:8000/docs>
+
+## Endpoints
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/health` | liveness + model readiness |
+| GET | `/model/info` | model card (metrics, features, importances) |
+| POST | `/predict` | duration + fueling in one call (used by Laravel) |
+| POST | `/predict/duration` | duration only |
+| POST | `/predict/fueling?duration_min=` | fueling only |
+| POST | `/model/reload` | reload artifacts (requires `X-Admin-Token`) |
+
+## Example
+
+```bash
+curl -s -X POST localhost:8000/predict -H 'Content-Type: application/json' -d '{
+  "activity_type": "run",
+  "distance_km": 21.1,
+  "elevation_gain_m": 220,
+  "weight_kg": 55,
+  "experience_level": 3,
+  "temperature_c": 26,
+  "history": [
+    {"activity_type":"run","distance_km":5,"duration_min":29},
+    {"activity_type":"run","distance_km":10,"duration_min":61}
+  ]
+}' | jq
+```
+
+CLI predictor (no server):
+
+```bash
+python -m duration_model.predict --activity-type run --distance-km 21.1 --elevation-gain-m 220 --weight-kg 55
+```
+
+## Layout
+
+```
+api/                 FastAPI app
+  main.py            routes + CORS + /model/reload admin guard
+  schemas.py         pydantic request/response models
+  __init__.py
+duration_model/      duration quantile model
+  preprocess.py      feature engineering + Riegel reference curve
+  model_store.py     artifact loading, quantile inference, route metrics
+  train.py           trains q10/q50/q90 GBMs, exports JSON trees + model card
+  predict.py         `python -m duration_model.predict` CLI
+  duration_model.joblib · duration_model.json · model_card.json   (committed artifacts)
+fueling_model/       fueling recommendation engine
+  predict.py         MET energy cost + carbohydrate/sodium/fluid guidance
+                     (deterministic by design — no learned parameters)
+data/
+  generate_dataset.py  physics-informed synthetic bootstrap corpus
+  __init__.py
+evaluation/
+  sanity_check.py    reference-point smoke test against the trained model
+  __init__.py
+tests/
+  test_api.py        endpoint + engine tests (pytest)
+```
+
+## Model
+
+`GradientBoostingRegressor(loss="quantile", alpha∈{0.1,0.5,0.9})` on the log of a
+*pace factor*, anchored to the athlete's own Riegel distance→time curve:
+
+```
+base      = exp(a + b·ln d)          # fitted per athlete & modality
+duration  = base · exp(f(features))  # features: distance, elevation, elev/km, mass, experience, sport
+```
+
+Metrics live in `duration_model/model_card.json` and are surfaced in the UI.
+
+## Retrain on real data
+
+```bash
+pip install 'psycopg[binary]'
+DATABASE_URL="postgresql://postgres.<ref>:<pw>@aws-0-….pooler.supabase.com:5432/postgres" \
+  python -m duration_model.train --source supabase
+curl -X POST $ML_API_URL/model/reload -H "X-Admin-Token: $ADMIN_TOKEN"
+```
+
+Copy `duration_model/duration_model.json` → `frontend/public/models/` so the PWA stays in
+sync with the server.
