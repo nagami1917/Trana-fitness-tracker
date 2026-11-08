@@ -67,6 +67,22 @@ jobs:
       - name: Install dependencies
         working-directory: backend
         run: composer update --no-interaction --prefer-dist --no-progress
+      - name: Smoke-test the local Laravel server
+        working-directory: backend
+        run: |
+          APP_ENV=testing \
+          APP_KEY="base64:$(printf '%032d' 0 | base64 | tr -d '\n')" \
+          DB_CONNECTION=sqlite DB_DATABASE=:memory: CACHE_STORE=array SESSION_DRIVER=array \
+          php artisan serve --host=127.0.0.1 --port=18001 --no-reload > "$RUNNER_TEMP/trana-serve.log" 2>&1 &
+          server_pid=$!
+          trap 'pkill -P "$server_pid" 2>/dev/null || true; kill "$server_pid" 2>/dev/null || true' EXIT
+          if ! curl --fail --silent --show-error --retry 15 --retry-connrefused --retry-delay 1 \
+            http://127.0.0.1:18001/up > /dev/null; then
+            cat "$RUNNER_TEMP/trana-serve.log"
+            exit 1
+          fi
+          curl --fail --silent --show-error http://127.0.0.1:18001/api/docs \
+            | python3 -c 'import json, sys; assert json.load(sys.stdin)["name"] == "TRANA API"'
       - name: Run backend tests
         working-directory: backend
         run: |

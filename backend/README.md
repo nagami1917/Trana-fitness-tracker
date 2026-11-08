@@ -16,6 +16,9 @@ php artisan serve --host=0.0.0.0 --port=8001
 ```
 
 Base URL: `http://localhost:8001/api` · full reference in [`../docs/api.md`](../docs/api.md).
+After starting the server, visit `http://localhost:8001/up` to check that the
+Laravel HTTP entry point is responding. The `public/` directory contains the
+front controller required by `php artisan serve`.
 
 ## Layout
 
