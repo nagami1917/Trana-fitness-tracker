@@ -1,5 +1,34 @@
 /** Formatting helpers shared across the app. */
 
+/** 5.42 km → "5.42 km" */
+export function formatDistance(km) {
+  const n = Number(km ?? 0);
+  return n < 10 ? n.toFixed(2) : n.toFixed(n < 100 ? 1 : 0);
+}
+
+/** 38.35 min → "38:21" */
+export function formatDuration(minutes) {
+  const total = Math.max(0, Math.round(minutes ?? 0));
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}` : `${m}:00`;
+}
+
+/** 6.15 min/km → "6:09/km" */
+export function formatPace(minPerKm) {
+  const n = Number(minPerKm ?? 0);
+  if (!n || !Number.isFinite(n)) return '—:—';
+  const m = Math.floor(n);
+  const s = Math.round((n - m) * 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+/** 9.2 km/h → "9.2" */
+export function formatSpeed(kmh) {
+  const n = Number(kmh ?? 0);
+  return n && Number.isFinite(n) ? n.toFixed(1) : '—';
+}
+
 export const nf = (n, digits = 0) =>
   Number(n ?? 0).toLocaleString('en-US', {
     minimumFractionDigits: digits,

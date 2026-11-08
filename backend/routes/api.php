@@ -1,10 +1,12 @@
 <?php
 
 use App\Http\Controllers\Api\ActivityController;
+use App\Http\Controllers\Api\ActivityPointController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\GoalController;
 use App\Http\Controllers\Api\PredictionController;
 use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\Api\RouteController;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
@@ -72,6 +74,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/activities/summary', [ActivityController::class, 'summary']);
     Route::apiResource('activities', ActivityController::class)->only(['index', 'store', 'show', 'destroy']);
+    Route::post('/activities/{activity}/points', [ActivityPointController::class, 'store']);
+
+    Route::apiResource('routes', RouteController::class)->only(['index', 'store', 'show']);
 
     Route::get('/goals', [GoalController::class, 'show']);
     Route::put('/goals', [GoalController::class, 'update']);

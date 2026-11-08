@@ -27,6 +27,7 @@ class StoreActivityRequest extends FormRequest
             'route.*' => ['array', 'size:2'],
             'route.*.0' => ['numeric', 'between:-90,90'],
             'route.*.1' => ['numeric', 'between:-180,180'],
+            'route_geojson' => ['nullable', 'array'],
             'notes' => ['nullable', 'string', 'max:2000'],
             'source' => ['nullable', 'string', 'max:24'],
         ];
