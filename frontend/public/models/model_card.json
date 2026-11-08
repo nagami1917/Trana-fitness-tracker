@@ -1,0 +1,40 @@
+{
+  "name": "TRANA duration model",
+  "version": "20261108.0405",
+  "algorithm": "GradientBoostingRegressor (quantile loss, q10/q50/q90)",
+  "target": "log(duration / flat-equivalent time at the athlete's own reference speed)",
+  "output": "activity duration in minutes (base \u00d7 exp(prediction))",
+  "features": [
+    "distance_km",
+    "elevation_gain_m",
+    "elevation_per_km",
+    "weight_kg",
+    "experience_level",
+    "is_run",
+    "is_ride",
+    "is_walk",
+    "is_hike"
+  ],
+  "metrics": {
+    "mae_min": 9.56,
+    "rmse_min": 27.16,
+    "r2": 0.9524,
+    "mape_pct": 7.18,
+    "interval_coverage_pct": 76.8,
+    "train_rows": 6390,
+    "test_rows": 1598
+  },
+  "feature_importance": {
+    "elevation_per_km": 0.6219,
+    "distance_km": 0.1889,
+    "is_ride": 0.0531,
+    "elevation_gain_m": 0.0441,
+    "is_hike": 0.034,
+    "weight_kg": 0.0332,
+    "experience_level": 0.0105,
+    "is_run": 0.0086,
+    "is_walk": 0.0056
+  },
+  "trained_at": "2026-11-08T04:05:03+00:00",
+  "corpus_rows": 7988
+}

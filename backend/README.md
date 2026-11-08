@@ -1,0 +1,52 @@
+# TRANA API (Laravel 11 + Sanctum)
+
+```bash
+composer install
+cp .env.example .env
+php artisan key:generate
+# set DB_* (Supabase Postgres) and ML_API_URL in .env
+php artisan migrate --seed
+php artisan serve --port=8001
+```
+
+Base URL: `http://localhost:8001/api` · full reference in [`../docs/API.md`](../docs/API.md).
+
+## Layout
+
+```
+app/
+  Http/Controllers/Api/   Auth · Profile · Activity · Prediction · Goal · Demo
+  Http/Requests/          validation for auth, profile, activities, predictions
+  Models/                 User · FitnessProfile · Activity · Prediction · Goal
+  Services/
+    MlClient              HTTP client for the FastAPI service
+    PredictionService     history assembly, haversine, snake_case → camelCase
+    AnalyticsService      rollups, streaks, personal bests, weekly series
+  Console/Commands/       trana:retrain (nightly model refresh)
+routes/api.php            all endpoints, throttled
+database/migrations/      Postgres schema (mirrors supabase/sql/001_schema.sql)
+database/seeders/         DemoSeeder — 8 weeks of realistic history
+```
+
+## Notes
+
+* **PostgreSQL only.** `DB_CONNECTION=pgsql`; use the Supabase pooler host behind
+  serverless hosts.
+* **Auth**: Sanctum personal access tokens (`Authorization: Bearer …`). Token
+  abilities are ready for scoped apps (`activity:write`, `prediction:read`).
+* **Prediction**: Laravel owns no model. It gathers history, calls FastAPI, shapes
+  the response for the Svelte client and stores the full payload for auditing.
+* **Demo mode**: `/api/auth/demo` issues a token for a seeded sandbox athlete
+  (disabled in production unless `DEMO_MODE=true`).
+* **Rate limits**: auth 10/min/IP, predictions 60/min/user.
+* **Deploy**: `vercel.json` + `api/index.php` give a serverless PHP entry point;
+  any Laravel host works too.
+
+## Useful commands
+
+```bash
+php artisan migrate --seed          # create schema + demo athlete
+php artisan trana:retrain           # retrain + reload the model
+php artisan route:list --path=api   # inspect endpoints
+php artisan test
+```
