@@ -85,9 +85,11 @@ class ProfileApiTest extends TestCase
             'activity_experience' => 6.5,
         ]);
 
-        // The spec's read-only projection exposes the same row.
-        $this->assertDatabaseHas('fitness_profiles', ['user_id' => $user->id]);
-        $this->assertSame(1, (int) DB::table('user_profiles')->where('user_id', $user->id)->value('fitness_level'));
+        // The spec's read-only projection exposes the same row, including the
+        // derived age and the fitness_level alias.
+        $this->assertSame(4, (int) DB::table('user_profiles')->where('user_id', $user->id)->value('fitness_level'));
+        $this->assertSame(30, (int) DB::table('user_profiles')->where('user_id', $user->id)->value('age'));
+        $this->assertEqualsWithDelta(6.5, (float) DB::table('user_profiles')->where('user_id', $user->id)->value('activity_experience'), 0.001);
     }
 
     public function test_creating_a_second_profile_is_a_conflict(): void
