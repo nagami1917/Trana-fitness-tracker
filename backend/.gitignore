@@ -6,6 +6,8 @@
 /storage/framework/sessions/*
 /storage/framework/views/*
 /storage/logs/*
+# Laravel's generated configuration cache can contain private environment values.
+/bootstrap/cache/*.php
 # but keep the directory skeleton itself
 !/storage/**/.gitkeep
 .env
