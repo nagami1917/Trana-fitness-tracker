@@ -103,10 +103,10 @@ jobs:
             else
               details=$(printf '%s\n' "$plain" | tail -120)
             fi
-            printf '%s\n' "$details" | cut -c1-450 | head -160 \
-              | while IFS= read -r line; do [ -n "$line" ] && echo "::error::$line"; done
             # A single compact annotation carrying the log tail (annotations are
             # capped, so this keeps the whole failure available through the API).
-            echo "::error::TRANA_TEST_LOG_B64:$(printf '%s\n' "$plain" | tail -c 40000 | base64 -w0)"
+            echo "::error::TRANA_TEST_LOG_B64:$(printf '%s\n' "$plain" | tail -c 30000 | base64 -w0)"
+            printf '%s\n' "$details" | cut -c1-450 | head -5 \
+              | while IFS= read -r line; do [ -n "$line" ] && echo "::error::$line"; done
             exit "$code"
           fi
