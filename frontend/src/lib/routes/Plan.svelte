@@ -122,6 +122,9 @@
       });
       await refresh();
       saved = created;
+      // In live mode the server's numbers are authoritative (fresh model artifact,
+      // server-measured route distance), so show those instead of the local preview.
+      if (api.mode === 'live') prediction = created;
       notify('Plan saved — it’s on your dashboard.');
     } catch (error) {
       notify(error.message || 'Could not save the plan', 'error');
@@ -319,7 +322,13 @@
           <h2 class="text-base">Saved plans</h2>
           <div class="mt-2 divide-y divide-brand-100/70">
             {#each $plans.slice(0, 4) as plan (plan.id)}
-              <div class="flex items-center gap-3 py-2.5">
+              <button
+                class="flex w-full items-center gap-3 py-2.5 text-left transition hover:opacity-75"
+                onclick={() => {
+                  prediction = plan;
+                  saved = plan;
+                }}
+              >
                 <ActivityIcon type={plan.activity_type} size="sm" />
                 <div class="min-w-0 flex-1">
                   <p class="truncate text-xs font-extrabold capitalize">{plan.distance_km} km {plan.activity_type}</p>
@@ -330,7 +339,7 @@
                 <span class="shrink-0 text-[10px] font-bold text-ink-400">
                   {new Date(plan.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                 </span>
-              </div>
+              </button>
             {/each}
           </div>
         </Card>
