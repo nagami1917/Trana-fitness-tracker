@@ -29,3 +29,6 @@ frontend/.svelte-kit/
 
 # vercel
 .vercel/
+
+# model binaries (kept out of git; artifacts live in ml/duration_model/)
+*.pkl
