@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "arena/**"]
+  pull_request:
+
+jobs:
+  frontend:
+    name: Frontend (Svelte + Tailwind)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npx svelte-check --output human
+      - run: npm run build
+      - run: node scripts/smoke.mjs
+      - run: node scripts/render-smoke.mjs
+
+  ml:
+    name: ML service (FastAPI + scikit-learn)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ml-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements-dev.txt
+      - run: python -m training.train
+      - run: python -m training.sanity_check
+      - run: python -m pytest -q tests
+
+  backend:
+    name: API (Laravel)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: mbstring, pdo_pgsql, pgsql
+          coverage: none
+      - name: Lint every PHP file
+        run: |
+          find backend -name '*.php' -not -path '*/vendor/*' -print0 \
+            | xargs -0 -n1 -P4 php -l > /tmp/lint.txt || (cat /tmp/lint.txt && exit 1)
+          echo "PHP lint clean"
+      - name: Validate composer.json
+        run: composer validate --no-check-publish --working-dir=backend

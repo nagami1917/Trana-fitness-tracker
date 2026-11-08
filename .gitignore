@@ -1,0 +1,31 @@
+# dependencies
+node_modules/
+vendor/
+.venv/
+__pycache__/
+*.pyc
+
+# builds
+dist/
+build/
+.output/
+
+# env & secrets
+.env
+.env.*
+!.env.example
+
+# generated data / artifacts that can be rebuilt
+ml-service/training/data/*.csv
+ml-service/.pytest_cache/
+frontend/.vite/
+frontend/.svelte-kit/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.log
+
+# vercel
+.vercel/
