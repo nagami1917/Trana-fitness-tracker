@@ -84,11 +84,20 @@ reachable from the Laravel API.
 
 ```text
 frontend/        Svelte 5 + Vite + Tailwind PWA (Chart.js, Leaflet, OpenStreetMap)
-frontend/src/lib/ml/       JS port of the Python model — identical trees, offline
+  src/components/{common,dashboard,activities,route,fueling,analytics}/
+  src/pages/{Login,Register,Dashboard,Activities,PlanActivity,Fueling,Analytics,Profile,Settings,Goals}/
+  src/{stores,services,lib,routes}/    state · API/demo client · router+on-device ML · ROUTES table
+  src/lib/ml/                          JS port of the Python model — identical trees, offline
 backend/         Laravel 11 REST API (Sanctum, Eloquent, Supabase Postgres)
-ml-service/      Python FastAPI service + scikit-learn training pipeline
+  app/Services/{ActivityService,RouteService,DurationPredictionService,FuelingPredictionService}.php
+  app/Http/{Controllers,Requests,Resources}/
+ml/              Python FastAPI service + scikit-learn training pipeline
+  api/           FastAPI app (main.py, schemas.py)
+  duration_model/  quantile GBM: train.py · predict.py · preprocess.py · model_store.py · artifacts
+  fueling_model/   deterministic ACSM/ISSN fueling engine (predict.py)
+  data/          synthetic corpus generator   ·   evaluation/sanity_check.py
+docs/            api.md · architecture.md · database.md · ml-methodology.md · DEPLOYMENT.md
 supabase/        PostgreSQL schema, RLS policies, analytical views
-docs/            Architecture, API reference, deployment guide
 ```
 
 ---
@@ -118,12 +127,12 @@ node scripts/smoke.mjs # headless check of the whole prediction pipeline
 ### 4.2 Machine learning service
 
 ```bash
-cd ml-service
+cd ml
 python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-python -m training.train            # trains + exports artifacts (~40 s)
-python -m training.sanity_check     # physical plausibility asserts
-uvicorn app.main:app --reload --port 8000
+python -m duration_model.train      # trains + exports artifacts (~40 s)
+python -m evaluation.sanity_check   # physical plausibility asserts
+uvicorn api.main:app --reload --port 8000
 ```
 
 ### 4.3 Laravel API
@@ -157,7 +166,7 @@ VITE_API_BASE_URL=http://localhost:8001
 | backend | `ML_API_URL`, `ML_API_TOKEN`, `ML_TIMEOUT` | Python prediction service. |
 | backend | `CORS_ALLOWED_ORIGINS` | Comma-separated frontend origins. |
 | backend | `DEMO_MODE`, `DEMO_EMAIL`, `DEMO_PASSWORD` | Public sandbox login. |
-| ml-service | `ALLOWED_ORIGINS`, `ADMIN_TOKEN`, `DATABASE_URL` | CORS, model-reload auth, training source. |
+| ml | `ALLOWED_ORIGINS`, `ADMIN_TOKEN`, `DATABASE_URL` | CORS, model-reload auth, training source. |
 
 ---
 
@@ -196,15 +205,15 @@ Top learned effects: climbing per kilometre, total elevation, distance, sport.
 **Retraining on real data**
 
 ```bash
-cd ml-service
-DATABASE_URL="postgresql://..." python -m training.train --source supabase
+cd ml
+DATABASE_URL="postgresql://..." python -m duration_model.train --source supabase
 curl -X POST "$ML_API_URL/model/reload" -H "X-Admin-Token: $ADMIN_TOKEN"
 ```
 
 or let Laravel schedule it: `php artisan trana:retrain` (nightly at 03:00).
 
-**Offline parity.** `training/train.py` exports the fitted trees to
-`artifacts/duration_model.json`; the PWA ships that file and evaluates the same
+**Offline parity.** `ml/duration_model/train.py` exports the fitted trees to
+`duration_model/duration_model.json`; the PWA ships that file and evaluates the same
 forests in JavaScript (`frontend/src/lib/ml/duration.js`). Server and browser
 therefore agree, and predictions keep working without a network connection.
 
@@ -220,7 +229,7 @@ sodium/h   = baseline × heat factor × duration factor   (light 350 / avg 550 /
 fluid/h    = baseline × heat factor                     (450 / 650 / 900 ml)
 ```
 
-All constants live in `ml-service/app/fueling.py` and are mirrored exactly in
+All constants live in `ml/fueling_model/predict.py` and are mirrored exactly in
 `frontend/src/lib/ml/fueling.js` and (for one-off estimates) in the Laravel
 activity controller. Outputs are guidance for healthy adults, not medical advice.
 
@@ -239,7 +248,7 @@ activity controller. Outputs are guidance for healthy adults, not medical advice
 | POST | `/api/predictions/preview` | Same, without saving |
 | GET | `/api/predictions` · `/api/model` | Saved plans, model card |
 
-Full reference with payloads: [`docs/API.md`](docs/API.md).
+Full reference with payloads: [`docs/api.md`](docs/api.md).
 
 ---
 
@@ -260,7 +269,7 @@ Chart.js for data viz and Leaflet + OpenStreetMap for routes.
 | Frontend | Vercel | `npm run build`, output `dist`, SPA rewrite |
 | API | Vercel (PHP runtime) | `backend/vercel.json` + `api/index.php` |
 | Database | Supabase | Postgres + pooler connection, apply `supabase/sql/*.sql` |
-| ML | Render / Railway / Fly.io / Cloud Run | `ml-service/Dockerfile`, port 8000 |
+| ML | Render / Railway / Fly.io / Cloud Run | `ml/Dockerfile`, port 8000 |
 
 Step-by-step instructions, including the CORS and connection-string gotchas, are in
 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).

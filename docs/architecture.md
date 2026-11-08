@@ -87,23 +87,23 @@ Consequences:
 
 ## 5. Training corpus
 
-`training/generate_dataset.py` builds a physics-informed bootstrap corpus (220
+`data/generate_dataset.py` builds a physics-informed bootstrap corpus (220
 athletes, ≈8 000 sessions) from published relationships — modality base speeds,
 gradient penalties, Naismith-style ascent costs, fatigue deceleration and
 day-to-day noise. This exists because a new deployment has no data; once real
 rows are in Supabase:
 
 ```bash
-DATABASE_URL=... python -m training.train --source supabase
+DATABASE_URL=... python -m duration_model.train --source supabase
 ```
 
-`training/sanity_check.py` asserts that classic reference points (5 km, 10 km, half
+`evaluation/sanity_check.py` asserts that classic reference points (5 km, 10 km, half
 marathon, 40 km ride, 400 m hike climb, 5 km walk) land within ±22 % of
 textbook expectations, so a bad retrain cannot reach production unnoticed.
 
 ## 6. Fueling engine
 
-Deterministic, inspectable formulas (see `app/fueling.py`), not a black box — a
+Deterministic, inspectable formulas (see `ml/fueling_model/predict.py`), not a black box — a
 health-facing product should let you trace every number:
 
 ```
