@@ -2,6 +2,8 @@
 
 Base URL: `https://<your-api>/api`
 Auth: `Authorization: Bearer <sanctum-token>` except for `/health`, `/docs`, `/auth/register`, and `/auth/login`.
+The API does not authenticate with session cookies or use CSRF cookies. Do not
+add cookie-based API authentication without enabling appropriate CSRF protection.
 Responses are JSON; collections are wrapped in `{ "data": [...] }`.
 
 ---
