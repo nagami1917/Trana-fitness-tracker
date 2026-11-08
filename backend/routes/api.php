@@ -41,7 +41,11 @@ Route::get('/docs', fn () => response()->json([
         'GET  /api/auth/me',
         'POST /api/auth/logout',
         'GET  /api/profile',
+        'POST /api/profile',
         'PUT  /api/profile',
+        'PATCH /api/profile',
+        'PATCH /api/profile/weight',
+        'PATCH /api/profile/fitness-level',
         'GET  /api/activities',
         'POST /api/activities',
         'GET  /api/activities/{id}',
@@ -67,8 +71,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
 
+    // Step 4 — fitness profile: create, view, edit, update weight/level.
     Route::get('/profile', [ProfileController::class, 'show']);
-    Route::put('/profile', [ProfileController::class, 'update']);
+    Route::post('/profile', [ProfileController::class, 'store']);
+    Route::match(['put', 'patch'], '/profile', [ProfileController::class, 'update']);
+    Route::patch('/profile/weight', [ProfileController::class, 'updateWeight']);
+    Route::patch('/profile/fitness-level', [ProfileController::class, 'updateFitnessLevel']);
 
     Route::get('/activities/summary', [ActivityController::class, 'summary']);
     Route::apiResource('activities', ActivityController::class)->only(['index', 'store', 'show', 'destroy']);

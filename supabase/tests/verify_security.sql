@@ -75,8 +75,9 @@ begin
         '2026_01_01_000000_create_trana_tables',
         '2026_01_01_000001_create_personal_access_tokens_table',
         '2026_11_08_000001_create_spec_compatibility_views',
-        '2026_11_08_000002_secure_supabase_data_api'
-    )) <> 7 then
+        '2026_11_08_000002_secure_supabase_data_api',
+        '2026_11_08_000003_add_user_profile_spec_fields'
+    )) <> 8 then
         raise exception 'Laravel migration baseline is incomplete';
     end if;
 end $$;

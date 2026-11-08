@@ -252,7 +252,8 @@ activity controller. Outputs are guidance for healthy adults, not medical advice
 | POST | `/api/auth/register` · `/auth/login` | Bearer token issuance |
 | GET | `/api/health` | API database connectivity (no credentials exposed) |
 | GET | `/api/auth/me` | Current athlete |
-| GET/PUT | `/api/profile` | Body mass, sweat profile, experience, goals |
+| GET/POST/PUT/PATCH | `/api/profile` | Fitness profile: create, view, edit (body mass, fitness level, age, experience, sweat profile, goals) |
+| PATCH | `/api/profile/weight` · `/api/profile/fitness-level` | Focused updates used by the profile screen |
 | GET/POST | `/api/activities` | Activity log (the training corpus) |
 | GET | `/api/activities/{id}` · `/summary` | Detail / analytics |
 | POST | `/api/predictions` | Plan a session → duration + fueling |

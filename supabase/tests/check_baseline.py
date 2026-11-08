@@ -12,6 +12,6 @@ names = re.findall(r"'((?:0001|2026)_\d{2}_\d{2}_\d{6}_[a-z_]+)'", source)
 for name in names:
     if not (root / "backend/database/migrations" / f"{name}.php").is_file():
         raise SystemExit(f"Baseline records a missing Laravel migration: {name}")
-if len(names) != 7 or len(set(names)) != 7:
-    raise SystemExit("Expected seven distinct Laravel migration records in the baseline")
+if len(names) != 8 or len(set(names)) != 8:
+    raise SystemExit("Expected eight distinct Laravel migration records in the baseline")
 print("Supabase baseline snapshot and Laravel migration records match")
