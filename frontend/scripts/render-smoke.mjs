@@ -27,6 +27,9 @@ globalThis.localStorage = {
 globalThis.fetch = async () => ({ ok: false, json: async () => null, text: async () => '' });
 globalThis.window = { location: { pathname: '/', search: '' }, addEventListener() {}, scrollTo() {} };
 
+// This test renders the local demo, even when a developer has a live .env.local.
+process.env.VITE_API_BASE_URL = '';
+
 const { createServer } = await import('vite');
 const { svelte } = await import('@sveltejs/vite-plugin-svelte');
 const { render } = await import('svelte/server');
@@ -34,6 +37,7 @@ const { render } = await import('svelte/server');
 const vite = await createServer({
   root,
   configFile: false,
+  envFile: false,
   logLevel: 'error',
   appType: 'custom',
   plugins: [svelte({ compilerOptions: { generate: 'server', dev: false } })],

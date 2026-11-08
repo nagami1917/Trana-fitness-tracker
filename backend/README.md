@@ -4,9 +4,11 @@
 composer install
 cp .env.example .env
 php artisan key:generate
-# set DB_* (Supabase Postgres) and ML_API_URL in .env
-php artisan migrate --seed
-php artisan serve --port=8001
+# Set DB_* (including the private database password) and ML_API_URL in .env.
+# See ../supabase/README.md for the connected project and pooler settings.
+php artisan migrate:status
+php artisan migrate
+php artisan serve --host=0.0.0.0 --port=8001
 ```
 
 Base URL: `http://localhost:8001/api` · full reference in [`../docs/api.md`](../docs/api.md).
@@ -24,7 +26,7 @@ app/
     AnalyticsService      rollups, streaks, personal bests, weekly series
   Console/Commands/       trana:retrain (nightly model refresh)
 routes/api.php            all endpoints, throttled
-database/migrations/      Postgres schema (mirrors supabase/sql/001_schema.sql)
+database/migrations/      Postgres schema + Supabase Data API lockdown
 database/seeders/         DemoSeeder — 8 weeks of realistic history
 ```
 
@@ -60,7 +62,9 @@ run the tests fast in CI.
 ## Useful commands
 
 ```bash
-php artisan migrate --seed          # create schema + demo athlete
+php artisan migrate                 # apply outstanding schema changes
+# Only for an isolated development database (the demo account has known credentials):
+php artisan db:seed                  # create demo athlete
 php artisan trana:retrain           # retrain + reload the model
 php artisan route:list --path=api   # inspect endpoints
 php artisan test

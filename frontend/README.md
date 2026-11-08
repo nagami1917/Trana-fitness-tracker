@@ -13,10 +13,13 @@ node scripts/smoke.mjs   # headless prediction pipeline check
 | `VITE_API_BASE_URL` | Behaviour |
 | --- | --- |
 | empty | **Demo mode** — seeded athlete, localStorage persistence, on-device model |
-| `https://api…` | **Live mode** — Sanctum bearer tokens against the Laravel API |
+| `/` | **Live mode** — same-origin `/api`; Vite proxies to `VITE_PROXY_TARGET` during development |
+| `https://api…` | **Live mode** — Sanctum bearer tokens against the deployed Laravel API |
 
 Nothing else changes: every screen consumes the same shapes, because
-`src/services/demo.js` mirrors the Laravel contract exactly.
+`src/services/demo.js` mirrors the Laravel contract exactly. Set `/` only when
+Vite or your production host forwards `/api` to Laravel. Never put a database
+password or Supabase service-role key in `VITE_*` variables.
 
 ## Map
 

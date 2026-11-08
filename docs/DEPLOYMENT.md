@@ -13,13 +13,16 @@ Vercel (frontend) ──► Vercel (Laravel API) ──► Supabase Postgres
 
 ## 1. Supabase (database)
 
-1. Create a project → note the database password and the region.
-2. **SQL Editor** → run `supabase/sql/001_schema.sql`, then `supabase/sql/002_rls.sql`.
-   (Or let Laravel create the tables: `php artisan migrate --seed`.)
-3. *Project Settings → Database → Connection string → URI*. You need:
+The connected project is **Trana** (`tlqyvjhlesmackmcrzyg`); its empty Laravel
+baseline has already been applied. For a different database, see
+[`../supabase/README.md`](../supabase/README.md) and choose either Laravel
+migrations or the one-time SQL baseline. Do not apply both to an existing DB.
+
+In the Supabase dashboard select **Connect → Session pooler**. Copy the exact
+connection details rather than guessing the pooler hostname:
 
 ```
-host      aws-0-<region>.pooler.supabase.com     ← session pooler
+host      <host copied from Connect>
 port      5432
 database  postgres
 username  postgres.<project-ref>
@@ -27,11 +30,12 @@ password  <database password>
 sslmode   require
 ```
 
-> Why the pooler? Vercel is serverless: every invocation may open a connection.
-> The direct port (5432 on `db.<ref>.supabase.co`) exhausts connections quickly on
-> bursty traffic. Use the **session** pooler (port 5432 on `...pooler.supabase.com`)
-> for PHP-FPM/serverless, and the transaction pooler (6543) only for
-> short statements without prepared-statement reuse.
+Put the password only in backend environment secrets. The direct host for Trana
+is `db.tlqyvjhlesmackmcrzyg.supabase.co`, but direct connections require IPv6
+unless the IPv4 add-on is enabled. For serverless or IPv4-only hosts, use the
+session pooler supplied by the dashboard. Laravel/Sanctum performs auth; the
+Supabase Data API's `anon` and `authenticated` roles cannot read app tables or
+views. Do not seed the known demo account into a real production database.
 
 ---
 

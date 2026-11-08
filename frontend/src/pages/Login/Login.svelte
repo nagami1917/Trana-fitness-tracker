@@ -3,8 +3,8 @@
   import { login, continueAsGuest, notify, apiMode, profile } from '../../stores/index.js';
   import { navigate } from '../../lib/router.js';
 
-  let email = $state('nagami@trana.app');
-  let password = $state('password');
+  let email = $state($apiMode === 'demo' ? 'nagami@trana.app' : '');
+  let password = $state($apiMode === 'demo' ? 'password' : '');
   let loading = $state(false);
   let error = $state('');
 

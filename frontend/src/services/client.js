@@ -1,21 +1,18 @@
 /**
  * API facade.
  *
- * Set `VITE_API_BASE_URL` to your Laravel deployment (e.g.
- * `https://trana-api.vercel.app`) and the app talks to the real REST API with a
- * Sanctum bearer token. With no env var it falls back to the local demo
- * backend, which keeps the PWA fully usable offline.
- *
- * Requests are always sent to a relative `/api/...` path when the base URL is
- * empty so nothing browser-side ever calls localhost.
+ * Set `VITE_API_BASE_URL` to the Laravel deployment origin or `/` for a
+ * same-origin API (Vite proxies `/api` while developing). With no value the
+ * app uses the local demo backend. Never put database credentials in the PWA.
  */
 
 import { demoApi, subscribe as demoSubscribe } from './demo.js';
+import { resolveApiConfig } from './config.js';
 
-const BASE = (import.meta.env?.VITE_API_BASE_URL || '').replace(/\/$/, '');
+const { base: BASE, isLive } = resolveApiConfig(import.meta.env);
 const TOKEN_KEY = 'trana.token';
 
-export const isLive = Boolean(BASE);
+export { isLive };
 
 const getToken = () => localStorage.getItem(TOKEN_KEY);
 const setToken = (token) => (token ? localStorage.setItem(TOKEN_KEY, token) : localStorage.removeItem(TOKEN_KEY));
