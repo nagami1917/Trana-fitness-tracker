@@ -3,7 +3,7 @@
 > **Plan the effort. Know the fuel.**
 > TRANA is a web-based predictive system that looks at your *past* activities and your
 > *upcoming* route, then tells you how long it will take, how much energy you'll spend,
-> and exactly what to eat and drink for it.
+> and estimates what to eat and drink for it.
 
 <p align="center">
   <img src="frontend/public/mascot-cat.png" width="140" alt="TRANA mascot" />
@@ -25,8 +25,8 @@ carbohydrate, sodium and fluid targets, and lays them out on a timeline
 | **Carbohydrate** | Duration + intensity bands following sports-nutrition guidance (0 g/h under an hour → up to 85–90 g/h for multi-hour efforts), expressed as gels / bottles / real food. |
 | **Sodium & fluid** | Baseline sweat profile (light / average / heavy sweater), adjusted for heat and session length. |
 | **Fueling timeline** | Pre-session meal, top-up snack, during-session interval, recovery window — each with grams and millilitres. |
-| **Learning loop** | Every completed session is logged, so predictions improve; the Analytics screen shows model error against your saved plans. |
-| **Offline-first PWA** | The exported model trees run **in the browser**, so predictions still work with no network. |
+| **Personal history** | Logged activities inform your reference pace; they do not automatically retrain the shared model. |
+| **On-device previews** | The exported model can calculate a preview locally once loaded; account data and saved changes require the API. |
 
 ---
 
@@ -75,8 +75,8 @@ Laravel normalises the payload, saves `predictions`, returns JSON
 Svelte renders the fueling plan
 ```
 
-The browser never holds database credentials, and the private ML service is only
-reachable from the Laravel API.
+The browser never holds database credentials. Protect the ML service with a shared
+server-side token and/or private network access in a deployment.
 
 ---
 
@@ -86,7 +86,7 @@ reachable from the Laravel API.
 frontend/        Svelte 5 + Vite + Tailwind PWA (Chart.js, Leaflet, OpenStreetMap)
   src/components/{common,dashboard,activities,route,fueling,analytics}/
   src/pages/{Login,Register,Dashboard,Activities,PlanActivity,Fueling,Analytics,Profile,Settings,Goals}/
-  src/{stores,services,lib,routes}/    state · API/demo client · router+on-device ML · ROUTES table
+  src/{stores,services,lib,routes}/    state · Laravel API client · router+on-device ML · ROUTES table
   src/lib/ml/                          JS port of the Python model — identical trees, offline
 backend/         Laravel 11 REST API (Sanctum, Eloquent, Supabase Postgres)
   app/Services/{ActivityService,RouteService,DurationPredictionService,FuelingPredictionService}.php
@@ -107,7 +107,7 @@ supabase/        PostgreSQL schema, RLS policies, analytical views
 ### Prerequisites
 Node 20+, Python 3.11+, PHP 8.2+ with Composer, a Supabase project (or any Postgres).
 
-### 4.1 Frontend (works immediately, demo data included)
+### 4.1 Frontend
 
 ```bash
 cd frontend
@@ -115,9 +115,12 @@ npm install
 npm run dev            # http://localhost:5173
 ```
 
-With no `VITE_API_BASE_URL`, the app runs in **demo mode**: a seeded athlete, a
-localStorage database, and the real model running on-device. Click
-*“Explore with demo data”* on the sign-in screen.
+The frontend always uses the Laravel API. An empty `VITE_API_BASE_URL` or `/`
+uses same-origin `/api`; Vite proxies it to the backend during development.
+Start Laravel and connect it to your database before signing in or registering.
+No sample account or activity history is created automatically. Data from the
+previous browser-only mode remains in that browser and is not automatically
+imported; existing Supabase records are not changed by this update.
 
 ```bash
 npm run build          # production bundle + service worker
@@ -130,8 +133,8 @@ node scripts/smoke.mjs # headless check of the whole prediction pipeline
 cd ml
 python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-python -m duration_model.train      # trains + exports artifacts (~40 s)
-python -m evaluation.sanity_check   # physical plausibility asserts
+# The committed model artifacts can be used without retraining.
+python -m evaluation.sanity_check   # optional physical plausibility checks
 uvicorn api.main:app --reload --port 8000
 ```
 
@@ -159,20 +162,20 @@ VITE_API_BASE_URL=/
 
 Vite proxies same-origin `/api` requests to the Laravel server (by default
 `http://127.0.0.1:8001`, server-side only). For separate deployments, set
-`VITE_API_BASE_URL` to the deployed Laravel API origin. An empty value selects
-local demo mode; it does **not** use the proxy. Never put database credentials
-in a `VITE_*` variable.
+`VITE_API_BASE_URL` to the deployed Laravel API origin. An empty value also
+uses the proxy. If Laravel runs on port 8002 instead, set
+`VITE_PROXY_TARGET=http://127.0.0.1:8002` in `frontend/.env.local` and restart
+Vite. Never put database credentials in a `VITE_*` variable.
 
 ### Environment variables
 
 | Where | Variable | Purpose |
 | --- | --- | --- |
-| frontend | `VITE_API_BASE_URL` | Laravel API origin; `/` ⇒ same-origin API; empty ⇒ demo mode. |
+| frontend | `VITE_API_BASE_URL`, `VITE_PROXY_TARGET` | Blank or `/` uses same-origin `/api`; Vite forwards it to the server-side proxy target. |
 | backend | `DB_HOST/DB_PORT/DB_DATABASE/DB_USERNAME/DB_PASSWORD/DB_SSLMODE` | Supabase Postgres (session pooler for Vercel). Laravel ignores `DB_URL`/`DATABASE_URL` for pgsql. |
-| backend | `ML_API_URL`, `ML_API_TOKEN`, `ML_TIMEOUT` | Python prediction service. |
+| backend | `ML_API_URL`, `ML_API_TOKEN`, `ML_ADMIN_TOKEN`, `ML_TIMEOUT` | Python prediction service and optional server-to-server secrets. |
 | backend | `CORS_ALLOWED_ORIGINS` | Comma-separated frontend origins. |
-| backend | `DEMO_MODE`, `DEMO_EMAIL`, `DEMO_PASSWORD` | Public sandbox login. |
-| ml | `ALLOWED_ORIGINS`, `ADMIN_TOKEN`, `DATABASE_URL` | CORS, model-reload auth, training source. |
+| ml | `ML_API_TOKEN`, `ADMIN_TOKEN`, `ALLOWED_ORIGINS`, `DATABASE_URL` | API/reload secrets, CORS, and optional training source. |
 
 ---
 
@@ -195,8 +198,8 @@ features        = distance, elevation, elevation/km, mass, experience, sport
 0.50 / 0.90 — so the UI can say “96 min, likely 88–112” instead of pretending to
 know a single exact value.
 
-**Current artifact** (bootstrapped on a physics-informed synthetic corpus,
-retrainable on real Supabase data):
+**Current artifact** (bootstrapped and tested on a synthetic corpus). These test
+metrics are not evidence of real-world accuracy:
 
 | Metric | Value |
 | --- | --- |
@@ -204,7 +207,7 @@ retrainable on real Supabase data):
 | MAE | 9.6 min |
 | MAPE | 7.2 % |
 | 80 % interval coverage | 76.8 % |
-| Training rows | 7,988 sessions |
+| Training rows | 7,988 synthetic activities |
 
 Top learned effects: climbing per kilometre, total elevation, distance, sport.
 
@@ -216,12 +219,13 @@ DATABASE_URL="postgresql://..." python -m duration_model.train --source supabase
 curl -X POST "$ML_API_URL/model/reload" -H "X-Admin-Token: $ADMIN_TOKEN"
 ```
 
-or let Laravel schedule it: `php artisan trana:retrain` (nightly at 03:00).
+Retrain only with appropriate consent and enough representative data; deployment
+and validation of the new artifacts are separate steps.
 
-**Offline parity.** `ml/duration_model/train.py` exports the fitted trees to
-`duration_model/duration_model.json`; the PWA ships that file and evaluates the same
-forests in JavaScript (`frontend/src/lib/ml/duration.js`). Server and browser
-therefore agree, and predictions keep working without a network connection.
+**Previews.** `ml/duration_model/train.py` exports the trees to JSON for the PWA.
+The browser and server may differ if their model versions or inputs differ. The
+server calculation is authoritative when a plan is saved; accessing accounts and
+saving data requires a working API and database.
 
 ---
 
@@ -245,7 +249,8 @@ activity controller. Outputs are guidance for healthy adults, not medical advice
 
 | Method | Endpoint | Description |
 | --- | --- | --- |
-| POST | `/api/auth/register` · `/login` · `/demo` | Bearer token issuance |
+| POST | `/api/auth/register` · `/auth/login` | Bearer token issuance |
+| GET | `/api/health` | API database connectivity (no credentials exposed) |
 | GET | `/api/auth/me` | Current athlete |
 | GET/PUT | `/api/profile` | Body mass, sweat profile, experience, goals |
 | GET/POST | `/api/activities` | Activity log (the training corpus) |
@@ -294,5 +299,5 @@ Step-by-step instructions, including the CORS and connection-string gotchas, are
 
 ## License
 
-MIT — a student/portfolio project. Predictions are estimates; always train and fuel
-responsibly.
+MIT — predictions are estimates, not medical advice. Before public deployment,
+address the known security and operational limitations in the deployment guide.

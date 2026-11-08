@@ -7,32 +7,41 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Process;
 
 /**
- * Nightly retrain hook.
+ * Explicit retrain hook. This is not scheduled automatically.
  *
- * The model itself is trained in Python, so this command shells out to the
- * ML project (or a Render/Railway job endpoint) and then asks the service to
- * reload the fresh artifact into memory.
+ * Training and deploying the new artifacts requires a configured Python
+ * environment, an appropriate data source, and permission to use that data.
  */
 class RetrainModel extends Command
 {
     protected $signature = 'trana:retrain
                             {--no-reload : Only retrain, do not ask the service to reload}
-                            {--source=synth : synth, csv or supabase}';
+                            {--source= : Required source: synth, csv or supabase}';
 
     protected $description = 'Retrain the TRANA duration model from collected activity data';
 
     public function handle(MlClient $ml): int
     {
+        $source = $this->option('source');
+        if (! in_array($source, ['synth', 'csv', 'supabase'], true)) {
+            $this->error('Choose an explicit --source: synth, csv or supabase.');
+
+            return self::FAILURE;
+        }
+
         $command = (string) env(
             'ML_TRAIN_COMMAND',
             'cd ../ml && .venv/bin/python -m duration_model.train --source=supabase'
         );
+        if (! str_contains($command, '--source=supabase')) {
+            $this->error('ML_TRAIN_COMMAND must contain --source=supabase as a source placeholder.');
 
-        if ($source = $this->option('source')) {
-            $command = str_replace('--source=supabase', '--source='.$source, $command);
+            return self::FAILURE;
         }
+        $command = str_replace('--source=supabase', '--source='.$source, $command);
 
-        $this->info('Training: '.$command);
+        // A custom command may contain secrets; never print it.
+        $this->info('Starting model training.');
         $result = Process::timeout(1800)->run($command);
 
         $this->line($result->output());
@@ -46,9 +55,16 @@ class RetrainModel extends Command
         if (! $this->option('no-reload')) {
             try {
                 $reload = $ml->reload();
-                $this->info('Model reload requested: '.json_encode($reload));
+                if (! ($reload['reloaded'] ?? false)) {
+                    $this->error('Training finished, but the ML service did not reload the model.');
+
+                    return self::FAILURE;
+                }
+                $this->info('Model reloaded.');
             } catch (\Throwable $e) {
-                $this->warn('Could not reload the service: '.$e->getMessage());
+                $this->error('Training finished, but the ML service could not reload the model.');
+
+                return self::FAILURE;
             }
         }
 

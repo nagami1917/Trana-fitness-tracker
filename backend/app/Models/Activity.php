@@ -30,6 +30,7 @@ class Activity extends Model
     protected function casts(): array
     {
         return [
+            'user_id' => 'integer',
             'distance_km' => 'float',
             'elevation_gain_m' => 'integer',
             'duration_min' => 'float',

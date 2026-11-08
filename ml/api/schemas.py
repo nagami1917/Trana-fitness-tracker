@@ -21,9 +21,9 @@ class HistoryItem(BaseModel):
 
 class PredictRequest(BaseModel):
     activity_type: ActivityType
-    distance_km: float = Field(gt=0, le=400)
+    distance_km: float = Field(gt=0, le=500)
     elevation_gain_m: float = Field(default=0, ge=0, le=12000)
-    weight_kg: float = Field(gt=25, le=250)
+    weight_kg: float = Field(ge=25, le=250)
     experience_level: int = Field(default=3, ge=1, le=5)
     history: list[HistoryItem] = Field(default_factory=list, max_length=400)
     sweat_profile: SweatProfile = "normal"

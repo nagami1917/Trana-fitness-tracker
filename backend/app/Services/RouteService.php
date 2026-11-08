@@ -65,6 +65,6 @@ class RouteService
             $total += 2 * $radius * asin(min(1.0, sqrt($a)));
         }
 
-        return round(max(0.1, $total), 3);
+        return round($total, 3);
     }
 }

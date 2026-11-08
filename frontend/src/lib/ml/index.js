@@ -6,8 +6,8 @@
  *        → fueling (physiology formulas)
  *        → one recommendation object
  *
- * In live mode the exact same shape comes back from `POST /api/predictions`
- * (Laravel → FastAPI), so components never care where a number was computed.
+ * The preview runs in the browser. Saving calls `POST /api/predictions`
+ * (Laravel → FastAPI) and uses the server's result.
  */
 
 import { experienceLevel, loadModel, predictDuration, referenceSpeed } from './duration.js';

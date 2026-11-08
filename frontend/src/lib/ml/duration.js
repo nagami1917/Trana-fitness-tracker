@@ -4,7 +4,7 @@
  * This is a faithful JavaScript port of `ml/duration_model/preprocess.py` +
  * `model_store.py`, evaluating the exact same gradient-boosted trees exported
  * from scikit-learn (`public/models/duration_model.json`). It runs when the PWA
- * is offline or in demo mode, so the numbers never drift from the server.
+ * for on-device previews. The server calculation is authoritative when a plan is saved.
  *
  *   base      = exp(a + b · ln(distance))        ← athlete's own distance→time curve
  *   duration  = base · exp(f(distance, elevation, weight, experience, modality))

@@ -4,7 +4,7 @@
 
 | Layer | Technology | Responsibility |
 | --- | --- | --- |
-| Client | Svelte 5 (runes) + Vite, Tailwind, Chart.js, Leaflet/OSM, `vite-plugin-pwa` | UI, offline-first PWA, on-device model evaluation |
+| Client | Svelte 5 (runes) + Vite, Tailwind, Chart.js, Leaflet/OSM, `vite-plugin-pwa` | UI, PWA, on-device prediction previews |
 | API | Laravel 11, Sanctum, Eloquent | Auth, validation, history assembly, persistence, orchestration |
 | Database | Supabase **PostgreSQL** | Activities, profiles, predictions, goals + analytical views |
 | ML | Python 3.11, FastAPI, scikit-learn, pandas | Duration model (training + inference), fueling engine |
@@ -118,12 +118,11 @@ timeline = 3 h before / 30 min before / during (every 45–60 min) / recovery
 
 * `vite-plugin-pwa` precaches the app shell, fonts, tiles (runtime, 30-day cache)
   and `public/models/duration_model.json`.
-* The browser evaluates the exported trees (`lib/ml/duration.js`) and the same
-  fueling formulas (`lib/ml/fueling.js`), so the prediction screen is fully
-  functional offline.
-* Writes queue naturally in the UI: a session logged offline is kept by the service
-  worker's app shell until connectivity returns (demo mode) or fails loudly with a
-  toast (live mode, so the athlete knows the server has not seen it yet).
+* The browser evaluates exported trees (`lib/ml/duration.js`) for local previews.
+  Loading account data and saving plans, activities, goals or profiles requires
+  the API and database; writes are not queued offline.
+* If the API is unavailable at startup, the UI offers a retry without replacing
+  account data with sample data or discarding a still-valid token.
 
 ## 8. Security
 
@@ -132,10 +131,10 @@ timeline = 3 h before / 30 min before / during (every 45–60 min) / recovery
 * All queries are scoped through the authenticated user's relations
   (`$request->user()->activities()`), so ID tampering cannot cross accounts;
   `abort_unless($model->user_id === $user->id, 404)` on every route-model binding.
-* RLS is enabled on every table even though Laravel connects as the service role —
-  defence in depth in case an anon key ever leaks into a client bundle.
+* RLS is enabled and Data API access is revoked for browser roles. Laravel
+  connects with a backend PostgreSQL role and enforces user isolation itself.
 * CORS is an explicit origin allowlist; stack traces are suppressed in API responses.
-* The ML service is stateless and holds no database credentials.
+* The ML service is stateless during inference. Configure its shared token and restrict network access in production.
 
 ## 9. Trade-offs
 
@@ -143,5 +142,5 @@ timeline = 3 h before / 30 min before / during (every 45–60 min) / recovery
 | --- | --- | --- |
 | Laravel instead of a Node BFF | Required by the project brief; strong validation/Eloquent | Two runtimes to deploy |
 | Separate Python service | scikit-learn/Pandas ecosystem; independent scaling | One more network hop |
-| Trees exported to JSON | True offline parity, no server round-trip for previews | ~340 kB asset (gzip ≈ 60 kB) |
+| Trees exported to JSON | Local previews without a server round-trip | ~340 kB asset (gzip ≈ 60 kB) |
 | Formula-based fueling | Auditable, explainable, no training data needed | Less “personalised” than a learned model (sweat rate is self-reported) |

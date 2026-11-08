@@ -1,10 +1,10 @@
 <script>
   import { Lock, Mail, Sparkles, ArrowRight, LoaderCircle, Flame, Timer, Salad } from 'lucide-svelte';
-  import { login, continueAsGuest, notify, apiMode, profile } from '../../stores/index.js';
+  import { login, notify, profile } from '../../stores/index.js';
   import { navigate } from '../../lib/router.js';
 
-  let email = $state($apiMode === 'demo' ? 'nagami@trana.app' : '');
-  let password = $state($apiMode === 'demo' ? 'password' : '');
+  let email = $state('');
+  let password = $state('');
   let loading = $state(false);
   let error = $state('');
 
@@ -24,17 +24,7 @@
     }
   }
 
-  async function demo() {
-    loading = true;
-    try {
-      await continueAsGuest();
-      navigate('/');
-    } catch (err) {
-      error = err.message || 'Could not start the demo';
-    } finally {
-      loading = false;
-    }
-  }
+
 </script>
 
 <div class="relative grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
@@ -65,8 +55,8 @@
         before you start.
       </h1>
       <p class="mt-4 max-w-md text-[15px] font-semibold leading-relaxed text-ink-500">
-        TRANA reads your past activities, learns your true pace, and predicts how long your planned route will take —
-        then tells you exactly how much carbohydrate, sodium and fluid to carry.
+        TRANA uses your past activities to estimate how long your planned route will take —
+        then estimates how much carbohydrate, sodium and fluid to carry.
       </p>
 
       <div class="mt-8 grid gap-3 sm:grid-cols-3">
@@ -134,16 +124,6 @@
         </button>
       </form>
 
-      <div class="my-5 flex items-center gap-3">
-        <span class="h-px flex-1 bg-brand-100"></span>
-        <span class="text-[11px] font-bold uppercase tracking-widest text-ink-400">or</span>
-        <span class="h-px flex-1 bg-brand-100"></span>
-      </div>
-
-      <button class="btn-ghost w-full !py-3" onclick={demo} disabled={loading}>
-        <Sparkles size={16} class="text-brand-500" /> Explore with demo data
-      </button>
-
       <p class="mt-4 text-center text-sm font-semibold text-ink-400">
         New to TRANA?
         <button class="font-extrabold text-brand-600 transition hover:text-brand-700" onclick={() => navigate('/register')}>
@@ -152,9 +132,7 @@
       </p>
 
       <p class="mt-6 text-center text-[11px] font-semibold leading-relaxed text-ink-400">
-        {$apiMode === 'demo'
-          ? 'Demo mode — everything you do stays in this browser. Connect the Laravel API to go live.'
-          : 'Connected to the TRANA API. Your data lives in Supabase Postgres.'}
+        Your account data is stored through the TRANA API.
       </p>
     </div>
   </section>

@@ -38,11 +38,11 @@ database password.
    reapply the SQL baseline to an existing database. Generate `APP_KEY` with
    `php artisan key:generate` only when setting up a new `.env`.
 
-The connected Trana project has already received the baseline migration; it
-contains empty application tables and Laravel migration records, not demo data.
-The backend demo endpoint can create a shared account with known default
-credentials in non-production environments. Use it only with an isolated demo
-database, and do not seed that account into a real production database.
+The connected Trana project has already received the baseline migration.
+The default seeder no longer creates a shared account or sample activities, and
+the demo sign-in/reset routes have been removed. Existing database records are
+not altered by these code changes; inspect any legacy sample accounts separately
+before deciding whether to remove them.
 The SQL test in `supabase/tests/verify_security.sql` checks RLS, view security,
 Data API grants, sequences, and migration records.
 

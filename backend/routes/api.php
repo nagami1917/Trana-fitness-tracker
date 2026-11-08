@@ -2,10 +2,10 @@
 
 use App\Http\Controllers\Api\ActivityController;
 use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\DemoController;
 use App\Http\Controllers\Api\GoalController;
 use App\Http\Controllers\Api\PredictionController;
 use App\Http\Controllers\Api\ProfileController;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -16,13 +16,28 @@ use Illuminate\Support\Facades\Route;
 | All routes are consumed through a single base URL (`VITE_API_BASE_URL`).
 */
 
+// The SPA checks both the API and the configured database before loading data.
+// Do not expose database exception messages or credentials to anonymous clients.
+Route::get('/health', function () {
+    try {
+        DB::selectOne('select 1');
+    } catch (\Throwable $exception) {
+        return response()->json([
+            'status' => 'unavailable',
+            'message' => 'The API cannot reach its database. Check the backend database settings.',
+        ], 503);
+    }
+
+    return response()->json(['status' => 'ok']);
+});
+
 Route::get('/docs', fn () => response()->json([
     'name' => 'TRANA API',
     'version' => '1.0.0',
     'endpoints' => [
         'POST /api/auth/register',
         'POST /api/auth/login',
-        'POST /api/auth/demo',
+        'GET  /api/health',
         'GET  /api/auth/me',
         'POST /api/auth/logout',
         'GET  /api/profile',
@@ -46,7 +61,6 @@ Route::get('/docs', fn () => response()->json([
 Route::middleware('throttle:auth')->group(function () {
     Route::post('/auth/register', [AuthController::class, 'register']);
     Route::post('/auth/login', [AuthController::class, 'login']);
-    Route::post('/auth/demo', [AuthController::class, 'demo']);
 });
 
 Route::middleware('auth:sanctum')->group(function () {
@@ -72,5 +86,4 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/model', [PredictionController::class, 'model']);
 
-    Route::post('/demo/reset', [DemoController::class, 'reset']);
 });

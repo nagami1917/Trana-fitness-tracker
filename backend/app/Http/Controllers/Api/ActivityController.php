@@ -27,6 +27,7 @@ class ActivityController extends Controller
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:500'],
+            'page' => ['nullable', 'integer', 'min:1'],
         ]);
 
         $activities = $request->user()->activities()
@@ -35,15 +36,24 @@ class ActivityController extends Controller
             ->when($validated['to'] ?? null, fn ($query, $to) => $query->where('started_at', '<=', $to))
             ->when($validated['q'] ?? null, function ($query, $term) {
                 $query->where(function ($inner) use ($term) {
-                    $inner->where('activity_type', 'ilike', "%{$term}%")
-                        ->orWhere('notes', 'ilike', "%{$term}%");
+                    $pattern = '%'.mb_strtolower($term).'%';
+                    $inner->whereRaw('LOWER(activity_type) LIKE ?', [$pattern])
+                        ->orWhereRaw('LOWER(notes) LIKE ?', [$pattern]);
                 });
             })
             ->orderByDesc('started_at')
-            ->limit($validated['limit'] ?? 200)
-            ->get();
+            ->orderByDesc('id')
+            ->paginate($validated['limit'] ?? 200, ['*'], 'page', $validated['page'] ?? 1);
 
-        return response()->json(['data' => ActivityResource::collection($activities)->toArray($request)]);
+        return response()->json([
+            'data' => ActivityResource::collection($activities->getCollection())->toArray($request),
+            'meta' => [
+                'current_page' => $activities->currentPage(),
+                'last_page' => $activities->lastPage(),
+                'per_page' => $activities->perPage(),
+                'total' => $activities->total(),
+            ],
+        ]);
     }
 
     public function store(StoreActivityRequest $request): JsonResponse

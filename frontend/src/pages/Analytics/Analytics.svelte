@@ -63,15 +63,22 @@
           <div>
             <p class="text-sm font-extrabold text-ink-900">Duration model</p>
             <p class="text-[10px] font-bold uppercase tracking-wide text-ink-400">
-              v{$modelCard?.version ?? 'local'} · {($modelCard?.corpus_rows ?? 0).toLocaleString()} training sessions
+              v{$modelCard?.version ?? 'local'} · {($modelCard?.corpus_rows ?? 0).toLocaleString()} training rows
             </p>
           </div>
         </div>
 
+        <p class="mt-3 text-[11px] font-semibold leading-relaxed text-ink-500">
+          {#if $modelCard?.training_source === 'synthetic'}
+            These test metrics use synthetic activities, not real-world validation.
+          {:else}
+            Test metrics may not reflect your individual results.
+          {/if}
+        </p>
         <div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {#each [
             { label: 'R²', value: $modelCard?.metrics?.r2 ?? '—' },
-            { label: 'Mean error', value: $modelCard?.metrics ? `±${Math.round($modelCard.metrics.mape_pct)}%` : '—' },
+            { label: 'Test error', value: $modelCard?.metrics ? `±${Math.round($modelCard.metrics.mape_pct)}%` : '—' },
             { label: 'MAE', value: $modelCard?.metrics ? `${$modelCard.metrics.mae_min} min` : '—' },
             { label: '80% band', value: $modelCard?.metrics ? `${$modelCard.metrics.interval_coverage_pct}%` : '—' },
           ] as metric (metric.label)}

@@ -1,7 +1,14 @@
 # Deployment guide
 
-TRANA ships as four pieces: **Supabase Postgres**, a **Laravel API** on Vercel, a
-**FastAPI ML service** on any Python host, and the **Svelte PWA** on Vercel.
+TRANA consists of **Supabase Postgres**, a **Laravel API**, a **FastAPI ML
+service**, and the **Svelte PWA**. Hosting options below are examples, not a
+claim that this deployment has been tested.
+
+**Not production-ready yet:** Laravel 11 is end-of-life and this repository
+currently suppresses unresolved Laravel security advisories. Upgrade and audit
+the framework and dependencies before accepting real users. Password recovery,
+email verification, backups/restore testing, monitoring, privacy/consent, and a
+real-world validation of the prediction model also need work.
 
 ```text
 Vercel (frontend) ──► Vercel (Laravel API) ──► Supabase Postgres
@@ -36,7 +43,7 @@ the session pooler supplied by the dashboard. The Laravel PostgreSQL connection
 uses individual `DB_*` values and ignores `DB_URL` and `DATABASE_URL`; clear
 Laravel's config cache after changing them. Laravel/Sanctum performs auth; the
 Supabase Data API's `anon` and `authenticated` roles cannot read app tables or
-views. Do not seed the known demo account into a real production database.
+views. The default seeder does not create sample accounts or activities.
 
 ---
 
@@ -62,8 +69,9 @@ Set these environment variables in the Vercel dashboard (Production + Preview):
 | `CACHE_STORE` / `SESSION_DRIVER` | `database` (run the cache/sessions migrations once) |
 | `CORS_ALLOWED_ORIGINS` | `https://<your-frontend>.vercel.app` |
 | `ML_API_URL` | `https://<ml>.onrender.com` |
+| `ML_API_TOKEN` | Same long, random secret configured on the ML service |
+| `ML_ADMIN_TOKEN` | Separate secret matching the ML service `ADMIN_TOKEN` if model reload is needed |
 | `ML_TIMEOUT` | `12` |
-| `DEMO_MODE` | `false` (or `true` to keep the sandbox login) |
 
 Notes:
 
@@ -88,7 +96,7 @@ The folder contains a `Dockerfile`.
 
 * New → Web Service → Docker → repo `ml` directory.
 * Port `8000`. Health check path `/health`.
-* Env: `ALLOWED_ORIGINS=https://<api>.vercel.app`, `ADMIN_TOKEN=<random long string>`.
+* Privately set `ML_API_TOKEN` to the same random value as Laravel, and set a different random `ADMIN_TOKEN` if model reload is needed. Restrict network access and use HTTPS.
 * Optional persistent disk mounted at `/app/duration_model` if you retrain in place.
 
 **Railway**
@@ -112,10 +120,14 @@ fly deploy
 
 ```bash
 cd ml
-gcloud run deploy trana-ml --source . --port 8000 --allow-unauthenticated --region asia-southeast1
+# Configure the shared ML_API_TOKEN and restrict network access before deployment.
+gcloud run deploy trana-ml --source . --port 8000 --region asia-southeast1
 ```
 
-Verify: `curl https://<ml>/health` → `{ "status": "ok", "model_ready": true }`.
+Configure `ML_API_TOKEN` on **both** Laravel and FastAPI; if it is blank,
+prediction endpoints are not authenticated. `ADMIN_TOKEN` separately protects
+model reload, which is disabled when the token is blank. CORS is not a substitute
+for authentication. Verify `curl https://<ml>/health` reports `model_ready: true`.
 
 Retraining in production:
 
@@ -147,28 +159,24 @@ Add a SPA rewrite so deep links (`/analytics`, `/plan`) resolve:
 { "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }] }
 ```
 
-The service worker caches the shell, the fonts, OSM tiles and the exported model,
-so the installed PWA keeps working offline.
+The service worker caches the shell, fonts, OSM tiles and exported model. Account
+loading and saving still require the API; offline writes are not queued.
 
 ---
 
 ## 5. Smoke test after deploy
 
 ```bash
-# 1. API is alive
-curl -s https://<api>.vercel.app/ | jq
-
-# 2. Demo token
-TOKEN=$(curl -s -X POST https://<api>.vercel.app/api/auth/demo | jq -r .token)
-
-# 3. Prediction end-to-end (Laravel → FastAPI)
-curl -s -X POST https://<api>.vercel.app/api/predictions \
-  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d '{"activity_type":"run","distance_km":21.1,"elevation_gain_m":220}' | jq '.data.duration, .data.fueling.carbs'
-
-# 4. Frontend
-open https://<frontend>.vercel.app
+# Read-only connection checks; do not put passwords in shell history.
+curl --fail https://<api>.vercel.app/api/health
+curl --fail https://<ml>/health
 ```
+
+Open the frontend, register a dedicated test account, complete onboarding, log an
+activity, save a prediction, sign out and sign back in. Verify the activity and
+plan persist and that a second account cannot access them. Use disposable test
+data and remove it through the app when appropriate. A successful health check
+alone does not prove end-to-end integration.
 
 ---
 
@@ -180,9 +188,9 @@ open https://<frontend>.vercel.app
 | `APP_KEY`, `APP_ENV`, `APP_DEBUG`, `APP_URL` | | ✅ | |
 | `DB_*`, `DB_SSLMODE` | | ✅ | |
 | `CORS_ALLOWED_ORIGINS` | | ✅ | |
-| `ML_API_URL`, `ML_API_TOKEN`, `ML_TIMEOUT` | | ✅ | |
+| `ML_API_URL`, `ML_TIMEOUT` | | ✅ | |
+| `ML_API_TOKEN` (same secret) | | ✅ | ✅ |
 | `ML_ADMIN_TOKEN` | | ✅ (reload) | |
-| `DEMO_MODE`, `DEMO_EMAIL`, `DEMO_PASSWORD` | | ✅ | |
 | `ALLOWED_ORIGINS`, `ADMIN_TOKEN` | | | ✅ |
 | `DATABASE_URL` (training only) | | | ✅ |
 

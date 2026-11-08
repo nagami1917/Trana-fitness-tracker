@@ -82,7 +82,7 @@ def load_activities(source: str, csv_path: str | None) -> pd.DataFrame:
     return frame
 
 
-def train(activities: pd.DataFrame, seed: int = 7) -> dict:
+def train(activities: pd.DataFrame, seed: int = 7, training_source: str = "unknown") -> dict:
     frame = training_frame(activities)
     x = frame[FEATURE_ORDER].to_numpy(dtype=float)
     # The model learns a log pace factor; minutes are recovered via the athlete's
@@ -146,6 +146,7 @@ def train(activities: pd.DataFrame, seed: int = 7) -> dict:
         "feature_importance": importance.to_dict(),
         "trained_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "corpus_rows": int(len(frame)),
+        "training_source": training_source,
     }
     (ARTIFACTS / "model_card.json").write_text(json.dumps(card, indent=2))
     return card
@@ -192,7 +193,7 @@ def main() -> None:
     if len(activities) < 200:
         raise SystemExit(f"need at least 200 activities to train, got {len(activities)}")
 
-    card = train(activities, seed=args.seed)
+    card = train(activities, seed=args.seed, training_source="synthetic" if args.source == "synth" else args.source)
     print(json.dumps(card["metrics"], indent=2))
     print("top features:", list(card["feature_importance"].items())[:4])
 

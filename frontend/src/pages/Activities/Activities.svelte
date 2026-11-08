@@ -126,6 +126,7 @@
 
   async function submit() {
     saving = true;
+    let written = false;
     try {
       const distance = draftRouteKm > 0 ? Number(draftRouteKm.toFixed(2)) : Number(draft.distance_km);
       await api.activities.create({
@@ -139,31 +140,37 @@
         route: draft.route.length > 1 ? draft.route : null,
         notes: draft.notes || null,
       });
-      await refresh();
+      written = true;
       addOpen = false;
+      await refresh();
       notify('Activity logged — your model just got sharper.');
     } catch (error) {
-      notify(error.message || 'Could not save the activity', 'error');
+      notify(written ? 'Activity saved, but the view could not refresh. Reload when connected.' : (error.message || 'Could not save the activity'), 'error');
     } finally {
       saving = false;
     }
   }
 
   async function remove(id) {
+    let written = false;
     try {
       await api.activities.remove(id);
-      await refresh();
+      written = true;
       confirmingDelete = null;
       detail = null;
+      await refresh();
       notify('Activity deleted.', 'info');
     } catch (error) {
-      notify(error.message || 'Could not delete', 'error');
+      notify(written ? 'Activity deleted, but the view could not refresh. Reload when connected.' : (error.message || 'Could not delete'), 'error');
     }
   }
 
-  function onPick(_mode, _index, latlng) {
+  function onPick(mode, index, latlng) {
     if (!latlng) return;
-    draft.route = [...draft.route, [Number(latlng.lat.toFixed(5)), Number(latlng.lng.toFixed(5))]];
+    const point = [Number(latlng.lat.toFixed(5)), Number(latlng.lng.toFixed(5))];
+    draft.route = mode === 'move'
+      ? draft.route.map((existing, i) => (i === index ? point : existing))
+      : [...draft.route, point];
   }
 </script>
 

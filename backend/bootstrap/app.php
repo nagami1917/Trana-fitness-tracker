@@ -56,7 +56,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 : 500;
 
             return response()->json([
-                'message' => $status === 500 && ! config('app.debug')
+                'message' => $status === 500
                     ? 'Something went wrong on our side.'
                     : $e->getMessage(),
             ], $status);

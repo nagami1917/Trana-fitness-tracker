@@ -9,13 +9,12 @@
  * build cannot: undefined values, bad guards, broken `$derived` chains.
  */
 
-import { createRequire } from 'node:module';
+import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '..');
-const require = createRequire(import.meta.url);
 
 // --- browser stubs ---------------------------------------------------------
 const store = new Map();
@@ -24,10 +23,34 @@ globalThis.localStorage = {
   setItem: (k, v) => store.set(k, String(v)),
   removeItem: (k) => store.delete(k),
 };
-globalThis.fetch = async () => ({ ok: false, json: async () => null, text: async () => '' });
+const fixtureUser = { id: 1, name: 'Test Athlete', email: 'athlete@example.test' };
+const fixtureProfile = {
+  ...fixtureUser, weight_kg: 60, height_cm: 168, birth_year: 1998, sex: 'other',
+  sweat_profile: 'normal', experience_level: 2, typical_temperature_c: 26, units: 'metric',
+  city: 'Test City', onboarded: true, total_activities: 3,
+  daily_calorie_goal: 2400, daily_distance_goal_km: 10, daily_active_min_goal: 60,
+  weekly_calorie_goal: 12000, weekly_distance_goal_km: 40, daily_carb_goal_g: 360,
+};
+const fixtureActivities = [
+  { id: 1, activity_type: 'run', distance_km: 5, duration_min: 30, calories: 300, elevation_gain_m: 20, started_at: new Date().toISOString(), route: null, notes: null },
+  { id: 2, activity_type: 'ride', distance_km: 20, duration_min: 60, calories: 500, elevation_gain_m: 80, started_at: new Date(Date.now() - 86400000).toISOString(), route: null, notes: null },
+  { id: 3, activity_type: 'walk', distance_km: 3, duration_min: 40, calories: 120, elevation_gain_m: 10, started_at: new Date(Date.now() - 172800000).toISOString(), route: null, notes: null },
+];
+const fixtureGoals = { daily_calories: 2400, daily_distance_km: 10, daily_active_min: 60, weekly_calories: 12000, weekly_distance_km: 40, carb_target_g: 360 };
+const page = (data) => ({ data, meta: { current_page: 1, last_page: 1 } });
+globalThis.fetch = async (url) => {
+  let body;
+  if (url === '/api/auth/login') body = { token: 'test-token', user: fixtureUser };
+  else if (url === '/api/profile') body = { data: fixtureProfile };
+  else if (url.startsWith('/api/activities?')) body = page(fixtureActivities);
+  else if (url.startsWith('/api/predictions?')) body = page([]);
+  else if (url === '/api/goals') body = { data: fixtureGoals };
+  else throw new Error(`Unexpected test request: ${url}`);
+  return new Response(JSON.stringify(body), { status: 200 });
+};
 globalThis.window = { location: { pathname: '/', search: '' }, addEventListener() {}, scrollTo() {} };
 
-// This test renders the local demo, even when a developer has a live .env.local.
+// Always render against explicit HTTP test fixtures, never a browser demo backend.
 process.env.VITE_API_BASE_URL = '';
 
 const { createServer } = await import('vite');
@@ -58,8 +81,10 @@ let failures = 0;
 
 try {
   const stores = await vite.ssrLoadModule('/src/stores/index.js');
-  await stores.continueAsGuest();
-  await stores.refresh();
+  await stores.login({ email: fixtureUser.email, password: 'fixture-only' });
+  stores.modelCard.set({ training_source: 'synthetic', version: 'test', corpus_rows: 10,
+    metrics: { r2: 0.9, mape_pct: 10, mae_min: 2, interval_coverage_pct: 80, test_rows: 2 },
+    feature_importance: {} });
 
   const routes = [
     ['/', 'Dashboard'],
@@ -94,6 +119,12 @@ try {
   // App shell + auth gate
   try {
     const mod = await vite.ssrLoadModule('/src/App.svelte');
+    stores.booting.set(false);
+    stores.bootError.set('Test connection failure');
+    const unavailable = render(mod.default).body;
+    assert.match(unavailable, /TRANA is unavailable/);
+    assert.match(unavailable, /Try again/);
+    stores.bootError.set(null);
     const html = render(mod.default).body;
     console.log(`✔ /            App         ${String(html.length).padStart(5)} chars`);
   } catch (error) {
@@ -117,6 +148,7 @@ try {
     try {
       const mod = await vite.ssrLoadModule(`/src/pages/${name}/${name}.svelte`);
       const html = render(mod.default).body;
+      assert.doesNotMatch(html, /Explore with demo data|demo@trana\.app/);
       console.log(`✔ /${name.toLowerCase().padEnd(9)} ${name.padEnd(11)} ${String(html.length).padStart(5)} chars`);
     } catch (error) {
       failures += 1;

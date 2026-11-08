@@ -1,8 +1,8 @@
 <script>
-  import { Settings as SettingsIcon, Save, LoaderCircle, LogOut, RefreshCw, Info, Brain, Smartphone, ShieldCheck, User, HeartPulse } from 'lucide-svelte';
+  import { Settings as SettingsIcon, Save, LoaderCircle, LogOut, Info, Brain, Smartphone, ShieldCheck, User, HeartPulse } from 'lucide-svelte';
   import Card from '../../components/common/Card.svelte';
   import Segmented from '../../components/common/Segmented.svelte';
-  import { profile, session, logout, notify, refresh, apiMode, modelCard, activities, plans } from '../../stores/index.js';
+  import { profile, session, logout, notify, refresh, modelCard, activities } from '../../stores/index.js';
   import { api } from '../../services/client.js';
   import { navigate } from '../../lib/router.js';
   import { nf } from '../../lib/format.js';
@@ -21,7 +21,6 @@
     units: $profile?.units ?? 'metric',
   });
   let saving = $state(false);
-  let resetting = $state(false);
 
   $effect(() => {
     if ($profile && !form.name) {
@@ -43,6 +42,7 @@
 
   async function save() {
     saving = true;
+    let written = false;
     try {
       await api.profile.update({
         name: form.name,
@@ -56,25 +56,13 @@
         typical_temperature_c: Number(form.typical_temperature_c),
         units: form.units,
       });
+      written = true;
       await refresh();
       notify('Profile saved — predictions will use your new numbers.');
     } catch (error) {
-      notify(error.message || 'Could not save profile', 'error');
+      notify(written ? 'Profile saved, but the view could not refresh. Reload when connected.' : (error.message || 'Could not save profile'), 'error');
     } finally {
       saving = false;
-    }
-  }
-
-  async function resetDemo() {
-    resetting = true;
-    try {
-      await api.reset();
-      await refresh();
-      notify('Demo data restored.', 'info');
-    } catch (error) {
-      notify(error.message || 'Could not reset', 'error');
-    } finally {
-      resetting = false;
     }
   }
 
@@ -206,11 +194,18 @@
         <div class="mt-3 space-y-1.5 text-[12px] font-semibold text-white/85">
           <p class="flex justify-between"><span class="text-white/60">Model version</span><span>{$modelCard?.version ?? 'local'}</span></p>
           <p class="flex justify-between"><span class="text-white/60">Algorithm</span><span class="text-right">{($modelCard?.algorithm ?? 'Gradient boosting').replace('GradientBoostingRegressor', 'Gradient boosting')}</span></p>
-          <p class="flex justify-between"><span class="text-white/60">Mean error</span><span>{$modelCard?.metrics ? `±${Math.round($modelCard.metrics.mape_pct)}%` : '—'}</span></p>
-          <p class="flex justify-between"><span class="text-white/60">Training sessions</span><span>{nf($modelCard?.corpus_rows ?? 0)}</span></p>
+          <p class="flex justify-between"><span class="text-white/60">Test error</span><span>{$modelCard?.metrics ? `±${Math.round($modelCard.metrics.mape_pct)}%` : '—'}</span></p>
+          <p class="flex justify-between"><span class="text-white/60">Training rows</span><span>{nf($modelCard?.corpus_rows ?? 0)}</span></p>
           <p class="flex justify-between"><span class="text-white/60">Your sessions</span><span>{$activities.length}</span></p>
-          <p class="flex justify-between"><span class="text-white/60">Data mode</span><span>{$apiMode === 'live' ? 'Laravel API + Supabase' : 'Local demo'}</span></p>
+          <p class="flex justify-between"><span class="text-white/60">Storage</span><span>TRANA API</span></p>
         </div>
+        <p class="mt-3 text-[11px] font-semibold leading-relaxed text-white/75">
+          {#if $modelCard?.training_source === 'synthetic'}
+            The bundled model was trained and tested on synthetic activities; its real-world accuracy is not validated.
+          {:else}
+            Prediction results are estimates and may differ from your actual performance.
+          {/if}
+        </p>
       </Card>
 
       <Card>
@@ -220,14 +215,9 @@
         </div>
         <div class="mt-3 space-y-2">
           <p class="text-[11px] font-semibold text-ink-400">
-            Signed in as <span class="font-extrabold text-ink-700">{$session?.email ?? 'demo@trana.app'}</span>
+            Signed in as <span class="font-extrabold text-ink-700">{$session?.email ?? ''}</span>
           </p>
           <button class="btn-ghost w-full justify-start !text-rose-500" onclick={signOut}><LogOut size={15} /> Sign out</button>
-          {#if $apiMode === 'demo'}
-            <button class="btn-ghost w-full justify-start" onclick={resetDemo} disabled={resetting}>
-              <RefreshCw size={15} class={resetting ? 'animate-spin' : ''} /> Reset demo data
-            </button>
-          {/if}
         </div>
       </Card>
 
@@ -237,8 +227,8 @@
           <h2 class="text-lg">Install TRANA</h2>
         </div>
         <p class="mt-2 text-[12px] font-semibold leading-relaxed text-ink-500">
-          TRANA is a progressive web app. Add it to your home screen to plan sessions offline — the duration model runs
-          entirely on your device when the network is gone.
+          TRANA is a progressive web app. Prediction previews run on your device, but signing in, loading your data,
+          and saving changes require the server connection.
         </p>
         <p class="mt-2 text-[10px] font-bold uppercase tracking-wide text-ink-400">iOS: Share → Add to Home Screen · Android: menu → Install app</p>
       </Card>

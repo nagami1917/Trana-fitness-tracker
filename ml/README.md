@@ -8,12 +8,21 @@ database access at inference time.
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-python -m duration_model.train            # writes duration_model/{duration_model.joblib,duration_model.json,model_card.json}
+# Existing artifacts are included; retraining is optional and requires consent for real data.
 python -m evaluation.sanity_check         # physical plausibility asserts (exit 1 on failure)
 uvicorn api.main:app --reload --port 8000
 ```
 
 Interactive docs: <http://localhost:8000/docs>
+
+## Service security
+
+For a deployment, set the same long random `ML_API_TOKEN` on FastAPI and Laravel;
+FastAPI checks the bearer token on prediction and model-info routes. An empty
+value leaves these routes unauthenticated for local development. Set a separate
+`ADMIN_TOKEN` on FastAPI and `ML_ADMIN_TOKEN` on Laravel for model reload; reload
+is disabled if `ADMIN_TOKEN` is missing. Restrict network access and use HTTPS;
+CORS is not authentication. `/health` is public for service probes.
 
 ## Endpoints
 
@@ -85,7 +94,9 @@ base      = exp(a + b·ln d)          # fitted per athlete & modality
 duration  = base · exp(f(features))  # features: distance, elevation, elev/km, mass, experience, sport
 ```
 
-Metrics live in `duration_model/model_card.json` and are surfaced in the UI.
+Metrics and the training source live in `duration_model/model_card.json` and
+are surfaced in the UI. The bundled model was trained and evaluated on synthetic
+activities; those metrics do not validate real-world accuracy.
 
 ## Retrain on real data
 
@@ -96,5 +107,7 @@ DATABASE_URL="postgresql://postgres.<ref>:<pw>@aws-0-….pooler.supabase.com:543
 curl -X POST $ML_API_URL/model/reload -H "X-Admin-Token: $ADMIN_TOKEN"
 ```
 
-Copy `duration_model/duration_model.json` → `frontend/public/models/` so the PWA stays in
-sync with the server.
+Copy both `duration_model/duration_model.json` and `model_card.json` to
+`frontend/public/models/` and redeploy so browser previews use the same version.
+Train on user data only with appropriate consent and validate on representative
+real-world data before relying on the estimates.
