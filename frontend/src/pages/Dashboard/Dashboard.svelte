@@ -376,17 +376,12 @@
             <span class="grid h-8 w-8 place-items-center rounded-xl bg-white/20"><Brain size={16} /></span>
             <p class="text-[11px] font-extrabold uppercase tracking-[0.12em] text-white/80">Your model</p>
           </div>
-          <p class="mt-3 font-display text-xl font-extrabold leading-tight">
-            {#if $modelCard?.metrics}
-              ±{Math.round($modelCard.metrics.mape_pct)}% duration accuracy
-            {:else}
-              Personal predictions active
-            {/if}
-          </p>
+          <p class="mt-3 font-display text-xl font-extrabold leading-tight">Estimates based on your history</p>
           <p class="mt-1 text-xs font-semibold text-white/80">
-            Trained on your pace history
-            {#if $modelCard?.metrics}
-              · R² {$modelCard.metrics.r2} over {$modelCard.metrics.test_rows.toLocaleString()} held-out sessions
+            {#if $modelCard?.training_source === 'synthetic'}
+              The bundled model was trained on synthetic activities. Real-world accuracy is not validated.
+            {:else}
+              Results are estimates and may differ from your actual performance.
             {/if}
           </p>
           <button class="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-white/15 px-3 py-1.5 text-[11px] font-extrabold backdrop-blur transition hover:bg-white/25" onclick={() => navigate('/analytics')}>

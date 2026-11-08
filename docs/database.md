@@ -80,11 +80,9 @@ users 1──N predictions
 
 ## Seeding
 
-`php artisan db:seed` creates a demo athlete via `DemoSeeder` (32 activities over
-the past months, matching the frontend demo fixtures in `frontend/src/services/seed.js`).
-Seed only an isolated development database: the demo account has known default
-credentials. Backend tests use in-memory SQLite with `RefreshDatabase` — they
-never touch Postgres.
+The default seeder creates no users or activities. Register accounts through
+Laravel instead. Existing data is not deleted or migrated by seeding. Backend
+tests use in-memory SQLite with `RefreshDatabase`; they never touch Postgres.
 
 ## Spec-compatible views
 

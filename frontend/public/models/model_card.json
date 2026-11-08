@@ -36,5 +36,6 @@
     "is_walk": 0.0056
   },
   "trained_at": "2026-11-08T04:45:29+00:00",
-  "corpus_rows": 7988
+  "corpus_rows": 7988,
+  "training_source": "synthetic"
 }

@@ -47,7 +47,7 @@ class PredictionService
             'elevation_gain_m' => (float) ($input['elevation_gain_m'] ?? 0),
             'weight_kg' => (float) $profile->weight_kg,
             'experience_level' => (int) $profile->experience_level,
-            'sweat_profile' => $profile->sweat_profile ?: 'normal',
+            'sweat_profile' => $input['sweat_profile'] ?? ($profile->sweat_profile ?: 'normal'),
             'temperature_c' => (float) ($input['temperature_c'] ?? $profile->typical_temperature_c ?? 26),
             'history' => $history,
         ];

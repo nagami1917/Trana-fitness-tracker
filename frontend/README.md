@@ -8,18 +8,22 @@ npm run preview   # serve the production build
 node scripts/smoke.mjs   # headless prediction pipeline check
 ```
 
-## Data mode
+## API connection
 
 | `VITE_API_BASE_URL` | Behaviour |
 | --- | --- |
-| empty | **Demo mode** — seeded athlete, localStorage persistence, on-device model |
-| `/` | **Live mode** — same-origin `/api`; Vite proxies to `VITE_PROXY_TARGET` during development |
-| `https://api…` | **Live mode** — Sanctum bearer tokens against the deployed Laravel API |
+| empty or `/` | Same-origin `/api`; Vite proxies to `VITE_PROXY_TARGET` during development |
+| `https://api…` | Sanctum bearer tokens against the deployed Laravel API |
 
-Nothing else changes: every screen consumes the same shapes, because
-`src/services/demo.js` mirrors the Laravel contract exactly. Set `/` only when
-Vite or your production host forwards `/api` to Laravel. Never put a database
-password or Supabase service-role key in `VITE_*` variables.
+A Laravel API and configured database are required; there is no browser-local
+sample dataset. Data saved by the previous browser-only mode is not automatically
+imported or deleted; it remains in that browser until explicitly removed. Existing
+real records in Supabase are not changed by this update.
+
+The default proxy target is `http://127.0.0.1:8001` on the Vite server. Set
+`VITE_PROXY_TARGET` in `.env.local` if Laravel uses another port, and restart
+Vite. Never put a database password or Supabase service-role key in `VITE_*`
+variables. A failed startup shows a retry screen instead of sample data.
 
 ## Map
 
@@ -37,7 +41,7 @@ src/
   pages/                  Login · Register · Dashboard · Activities · PlanActivity ·
                           Fueling · Analytics · Goals · Profile · Settings · Onboarding · NotFound
   stores/index.js         global state + derived analytics
-  services/               client.js (live API) · demo.js (offline backend) · seed.js
+  services/               client.js (Laravel API) · config.js
   lib/
     router.js             history-API router (no dependency)
     ml/                   duration.js (tree evaluator) · fueling.js · index.js
@@ -47,13 +51,16 @@ public/
   mascot-cat.png, icons   brand assets
 ```
 
-## Offline parity
+## Prediction previews
 
-`public/models/duration_model.json` is produced by `ml/duration_model/train.py`.
-The browser walks the very same trees (`lib/ml/duration.js`), so a prediction made
-offline in the air matches one made by the server. Regenerate the file after every
-retrain — the `train` script writes it to `ml/duration_model/`, copy it into
-`frontend/public/models/`.
+`public/models/duration_model.json` is exported by `ml/duration_model/train.py`
+and evaluated locally for previews. The bundled model was trained on synthetic
+activities; its metrics are not real-world validation. To keep a retrained model
+in sync, copy **both** `duration_model.json` and `model_card.json` from
+`ml/duration_model/` to `frontend/public/models/` and redeploy the frontend.
+The authoritative saved result comes from Laravel and FastAPI. Signing in,
+loading account data, and saving changes require a server connection; writes are
+not queued offline.
 
 ## Design tokens
 

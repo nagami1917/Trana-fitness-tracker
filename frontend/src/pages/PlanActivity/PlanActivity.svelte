@@ -83,11 +83,28 @@
     void form.elevation_gain_m;
     void form.temperature_c;
     void form.sweat_profile;
+    void form.planned_for;
     void form.route.length;
     void $activities.length;
+    saved = null;
     clearTimeout(timer);
     timer = setTimeout(run, 160);
   });
+
+  function startOver() {
+    form = {
+      activity_type: 'run',
+      distance_km: 5,
+      elevation_gain_m: 45,
+      temperature_c: $profile?.typical_temperature_c ?? 26,
+      route: [],
+      sweat_profile: $profile?.sweat_profile ?? 'normal',
+      planned_for: '',
+    };
+    saved = null;
+    prediction = null;
+    drawing = false;
+  }
 
   function pickType(id) {
     form.activity_type = id;
@@ -96,9 +113,12 @@
     }
   }
 
-  function onPick(_mode, _index, latlng) {
+  function onPick(mode, index, latlng) {
     if (!latlng) return;
-    form.route = [...form.route, [Number(latlng.lat.toFixed(5)), Number(latlng.lng.toFixed(5))]];
+    const point = [Number(latlng.lat.toFixed(5)), Number(latlng.lng.toFixed(5))];
+    form.route = mode === 'move'
+      ? form.route.map((existing, i) => (i === index ? point : existing))
+      : [...form.route, point];
   }
 
   function useRouteDistance() {
@@ -111,23 +131,30 @@
   async function save() {
     if (!prediction) return;
     saving = true;
+    let written = false;
+    let created = null;
     try {
-      const created = await api.predictions.create({
+      created = await api.predictions.create({
         activity_type: form.activity_type,
         distance_km: Number(effectiveDistance.toFixed(2)),
         elevation_gain_m: Number(form.elevation_gain_m) || 0,
         route: form.route.length > 1 ? form.route : null,
         temperature_c: Number(form.temperature_c),
-        planned_for: form.planned_for || null,
+        sweat_profile: form.sweat_profile,
+        planned_for: form.planned_for ? new Date(form.planned_for).toISOString() : null,
       });
+      written = true;
       await refresh();
       saved = created;
-      // In live mode the server's numbers are authoritative (fresh model artifact,
-      // server-measured route distance), so show those instead of the local preview.
-      if (api.mode === 'live') prediction = created;
+      // The server's calculation is authoritative; the on-device result is a preview.
+      prediction = created;
       notify('Plan saved — it’s on your dashboard.');
     } catch (error) {
-      notify(error.message || 'Could not save the plan', 'error');
+      if (written) {
+        saved = created;
+        prediction = created;
+      }
+      notify(written ? 'Plan saved, but the view could not refresh. Reload when connected.' : (error.message || 'Could not save the plan'), 'error');
     } finally {
       saving = false;
     }
@@ -140,7 +167,7 @@
       <span class="pill mb-2"><Sparkles size={12} /> TRANA prediction</span>
       <h1 class="font-display text-2xl sm:text-3xl">Plan your next session</h1>
       <p class="mt-1 text-sm font-semibold text-ink-400">
-        Tell TRANA what you’re about to do. It reads your history and predicts the time and the fuel.
+        Preview an estimate on this device using your history. Saving a plan uses the server’s prediction service.
       </p>
     </div>
     <button class="btn-ghost self-start" onclick={() => navigate('/activities')}>
@@ -295,7 +322,7 @@
           <FuelingPlan plan={prediction} />
 
           <div class="mt-4 flex flex-col gap-2 sm:flex-row">
-            <button class="btn-primary flex-1" onclick={save} disabled={saving}>
+            <button class="btn-primary flex-1" onclick={save} disabled={saving || Boolean(saved)}>
               {#if saving}
                 <LoaderCircle size={16} class="animate-spin" /> Saving…
               {:else if saved}
@@ -304,7 +331,7 @@
                 <Save size={16} /> Save this plan
               {/if}
             </button>
-            <button class="btn-ghost flex-1" onclick={() => navigate('/plan')}>
+            <button class="btn-ghost flex-1" onclick={startOver}>
               <Play size={15} /> Start over
             </button>
           </div>
@@ -317,7 +344,7 @@
         </Card>
       {/if}
 
-      {#if $plans.length > 1}
+      {#if $plans.length > 0}
         <Card>
           <h2 class="text-base">Saved plans</h2>
           <div class="mt-2 divide-y divide-brand-100/70">
@@ -325,6 +352,7 @@
               <button
                 class="flex w-full items-center gap-3 py-2.5 text-left transition hover:opacity-75"
                 onclick={() => {
+                  clearTimeout(timer);
                   prediction = plan;
                   saved = plan;
                 }}

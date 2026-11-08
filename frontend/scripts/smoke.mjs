@@ -3,7 +3,7 @@
  *
  *   node scripts/smoke.mjs
  *
- * Exercises the demo backend + the ported ML engine exactly as the UI does,
+ * Exercises the on-device prediction engine with explicit test fixtures,
  * without a browser. Useful in CI and for comparing the JS port against the
  * Python service (see ml/evaluation/sanity_check.py).
  */
@@ -30,20 +30,24 @@ globalThis.fetch = async (url) => {
   return { ok: true, json: async () => JSON.parse(body), text: async () => body };
 };
 
-const { demoApi } = await import('../src/services/demo.js');
-const { predictPlan, loadModel } = await import('../src/lib/ml/index.js');
-const { loadModelCard } = await import('../src/lib/ml/index.js');
+const { predictPlan, loadModel, loadModelCard } = await import('../src/lib/ml/index.js');
 
 const model = await loadModel();
 const card = await loadModelCard();
 console.log(`model v${card.version} · R² ${card.metrics.r2} · MAE ${card.metrics.mae_min} min`);
 if (!model?.models?.q50) throw new Error('trees failed to load');
 
-// --- seeded history --------------------------------------------------------
-const activities = await demoApi.activities.list();
-const profile = await demoApi.profile.get();
-const runs = activities.filter((a) => a.activity_type === 'run');
-console.log(`${activities.length} seeded activities (${runs.length} runs), ${profile.weight_kg} kg athlete\n`);
+// Explicit synthetic fixtures are test-only and never used by the application.
+const profile = { weight_kg: 60, experience_level: 2, sweat_profile: 'normal', typical_temperature_c: 26 };
+const activities = [
+  { activity_type: 'run', distance_km: 5, duration_min: 30, elevation_gain_m: 20 },
+  { activity_type: 'run', distance_km: 8, duration_min: 49, elevation_gain_m: 40 },
+  { activity_type: 'run', distance_km: 10, duration_min: 63, elevation_gain_m: 60 },
+  { activity_type: 'ride', distance_km: 20, duration_min: 65, elevation_gain_m: 100 },
+  { activity_type: 'walk', distance_km: 4, duration_min: 50, elevation_gain_m: 15 },
+  { activity_type: 'hike', distance_km: 7, duration_min: 120, elevation_gain_m: 350 },
+];
+console.log(`${activities.length} test fixture activities, ${profile.weight_kg} kg athlete\n`);
 
 const CASES = [
   ['run', 5, 40],
@@ -76,16 +80,6 @@ for (const [activity_type, distance_km, elevation_gain_m] of CASES) {
     ].join(''),
   );
 }
-
-// --- persisted plan round-trip --------------------------------------------
-const saved = await demoApi.predictions.create({
-  activity_type: 'run',
-  distance_km: 12,
-  elevation_gain_m: 90,
-});
-const plans = await demoApi.predictions.list();
-if (!plans.find((p) => p.id === saved.id)) throw new Error('plan was not persisted');
-console.log(`\nsaved plan #${saved.id}: ${Math.round(saved.duration.minutes)} min, ${saved.fueling.carbs.totalG} g carbs`);
 
 // --- monotonicity + sanity guards -----------------------------------------
 const a = await predictPlan({ activity: { activity_type: 'run', distance_km: 8, elevation_gain_m: 40 }, profile, activities });

@@ -1,6 +1,6 @@
 <script>
   import { Lock, Mail, User, Sparkles, ArrowRight, LoaderCircle, Timer, Flame, Salad } from 'lucide-svelte';
-  import { register, notify, apiMode } from '../../stores/index.js';
+  import { register, notify } from '../../stores/index.js';
   import { navigate } from '../../lib/router.js';
 
   let name = $state('');
@@ -59,8 +59,7 @@
         from day one.
       </h1>
       <p class="mt-4 max-w-md text-[15px] font-semibold leading-relaxed text-ink-500">
-        Create a free account and TRANA learns your pace from your own activities, predicts finish times, and tells you
-        exactly what to eat, drink and carry.
+        Create an account and TRANA uses your activities to estimate finish times and suggest what to eat, drink and carry.
       </p>
 
       <div class="mt-8 grid gap-3 sm:grid-cols-3">
@@ -146,9 +145,7 @@
       </p>
 
       <p class="mt-4 text-center text-[11px] font-semibold leading-relaxed text-ink-400">
-        {$apiMode === 'demo'
-          ? 'Demo mode — your account stays in this browser. Connect the Laravel API to go live.'
-          : 'Connected to the TRANA API. Your data lives in Supabase Postgres.'}
+        Your account data is stored through the TRANA API.
       </p>
     </div>
   </section>

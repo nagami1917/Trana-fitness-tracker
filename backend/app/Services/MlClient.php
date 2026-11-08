@@ -34,7 +34,7 @@ class MlClient
             $response = $this->request()->post('/predict', $payload);
         } catch (ConnectionException $e) {
             throw new RuntimeException(
-                'The prediction service is unreachable: '.$e->getMessage(),
+                'The prediction service is unreachable. Check the backend ML settings.',
                 previous: $e
             );
         }
@@ -83,7 +83,7 @@ class MlClient
     {
         $request = $this->request();
 
-        if ($token = env('ML_ADMIN_TOKEN')) {
+        if ($token = config('ml.admin_token')) {
             $request = $request->withHeaders(['X-Admin-Token' => $token]);
         }
 

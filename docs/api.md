@@ -1,10 +1,16 @@
 # TRANA API reference
 
 Base URL: `https://<your-api>/api`
-Auth: `Authorization: Bearer <sanctum-token>` on every route except `auth/*`.
+Auth: `Authorization: Bearer <sanctum-token>` except for `/health`, `/docs`, `/auth/register`, and `/auth/login`.
 Responses are JSON; collections are wrapped in `{ "data": [...] }`.
 
 ---
+
+## Health
+
+`GET /health` returns `{ "status": "ok" }` if Laravel can connect to its
+configured database, or a generic `503` without connection details if it cannot.
+This does not check FastAPI or verify that all migrations are applied.
 
 ## Auth
 
@@ -22,10 +28,6 @@ Responses are JSON; collections are wrapped in `{ "data": [...] }`.
 { "email": "nagami@trana.app", "password": "secret123", "device_name": "pwa" }
 ```
 `200` → `{ token, user }` · `422` on bad credentials.
-
-### `POST /auth/demo`
-No body. Creates/uses the shared sandbox athlete (seeded history) and returns a token.
-`403` in production unless `DEMO_MODE=true`.
 
 ### `GET /auth/me` → `{ user: {...} }` · `POST /auth/logout` → `{ message }`
 
@@ -55,7 +57,7 @@ No body. Creates/uses the shared sandbox athlete (seeded history) and returns a 
 
 ## Activities
 
-### `GET /activities?type=run&q=trail&from=2026-10-01&to=2026-11-08&limit=200`
+### `GET /activities?type=run&q=trail&from=2026-10-01&to=2026-11-08&limit=200&page=1`
 ```json
 {
   "data": [{
@@ -63,9 +65,13 @@ No body. Creates/uses the shared sandbox athlete (seeded history) and returns a 
     "duration_min": 58.4, "calories": 612, "avg_heart_rate": 152,
     "started_at": "2026-11-05T06:40:00+08:00",
     "route": [[14.67, 121.04], [14.68, 121.05]], "notes": null, "source": "manual"
-  }]
+  }],
+  "meta": { "current_page": 1, "last_page": 1, "per_page": 200, "total": 1 }
 }
 ```
+
+The default page size is 200 (maximum 500). Request subsequent pages until
+`current_page == last_page`.
 
 ### `POST /activities`
 ```json
@@ -111,11 +117,12 @@ when omitted. Adding an activity also re-buckets `experience_level`.
   "distance_km": 21.1,
   "elevation_gain_m": 220,
   "temperature_c": 26,
+  "sweat_profile": "high",
   "planned_for": "2026-11-15T05:30:00+08:00",
   "route": [[14.65, 121.02], [14.70, 121.09]]
 }
 ```
-If `route` has ≥ 2 points the server measures it (haversine) and uses that distance.
+If `route` has ≥ 2 points the server measures it (haversine) and uses that distance; the measured route must be 0.1–500 km. The optional `sweat_profile` overrides the profile for this estimate only.
 
 `201`
 ```json
@@ -157,13 +164,16 @@ If `route` has ≥ 2 points the server measures it (haversine) and uses that dis
 `503` when the ML service is unreachable:
 ```json
 { "message": "The prediction service is unavailable right now (HTTP 500).",
-  "hint": "The Svelte PWA can still predict locally while the ML service is offline." }
+  "hint": "A local preview may be available, but saving requires the prediction service." }
 ```
 
 ### `POST /predictions/preview`
 Same request body, returns the **raw FastAPI payload** (`snake_case`) without persisting.
 
-### `GET /predictions?status=planned&limit=30` · `GET /predictions/{id}` · `DELETE /predictions/{id}`
+### `GET /predictions?status=planned&limit=30&page=1` · `GET /predictions/{id}` · `DELETE /predictions/{id}`
+
+The list includes `meta.current_page`, `last_page`, `per_page`, and `total`.
+Default page size is 30; maximum is 100.
 
 ### `GET /model`
 Model card proxied from the ML service: algorithm, version, metrics, feature importances.
@@ -186,8 +196,7 @@ Model card proxied from the ML service: algorithm, version, metrics, feature imp
 | Status | Meaning |
 | --- | --- |
 | 401 | Missing/invalid bearer token |
-| 403 | Demo endpoints disabled |
 | 404 | Not found **or** owned by another athlete |
 | 422 | Validation — `{ message, errors: { field: [msg] } }` |
 | 429 | Rate limit (auth 10/min/IP, predictions 60/min/user) |
-| 503 | ML service unavailable |
+| 503 | Database unavailable on `/health`, or ML service unavailable for predictions |

@@ -12,6 +12,7 @@ return [
     */
     'url' => rtrim((string) env('ML_API_URL', ''), '/'),
     'token' => env('ML_API_TOKEN'),
+    'admin_token' => env('ML_ADMIN_TOKEN'),
     'timeout' => (int) env('ML_TIMEOUT', 12),
     'retry' => 2,
 

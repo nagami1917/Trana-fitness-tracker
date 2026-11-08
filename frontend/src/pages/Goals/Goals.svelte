@@ -71,6 +71,7 @@
 
   async function save() {
     saving = true;
+    let written = false;
     try {
       await api.goals.update({
         daily_calories: Number(form.daily_calories),
@@ -79,11 +80,12 @@
         weekly_calories: Number(form.weekly_calories),
         weekly_distance_km: Number(form.weekly_distance_km),
       });
+      written = true;
       await refresh();
       dirty = false;
       notify('Goals updated — TRANA will hold you to them.');
     } catch (error) {
-      notify(error.message || 'Could not save goals', 'error');
+      notify(written ? 'Goals saved, but the view could not refresh. Reload when connected.' : (error.message || 'Could not save goals'), 'error');
     } finally {
       saving = false;
     }

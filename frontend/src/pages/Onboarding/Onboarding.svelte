@@ -35,13 +35,21 @@
 
   async function finish(target = '/plan') {
     saving = true;
+    let written = false;
     try {
-      await api.profile.update({ ...form, onboarded: true });
+      const updated = await api.profile.update({ ...form, onboarded: true });
+      written = true;
+      profile.set(updated);
       await refresh();
       if (target === '/plan') notify(`All set, ${$session?.name ?? 'athlete'}! Let’s plan your first session.`);
       navigate(target, { replace: true });
     } catch (error) {
-      notify(error.message || 'Could not save your profile', 'error');
+      if (written) {
+        notify('Profile saved, but the view could not refresh. Reload when connected.', 'error');
+        navigate(target, { replace: true });
+      } else {
+        notify(error.message || 'Could not save your profile', 'error');
+      }
     } finally {
       saving = false;
     }

@@ -67,7 +67,7 @@
           <Gauge size={12} /> {d.paceMinPerKm ? pace(d.paceMinPerKm) : `${nf(d.speedKmh, 1)} km/h`}
         </span>
         <span class="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1">
-          <Clock size={12} /> {Math.round(d.confidence * 100)}% confidence
+          <Clock size={12} /> Estimate only
         </span>
         <span class="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1">
           <Sparkles size={12} /> MET {f.met}

@@ -4,8 +4,8 @@
  * every screen shows the same truth.
  */
 
-import { derived, get, writable } from 'svelte/store';
-import { api, onDataChange } from '../services/client.js';
+import { derived, writable } from 'svelte/store';
+import { api, onUnauthorized } from '../services/client.js';
 import { loadModelCard } from '../lib/ml/index.js';
 import { isSameDay, startOfWeek, weekdayShort } from '../lib/format.js';
 
@@ -17,7 +17,7 @@ export const goals = writable(null);
 export const modelCard = writable(null);
 export const ready = writable(false);
 export const booting = writable(true);
-export const apiMode = writable(api.mode);
+export const bootError = writable(null);
 export const toast = writable(null);
 
 let toastTimer;
@@ -27,15 +27,38 @@ export function notify(message, tone = 'success') {
   toastTimer = setTimeout(() => toast.set(null), 3600);
 }
 
+function clearUserData() {
+  session.set(null);
+  profile.set(null);
+  activities.set([]);
+  plans.set([]);
+  goals.set(null);
+}
+
+onUnauthorized(() => {
+  clearUserData();
+  notify('Your session has expired. Please sign in again.', 'error');
+});
+
 export async function bootstrap() {
   booting.set(true);
+  ready.set(false);
+  bootError.set(null);
   try {
+    // A healthy response confirms the API can reach its configured database.
+    await api.health();
     const user = await api.auth.user();
-    session.set(user);
-    if (user) await refresh();
+    if (user) {
+      await refresh();
+      session.set(user);
+    } else {
+      clearUserData();
+    }
     loadModelCard().then((card) => modelCard.set(card));
   } catch (error) {
-    notify(error.message || 'Could not reach the server', 'error');
+    clearUserData();
+    // A 401 means the token was rejected; other failures keep it for a retry.
+    if (error.status !== 401) bootError.set(error.message || 'Could not reach the server.');
   } finally {
     ready.set(true);
     booting.set(false);
@@ -55,35 +78,40 @@ export async function refresh() {
   goals.set(g);
 }
 
+async function finishSignIn(user) {
+  try {
+    // Do not show an incomplete dashboard if any account data fails to load.
+    await refresh();
+    session.set(user);
+    return user;
+  } catch (error) {
+    clearUserData();
+    if (error.status !== 401) {
+      bootError.set('Your account was accepted, but its data could not be loaded. Check the backend and try again.');
+    }
+    throw error;
+  }
+}
+
 export async function login(credentials) {
-  const user = await api.auth.login(credentials);
-  session.set(user);
-  await refresh();
-  return user;
+  return finishSignIn(await api.auth.login(credentials));
 }
 
 export async function register(payload) {
-  const user = await api.auth.register(payload);
-  session.set(user);
-  await refresh();
-  return user;
-}
-
-export async function continueAsGuest() {
-  const user = await api.auth.demo();
-  session.set(user);
-  await refresh();
-  return user;
+  return finishSignIn(await api.auth.register(payload));
 }
 
 export async function logout() {
-  await api.auth.logout();
-  session.set(null);
+  try {
+    await api.auth.logout();
+  } catch (error) {
+    if (error.status !== 401) {
+      notify('Signed out on this device, but the server session could not be revoked.', 'error');
+    }
+  } finally {
+    clearUserData();
+  }
 }
-
-onDataChange(() => {
-  if (get(session)) refresh().catch(() => {});
-});
 
 /* ------------------------------------------------------------------ metrics */
 

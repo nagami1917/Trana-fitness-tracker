@@ -8,6 +8,6 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        $this->call(DemoSeeder::class);
+        // Real accounts and activities are created by their owners, not seeded.
     }
 }

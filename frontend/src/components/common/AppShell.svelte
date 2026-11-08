@@ -177,7 +177,7 @@
                 <div class="absolute right-0 top-12 z-40 w-56 overflow-hidden rounded-2xl border border-brand-100 bg-white p-1.5 shadow-card animate-pop">
                   <div class="px-3 py-2">
                     <p class="truncate text-sm font-bold">{$profile?.name ?? 'Athlete'}</p>
-                    <p class="truncate text-[11px] font-semibold text-ink-400">{$session?.email ?? 'demo@trana.app'}</p>
+                    <p class="truncate text-[11px] font-semibold text-ink-400">{$session?.email ?? ''}</p>
                   </div>
                   <div class="divider my-1"></div>
                   <a href="/profile" use:link class="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-ink-500 hover:bg-brand-50 hover:text-brand-700">

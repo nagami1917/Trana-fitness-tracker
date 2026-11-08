@@ -121,3 +121,30 @@ def test_all_modalities(activity_type):
     res = client.post("/predict", json=payload(activity_type=activity_type, distance_km=8))
     assert res.status_code == 200
     assert res.json()["fueling"]["intensity"] in {"light", "moderate", "vigorous", "very_vigorous"}
+
+
+def test_prediction_service_token_protects_server_to_server_endpoints(monkeypatch):
+    monkeypatch.setenv("ML_API_TOKEN", "test-shared-secret")
+    assert client.get("/health").status_code == 200
+    assert client.get("/model/info").status_code == 401
+    assert client.post("/predict", json=payload()).status_code == 401
+    assert client.post("/predict", json=payload(), headers={"Authorization": "Bearer wrong"}).status_code == 401
+    assert client.post("/predict", json=payload(), headers={"Authorization": "Bearer test-shared-secret"}).status_code == 200
+
+
+def test_model_reload_is_disabled_without_an_admin_token(monkeypatch):
+    monkeypatch.delenv("ADMIN_TOKEN", raising=False)
+    assert client.post("/model/reload").status_code == 503
+    monkeypatch.setenv("ADMIN_TOKEN", "test-admin-secret")
+    assert client.post("/model/reload", headers={"X-Admin-Token": "wrong"}).status_code == 403
+    assert client.post("/model/reload", headers={"X-Admin-Token": "test-admin-secret"}).status_code == 200
+
+
+def test_laravel_accepted_prediction_boundaries_are_also_accepted_by_ml():
+    response = client.post("/predict", json=payload(distance_km=500, weight_kg=25))
+    assert response.status_code == 200, response.text
+
+
+def test_bundled_model_card_identifies_synthetic_training_data():
+    body = client.get("/model/info").json()
+    assert body["training_source"] == "synthetic"

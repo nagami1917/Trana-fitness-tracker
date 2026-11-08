@@ -40,6 +40,7 @@
   async function save(event) {
     event.preventDefault();
     loading = true;
+    let written = false;
     try {
       await api.profile.update({
         name: form.name.trim() || undefined,
@@ -52,10 +53,11 @@
         typical_temperature_c: Number(form.typical_temperature_c),
         units: form.units,
       });
+      written = true;
       await refresh();
       notify('Profile saved');
     } catch (err) {
-      notify(err.message || 'Could not save your profile', 'error');
+      notify(written ? 'Profile saved, but the view could not refresh. Reload when connected.' : (err.message || 'Could not save your profile'), 'error');
     } finally {
       loading = false;
     }
@@ -82,7 +84,7 @@
     </div>
     <div>
       <p class="text-lg font-extrabold text-ink-900">{$profile?.name ?? 'Athlete'}</p>
-      <p class="text-xs font-semibold text-ink-400">{$session?.email ?? 'demo@trana.app'}</p>
+      <p class="text-xs font-semibold text-ink-400">{$session?.email ?? ''}</p>
       {#if $profile?.city}<p class="mt-1 text-xs font-bold text-brand-600">{$profile.city}</p>{/if}
     </div>
     <div class="grid w-full grid-cols-2 gap-3">

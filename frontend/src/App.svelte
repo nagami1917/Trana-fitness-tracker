@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { route, navigate } from './lib/router.js';
-  import { bootstrap, session, booting, ready, profile } from './stores/index.js';
+  import { bootstrap, session, booting, bootError, ready, profile } from './stores/index.js';
   import AppShell from './components/common/AppShell.svelte';
   import Toaster from './components/common/Toaster.svelte';
   import Login from './pages/Login/Login.svelte';
@@ -20,7 +20,7 @@
   const Page = $derived(ROUTES[$route] ?? NotFound);
 
   $effect(() => {
-    if (!$ready) return;
+    if (!$ready || $bootError) return;
     if (!$session && !isPublicRoute) {
       navigate('/login', { replace: true });
       return;
@@ -42,6 +42,18 @@
       <div class="mx-auto mt-5 h-1.5 w-40 overflow-hidden rounded-full bg-brand-100">
         <div class="h-full w-1/3 animate-[shimmer_1.4s_linear_infinite] rounded-full bg-brand-gradient"></div>
       </div>
+    </div>
+  </div>
+{:else if $bootError}
+  <div class="grid min-h-screen place-items-center px-6 py-12">
+    <div class="w-full max-w-md rounded-3xl border border-brand-100 bg-white p-8 text-center shadow-card" role="alert">
+      <img src="/mascot-cat.png" alt="" class="mx-auto h-24 w-auto" />
+      <h1 class="mt-5 font-display text-2xl font-extrabold text-ink-900">TRANA is unavailable</h1>
+      <p class="mt-3 text-sm font-semibold leading-relaxed text-ink-500">{$bootError}</p>
+      <p class="mt-2 text-xs font-semibold leading-relaxed text-ink-400">
+        Make sure the Laravel API is running and its database connection is configured, then try again.
+      </p>
+      <button class="btn-primary mx-auto mt-6" onclick={bootstrap}>Try again</button>
     </div>
   </div>
 {:else if !$session}

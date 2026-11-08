@@ -69,10 +69,10 @@
       const isEnd = index === points.length - 1;
       const marker = L.marker(point, {
         icon: isStart ? startIcon() : isEnd && !interactive ? finishIcon() : dotIcon(),
-        draggable: interactive && !isStart,
+        draggable: interactive,
         keyboard: false,
       }).addTo(layerGroup);
-      if (interactive && !isStart) {
+      if (interactive) {
         marker.on('dragend', () => onPick?.('move', index, marker.getLatLng()));
       }
       markers.push(marker);
@@ -106,10 +106,11 @@
       className: 'trana-tiles',
     }).addTo(map);
 
-    if (interactive) {
-      L.control.zoom({ position: 'bottomright' }).addTo(map);
-      map.on('click', (event) => onPick?.('add', null, event.latlng));
-    }
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
+    // Drawing can be toggled after mount; check the current setting on click.
+    map.on('click', (event) => {
+      if (interactive) onPick?.('add', null, event.latlng);
+    });
 
     layerGroup = L.layerGroup().addTo(map);
     draw();
@@ -125,9 +126,14 @@
   });
 
   $effect(() => {
-    // re-draw whenever the point list changes
+    // Redraw markers and update map behaviour when drawing is toggled.
     void points;
-    if (map) draw();
+    void interactive;
+    if (map) {
+      if (interactive) map.doubleClickZoom.disable();
+      else map.doubleClickZoom.enable();
+      draw();
+    }
   });
 </script>
 

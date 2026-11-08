@@ -29,15 +29,24 @@ class PredictionController extends Controller
         $validated = $request->validate([
             'status' => ['nullable', 'in:planned,completed,cancelled'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'page' => ['nullable', 'integer', 'min:1'],
         ]);
 
         $rows = $request->user()->predictions()
             ->when($validated['status'] ?? null, fn ($q, $status) => $q->where('status', $status))
             ->orderByDesc('created_at')
-            ->limit($validated['limit'] ?? 30)
-            ->get();
+            ->orderByDesc('id')
+            ->paginate($validated['limit'] ?? 30, ['*'], 'page', $validated['page'] ?? 1);
 
-        return response()->json(['data' => $rows->map(fn (Prediction $p) => (new PredictionResource($p))->toArray($request))->values()]);
+        return response()->json([
+            'data' => $rows->getCollection()->map(fn (Prediction $p) => (new PredictionResource($p))->toArray($request))->values(),
+            'meta' => [
+                'current_page' => $rows->currentPage(),
+                'last_page' => $rows->lastPage(),
+                'per_page' => $rows->perPage(),
+                'total' => $rows->total(),
+            ],
+        ]);
     }
 
     public function store(StorePredictionRequest $request): JsonResponse
@@ -47,7 +56,7 @@ class PredictionController extends Controller
         } catch (RuntimeException $e) {
             return response()->json([
                 'message' => $e->getMessage(),
-                'hint' => 'The Svelte PWA can still predict locally while the ML service is offline.',
+                'hint' => 'A local preview may be available, but saving requires the prediction service.',
             ], 503);
         }
 
@@ -87,7 +96,7 @@ class PredictionController extends Controller
                 'elevation_gain_m' => (float) $request->input('elevation_gain_m', 0),
                 'weight_kg' => (float) ($request->user()->fitnessProfile?->weight_kg ?? 60),
                 'experience_level' => (int) ($request->user()->fitnessProfile?->experience_level ?? 3),
-                'sweat_profile' => $request->user()->fitnessProfile?->sweat_profile ?? 'normal',
+                'sweat_profile' => $request->input('sweat_profile') ?? $request->user()->fitnessProfile?->sweat_profile ?? 'normal',
                 'temperature_c' => (float) $request->input('temperature_c', 26),
                 'history' => $this->activities->history($request->user()),
             ]);

@@ -214,4 +214,41 @@ class PredictionCreationTest extends TestCase
         Http::assertNothingSent();
         $this->assertDatabaseCount('predictions', 0);
     }
+
+    public function test_sweat_override_is_sent_to_ml_without_changing_the_profile(): void
+    {
+        $user = $this->athlete();
+        $user->ensureProfile();
+        Sanctum::actingAs($user);
+        $this->fakeMlPredict();
+
+        $this->postJson('/api/predictions', [
+            'activity_type' => 'run',
+            'distance_km' => 10,
+            'sweat_profile' => 'high',
+        ])->assertCreated();
+
+        Http::assertSent(fn ($request) => $request->data()['sweat_profile'] === 'high');
+        $this->assertSame('normal', $user->fitnessProfile->fresh()->sweat_profile);
+    }
+
+    public function test_invalid_drawn_route_is_rejected_before_calling_ml(): void
+    {
+        Sanctum::actingAs($this->athlete());
+        Http::fake();
+        foreach ([
+            [[14.676, 121.0437]],
+            [[14.676, 121.0437], [14.676, 121.0437]],
+            [[0, 0], [20, 20]],
+        ] as $route) {
+            $this->postJson('/api/predictions', [
+                'activity_type' => 'run',
+                'distance_km' => 5,
+                'route' => $route,
+            ])->assertUnprocessable()->assertJsonValidationErrors('route');
+        }
+
+        Http::assertNothingSent();
+        $this->assertDatabaseCount('predictions', 0);
+    }
 }

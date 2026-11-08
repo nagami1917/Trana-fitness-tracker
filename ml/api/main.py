@@ -16,9 +16,10 @@ stateless worker: no database access at inference time.
 from __future__ import annotations
 
 import os
+import hmac
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from fueling_model.predict import FuelingInput, estimate_met, recommend
@@ -41,6 +42,16 @@ app.add_middleware(
 model = DurationModel()
 
 
+def require_api_token(authorization: str = Header(default="")) -> None:
+    """Protect prediction endpoints when a shared server-to-server token is configured."""
+    expected = os.getenv("ML_API_TOKEN", "")
+    if not expected:
+        return  # Local development can run without a token; set one for deployments.
+    scheme, _, provided = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not hmac.compare_digest(provided.encode(), expected.encode()):
+        raise HTTPException(status_code=401, detail="Invalid prediction service token")
+
+
 @app.get("/health")
 def health() -> dict:
     return {
@@ -51,12 +62,12 @@ def health() -> dict:
     }
 
 
-@app.get("/model/info")
+@app.get("/model/info", dependencies=[Depends(require_api_token)])
 def model_info() -> dict:
     return model.info()
 
 
-@app.post("/predict/duration")
+@app.post("/predict/duration", dependencies=[Depends(require_api_token)])
 def predict_duration(payload: PredictRequest) -> dict:
     distance = _effective_distance(payload)
     return model.predict(
@@ -69,7 +80,7 @@ def predict_duration(payload: PredictRequest) -> dict:
     )
 
 
-@app.post("/predict/fueling")
+@app.post("/predict/fueling", dependencies=[Depends(require_api_token)])
 def predict_fueling(payload: PredictRequest, duration_min: float | None = None) -> dict:
     distance = _effective_distance(payload)
     duration = duration_min or model.predict(
@@ -94,7 +105,7 @@ def predict_fueling(payload: PredictRequest, duration_min: float | None = None) 
     return recommend(inp)
 
 
-@app.post("/predict", response_model=PredictResponse)
+@app.post("/predict", response_model=PredictResponse, dependencies=[Depends(require_api_token)])
 def predict_all(payload: PredictRequest) -> PredictResponse:
     distance = _effective_distance(payload)
     duration = model.predict(
@@ -133,9 +144,11 @@ def predict_all(payload: PredictRequest) -> PredictResponse:
 
 @app.post("/model/reload")
 def reload_model(x_admin_token: str = Header(default="")) -> dict:
-    expected = os.getenv("ADMIN_TOKEN")
-    if expected and x_admin_token != expected:
-        raise HTTPException(status_code=403, detail="invalid admin token")
+    expected = os.getenv("ADMIN_TOKEN", "")
+    if not expected:
+        raise HTTPException(status_code=503, detail="Model reload is not configured")
+    if not hmac.compare_digest(x_admin_token.encode(), expected.encode()):
+        raise HTTPException(status_code=403, detail="Invalid admin token")
     global model
     model = DurationModel()
     return {"reloaded": True, "model_ready": model.ready, "version": (model.card or {}).get("version")}
