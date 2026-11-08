@@ -21,9 +21,9 @@ from datetime import datetime, timezone
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.fueling import FuelingInput, estimate_met, recommend
-from app.model_store import DurationModel, route_metrics
-from app.schemas import PredictRequest, PredictResponse
+from fueling_model.predict import FuelingInput, estimate_met, recommend
+from duration_model.model_store import DurationModel, route_metrics
+from .schemas import PredictRequest, PredictResponse
 
 app = FastAPI(
     title="TRANA ML API",
@@ -152,4 +152,4 @@ def _effective_distance(payload: PredictRequest) -> float:
 if __name__ == "__main__":  # pragma: no cover
     import uvicorn
 
-    uvicorn.run("app.main:app", host="0.0.0.0", port=int(os.getenv("PORT", "8000")), reload=False)
+    uvicorn.run("api.main:app", host="0.0.0.0", port=int(os.getenv("PORT", "8000")), reload=False)

@@ -26,19 +26,19 @@ jobs:
       - run: node scripts/render-smoke.mjs
 
   ml:
-    name: ML service (FastAPI + scikit-learn)
+    name: ML (FastAPI + scikit-learn)
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ml-service
+        working-directory: ml
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
       - run: pip install -r requirements-dev.txt
-      - run: python -m training.train
-      - run: python -m training.sanity_check
+      - run: python -m duration_model.train
+      - run: python -m evaluation.sanity_check
       - run: python -m pytest -q tests
 
   backend:

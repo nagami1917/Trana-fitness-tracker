@@ -6,16 +6,16 @@ UI an honest "estimated range" instead of a single over-confident number.
 
 Artifacts
 ---------
-artifacts/duration_model.joblib   : scikit-learn object (used by FastAPI)
-artifacts/duration_model.json     : the same trees as plain JSON so the PWA can
+duration_model/duration_model.joblib   : scikit-learn object (used by FastAPI)
+duration_model/duration_model.json     : the same trees as plain JSON so the PWA can
                                     evaluate them in the browser while offline
-artifacts/model_card.json         : metrics + feature names, surfaced in the UI
+duration_model/model_card.json         : metrics + feature names, surfaced in the UI
 
 Run
 ---
-    python -m training.train                      # synth corpus -> artifacts
-    python -m training.train --source supabase    # real Supabase data
-    python -m training.train --source csv --csv path/to/activities.csv
+    python -m duration_model.train                      # synth corpus -> artifacts
+    python -m duration_model.train --source supabase    # real Supabase data
+    python -m duration_model.train --source csv --csv path/to/activities.csv
 """
 
 from __future__ import annotations
@@ -37,10 +37,10 @@ from sklearn.model_selection import train_test_split
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from app.features import FEATURE_ORDER, training_frame  # noqa: E402
+from duration_model.preprocess import FEATURE_ORDER, training_frame  # noqa: E402
 
-ARTIFACTS = ROOT / "artifacts"
-DATA = ROOT / "training" / "data"
+ARTIFACTS = Path(__file__).resolve().parent
+DATA = ROOT / "data"
 
 QUANTILES = {"q10": 0.10, "q50": 0.50, "q90": 0.90}
 
@@ -74,7 +74,7 @@ def load_activities(source: str, csv_path: str | None) -> pd.DataFrame:
             return pd.DataFrame(cur.fetchall(), columns=cols)
 
     # Default: (re)generate the bootstrap corpus on the fly.
-    from training.generate_dataset import build_corpus
+    from data.generate_dataset import build_corpus
 
     frame = build_corpus()
     DATA.mkdir(parents=True, exist_ok=True)

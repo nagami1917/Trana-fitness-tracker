@@ -9,9 +9,9 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from app.features import base_minutes, reference_curve
-from app.fueling import FuelingInput, recommend
-from app.main import app
+from duration_model.preprocess import base_minutes, reference_curve
+from fueling_model.predict import FuelingInput, recommend
+from api.main import app
 
 client = TestClient(app)
 

@@ -2,7 +2,7 @@
 
 Run after training:
 
-    python -m training.sanity_check
+    python -m evaluation.sanity_check
 
 Any row whose relative error exceeds the tolerance is printed with a warning —
 useful as a smoke test before deploying a new artifact.
@@ -16,8 +16,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from app.fueling import FuelingInput, recommend  # noqa: E402
-from app.model_store import DurationModel  # noqa: E402
+from fueling_model.predict import FuelingInput, recommend  # noqa: E402
+from duration_model.model_store import DurationModel  # noqa: E402
 
 # (label, activity, distance, elevation, athlete reference pace, expected minutes)
 CASES = [
@@ -35,7 +35,7 @@ TOLERANCE = 0.22
 def main() -> None:
     model = DurationModel()
     if not model.ready:
-        raise SystemExit("no trained artifact found — run `python -m training.train` first")
+        raise SystemExit("no trained artifact found — run `python -m duration_model.train` first")
 
     print(f"{'case':<24}{'pred':>8}{'range':>18}{'expect':>8}{'err':>8}")
     failures = 0

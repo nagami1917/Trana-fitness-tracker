@@ -9,7 +9,7 @@ import numpy as np
 
 import math
 
-from app.features import (
+from duration_model.preprocess import (
     DEFAULT_SPEED_KMH,
     FEATURE_ORDER,
     base_minutes,
@@ -20,7 +20,7 @@ from app.features import (
     reference_speed,
 )
 
-ARTIFACTS = Path(__file__).resolve().parents[1] / "artifacts"
+ARTIFACTS = Path(__file__).resolve().parent
 
 
 class DurationModel:

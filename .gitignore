@@ -16,8 +16,8 @@ build/
 !.env.example
 
 # generated data / artifacts that can be rebuilt
-ml-service/training/data/*.csv
-ml-service/.pytest_cache/
+ml/data/*.csv
+ml/.pytest_cache/
 frontend/.vite/
 frontend/.svelte-kit/
 

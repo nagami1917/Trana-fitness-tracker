@@ -9,8 +9,8 @@ plus per-athlete fitness factors and realistic measurement noise.
 
 Once real activities exist in Supabase, re-train with:
 
-    python -m training.train --source supabase        # uses DATABASE_URL
-    python -m training.train --source csv --csv data/my_export.csv
+    python -m duration_model.train --source supabase        # uses DATABASE_URL
+    python -m duration_model.train --source csv --csv data/my_export.csv
 
 Output: training/data/activities.csv
 Schema is identical to the `activities` table in Supabase.
