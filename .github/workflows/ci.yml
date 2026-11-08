@@ -94,10 +94,16 @@ jobs:
           php artisan test 2>&1 | tee /tmp/trana-tests.log
           code=${PIPESTATUS[0]}
           if [ "$code" -ne 0 ]; then
-            # Surface the failure details as annotations (viewable via the API):
-            # everything from the PHPUnit failure summary to the end, one line per annotation.
-            sed -E 's/\x1b\[[0-9;]*m//g' /tmp/trana-tests.log \
-              | sed -n '/FAILURES!/,$p' | cut -c1-450 | head -120 \
+            # Surface the failure details as annotations (viewable via the API).
+            # Use the PHPUnit failure/error summary when there is one; otherwise
+            # fall back to the log tail so boot and migration errors are visible.
+            plain=$(sed -E 's/\x1b\[[0-9;]*m//g' /tmp/trana-tests.log)
+            if printf '%s\n' "$plain" | grep -qE '^(FAILURES|ERRORS)!'; then
+              details=$(printf '%s\n' "$plain" | sed -n '/^\(FAILURES\|ERRORS\)!/,$p')
+            else
+              details=$(printf '%s\n' "$plain" | tail -120)
+            fi
+            printf '%s\n' "$details" | cut -c1-450 | head -160 \
               | while IFS= read -r line; do [ -n "$line" ] && echo "::error::$line"; done
             exit "$code"
           fi
