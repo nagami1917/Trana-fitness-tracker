@@ -13,6 +13,7 @@
     LogOut,
     CircleUserRound,
     ChevronDown,
+    MapPin,
   } from 'lucide-svelte';
   import { route, navigate, link, isActive } from '../../lib/router.js';
   import { profile, session, logout, plans } from '../../stores/index.js';
@@ -23,6 +24,7 @@
   const NAV = [
     { href: '/', label: 'Dashboard', Icon: House },
     { href: '/plan', label: 'Plan Activity', Icon: Sparkles },
+    { href: '/track', label: 'Track Activity', Icon: MapPin },
     { href: '/activities', label: 'Activities', Icon: Footprints },
     { href: '/analytics', label: 'Analytics', Icon: ChartColumn },
     { href: '/fueling', label: 'Fueling', Icon: Salad },
@@ -33,6 +35,7 @@
 
   const MOBILE = [
     { href: '/', label: 'Home', Icon: House },
+    { href: '/track', label: 'Track', Icon: MapPin },
     { href: '/activities', label: 'Activities', Icon: Footprints },
     { href: '/plan', label: 'Plan', Icon: Plus, fab: true },
     { href: '/analytics', label: 'Analytics', Icon: ChartColumn },

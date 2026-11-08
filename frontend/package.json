@@ -26,6 +26,7 @@
   "dependencies": {
     "chart.js": "^4.4.7",
     "leaflet": "^1.9.4",
-    "lucide-svelte": "^0.469.0"
+    "lucide-svelte": "^0.469.0",
+    "maplibre-gl": "^6.17.0"
   }
 }

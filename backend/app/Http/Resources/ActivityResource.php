@@ -18,7 +18,11 @@ class ActivityResource extends JsonResource
             'calories' => (int) $this->calories,
             'avg_heart_rate' => $this->avg_heart_rate,
             'started_at' => $this->started_at?->toIso8601String(),
+            'ended_at' => $this->ended_at?->toIso8601String(),
+            'average_speed' => $this->average_speed ? (float) $this->average_speed : null,
+            'average_pace' => $this->average_pace ? (float) $this->average_pace : null,
             'route' => $this->route,
+            'route_geojson' => $this->route_geojson,
             'notes' => $this->notes,
             'source' => $this->source,
         ];

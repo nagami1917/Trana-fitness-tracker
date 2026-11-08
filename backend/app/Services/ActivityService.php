@@ -55,6 +55,7 @@ class ActivityService
             'avg_heart_rate' => $validated['avg_heart_rate'] ?? null,
             'started_at' => $validated['started_at'],
             'route' => $validated['route'] ?? null,
+            'route_geojson' => $validated['route_geojson'] ?? null,
             'notes' => $validated['notes'] ?? null,
             'source' => $validated['source'] ?? 'manual',
         ]);
