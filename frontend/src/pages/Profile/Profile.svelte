@@ -3,6 +3,7 @@
   import { CircleUserRound, Save, LoaderCircle, Flame, Footprints, CalendarDays } from 'lucide-svelte';
   import Card from '../../components/common/Card.svelte';
   import Segmented from '../../components/common/Segmented.svelte';
+  import CityRegionInput from '../../components/common/CityRegionInput.svelte';
   import { api } from '../../services/client.js';
   import { profile, session, refresh, notify } from '../../stores/index.js';
 
@@ -18,6 +19,7 @@
     units: 'metric',
   });
   let loading = $state(false);
+  let locating = $state(false);
 
   onMount(() => {
     const p = $profile;
@@ -39,6 +41,7 @@
 
   async function save(event) {
     event.preventDefault();
+    if (loading || locating) return;
     loading = true;
     let written = false;
     try {
@@ -46,7 +49,7 @@
         name: form.name.trim() || undefined,
         city: form.city.trim() || null,
         weight_kg: Number(form.weight_kg),
-        height_cm: form.height_cm === '' ? null : Number(form.height_cm),
+        height_cm: form.height_cm == null || form.height_cm === '' ? null : Number(form.height_cm),
         sex: form.sex,
         sweat_profile: form.sweat_profile,
         experience_level: Number(form.experience_level),
@@ -99,7 +102,7 @@
         <p class="mt-1 text-[10px] font-bold uppercase tracking-wider text-ink-400">kcal / day goal</p>
       </div>
     </div>
-    {#if $profile?.age}
+    {#if $profile?.birth_year != null && $profile?.age}
       <p class="flex items-center gap-1.5 text-[11px] font-semibold text-ink-400">
         <CalendarDays size={12} /> {$profile.age} years · experience level {$profile.experience_level ?? 3}/5
       </p>
@@ -113,10 +116,7 @@
         <label class="label" for="name">Name</label>
         <input id="name" class="input" bind:value={form.name} maxlength="80" required />
       </div>
-      <div>
-        <label class="label" for="city">City</label>
-        <input id="city" class="input" bind:value={form.city} maxlength="120" placeholder="Lusacan" />
-      </div>
+      <CityRegionInput id="profile-city" bind:value={form.city} bind:busy={locating} disabled={loading} />
 
       <div>
         <label class="label" for="weight">Weight (kg)</label>
@@ -189,7 +189,7 @@
       </div>
 
       <div class="sm:col-span-2">
-        <button type="submit" class="btn-primary w-full !py-3" disabled={loading}>
+        <button type="submit" class="btn-primary w-full !py-3" disabled={loading || locating}>
           {#if loading}
             <LoaderCircle size={17} class="animate-spin" /> Saving…
           {:else}

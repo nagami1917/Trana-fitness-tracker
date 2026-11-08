@@ -103,6 +103,12 @@ try {
     try {
       const mod = await vite.ssrLoadModule(file);
       const html = render(mod.default).body;
+      if (['Profile', 'Settings'].includes(name)) {
+        assert.match(html, /Use current location/);
+        assert.match(html, /coordinates and IP/);
+        assert.ok(html.indexOf('coordinates and IP') < html.indexOf('Use current location'));
+      }
+      if (name === 'Dashboard') assert.match(html, /Test City/);
       const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
       if (!text.length) throw new Error('rendered no text');
       const suspicious = ['NaN', 'undefined', 'Infinity', '[object Object]'].filter((bad) => text.includes(bad));
@@ -114,6 +120,30 @@ try {
       console.error(`✘ ${path} (${name}): ${error.message}`);
       if (process.env.VERBOSE) console.error(error.stack);
     }
+  }
+
+  // The dashboard should offer a way to add a city when none is saved.
+  try {
+    const mod = await vite.ssrLoadModule('/src/pages/Dashboard/Dashboard.svelte');
+    stores.profile.set({ ...fixtureProfile, city: null });
+    assert.match(render(mod.default).body, /Add city \/ region/);
+    stores.profile.set(fixtureProfile);
+  } catch (error) {
+    failures += 1;
+    stores.profile.set(fixtureProfile);
+    console.error(`✘ Dashboard without a city: ${error.message}`);
+  }
+
+  // Missing optional birth years must not render a calculated age.
+  try {
+    const mod = await vite.ssrLoadModule('/src/pages/Profile/Profile.svelte');
+    stores.profile.set({ ...fixtureProfile, birth_year: null, age: 999 });
+    assert.doesNotMatch(render(mod.default).body, /999 years/);
+    stores.profile.set(fixtureProfile);
+  } catch (error) {
+    failures += 1;
+    stores.profile.set(fixtureProfile);
+    console.error(`✘ Profile without a birth year: ${error.message}`);
   }
 
   // App shell + auth gate
@@ -136,6 +166,9 @@ try {
   try {
     const mod = await vite.ssrLoadModule('/src/pages/Onboarding/Onboarding.svelte');
     const html = render(mod.default).body;
+    assert.match(html, /Use current location/);
+    assert.match(html, /coordinates and IP/);
+    assert.ok(html.indexOf('coordinates and IP') < html.indexOf('Use current location'));
     console.log(`✔ /onboarding  Onboarding  ${String(html.length).padStart(5)} chars`);
   } catch (error) {
     failures += 1;
@@ -149,6 +182,11 @@ try {
       const mod = await vite.ssrLoadModule(`/src/pages/${name}/${name}.svelte`);
       const html = render(mod.default).body;
       assert.doesNotMatch(html, /Explore with demo data|demo@trana\.app/);
+      if (name === 'Login') {
+        assert.match(html, /type="password"/);
+        assert.match(html, /aria-label="Show password"/);
+        assert.match(html, /aria-controls="password"/);
+      }
       console.log(`✔ /${name.toLowerCase().padEnd(9)} ${name.padEnd(11)} ${String(html.length).padStart(5)} chars`);
     } catch (error) {
       failures += 1;

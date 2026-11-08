@@ -118,7 +118,7 @@
         </div>
         <div class="min-w-0 flex-1">
           <p class="truncate text-sm font-bold leading-tight">{$profile?.name ?? 'Athlete'}</p>
-          <p class="truncate text-[11px] font-semibold text-ink-400">{$profile?.city ?? 'TRANA member'}</p>
+          <p class="truncate text-[11px] font-semibold text-ink-400">{$profile?.city?.trim() || 'TRANA member'}</p>
         </div>
         <button class="rounded-xl p-2 text-ink-400 transition hover:bg-brand-100 hover:text-brand-700" onclick={signOut} title="Sign out">
           <LogOut size={16} />
