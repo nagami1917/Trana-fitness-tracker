@@ -68,9 +68,18 @@ class PredictionController extends Controller
     public function preview(StorePredictionRequest $request): JsonResponse
     {
         try {
+            // distance_km may be omitted when a route is drawn; resolve the
+            // effective distance the same way PredictionService does, because
+            // the ML service rejects distance_km <= 0.
+            $distance = (float) ($request->input('distance_km') ?? 0);
+            $route = $request->input('route');
+            if ($distance <= 0 && is_array($route) && count($route) > 1) {
+                $distance = $this->predictions->routeLengthKm($route);
+            }
+
             $result = $this->ml->predict([
                 'activity_type' => $request->input('activity_type'),
-                'distance_km' => (float) $request->input('distance_km', 0),
+                'distance_km' => $distance,
                 'elevation_gain_m' => (float) $request->input('elevation_gain_m', 0),
                 'weight_kg' => (float) ($request->user()->fitnessProfile?->weight_kg ?? 60),
                 'experience_level' => (int) ($request->user()->fitnessProfile?->experience_level ?? 3),

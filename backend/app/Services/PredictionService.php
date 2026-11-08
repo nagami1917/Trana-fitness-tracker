@@ -29,9 +29,19 @@ class PredictionService
         $profile = $user->ensureProfile();
         $history = $this->history($user);
 
+        // distance_km is optional when the athlete draws a route; the drawn
+        // route wins and is measured with the haversine formula. The ML
+        // service validates distance_km > 0, so the effective distance must be
+        // known before the HTTP call — not after.
+        $route = $input['route'] ?? null;
+        $distanceKm = (float) ($input['distance_km'] ?? 0);
+        if (is_array($route) && count($route) > 1) {
+            $distanceKm = $this->routeLengthKm($route);
+        }
+
         $payload = [
             'activity_type' => $input['activity_type'],
-            'distance_km' => (float) $input['distance_km'],
+            'distance_km' => $distanceKm,
             'elevation_gain_m' => (float) ($input['elevation_gain_m'] ?? 0),
             'weight_kg' => (float) $profile->weight_kg,
             'experience_level' => (int) $profile->experience_level,
@@ -45,18 +55,24 @@ class PredictionService
             $payload['daily_carb_target_g'] = (int) $goal->carb_target_g;
         }
 
-        if (! empty($input['route']) && count($input['route']) > 1) {
+        if (is_array($route) && count($route) > 1) {
             // The service prefers a drawn route over the typed distance so the
             // prediction always matches what the athlete actually plans to do.
             $payload['route'] = array_map(
                 fn ($point) => [(float) $point[0], (float) $point[1]],
-                $input['route']
+                $route
             );
-            $payload['distance_km'] = $this->routeLengthKm($input['route']);
+            $payload['distance_km'] = $distanceKm; // haversine length, measured above
         }
 
         $result = $this->ml->predict($payload);
-        $recommendation = $this->normalise($result, count($history), $payload['activity_type']);
+        $recommendation = $this->normalise(
+            $result,
+            count($history),
+            $payload['activity_type'],
+            (float) $payload['distance_km'],
+            (int) $payload['elevation_gain_m'],
+        );
 
         return $user->predictions()->create([
             'activity_type' => $input['activity_type'],
@@ -102,8 +118,12 @@ class PredictionService
     /**
      * Python payload → client payload.
      * snake_case (service) → camelCase (Svelte components).
+     *
+     * The ML service does not echo the request back, so when its response
+     * omits distance/elevation we fall back to the effective request values
+     * (drawn route wins) — otherwise saved predictions would store 0 km.
      */
-    private function normalise(array $result, int $historyUsed, string $activityType): array
+    private function normalise(array $result, int $historyUsed, string $activityType, float $effectiveDistanceKm = 0.0, int $effectiveElevationM = 0): array
     {
         $duration = (array) Arr::get($result, 'duration', []);
         $fueling = (array) Arr::get($result, 'fueling', []);
@@ -112,11 +132,14 @@ class PredictionService
         $low = (float) ($duration['range']['low'] ?? $minutes);
         $high = (float) ($duration['range']['high'] ?? $minutes);
         $distance = (float) ($result['distance_km'] ?? 0);
+        if ($distance <= 0) {
+            $distance = $effectiveDistanceKm;
+        }
 
         return [
             'activity_type' => $activityType,
-            'distance_km' => round($distance ?: (float) ($duration['distance_km'] ?? 0), 2),
-            'elevation_gain_m' => (int) ($result['elevation_gain_m'] ?? 0),
+            'distance_km' => round($distance, 2),
+            'elevation_gain_m' => (int) ($result['elevation_gain_m'] ?? $effectiveElevationM),
             'duration' => [
                 'minutes' => round($minutes, 1),
                 'hours' => round($minutes / 60, 2),

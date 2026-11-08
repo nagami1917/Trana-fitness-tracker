@@ -47,6 +47,21 @@
     "allow-plugins": {
       "pestphp/pest-plugin": true,
       "php-http/discovery": true
+    },
+    "policy": {
+      "advisories": {
+        "ignore-id": {
+          "PKSA-b41t-wbzk-9q51": "Affects all Laravel 11.x releases (11.x is EOL); no 11.x fix exists. Upgrade to Laravel 12 recommended.",
+          "PKSA-d5tc-s1qs-h781": "Affects all Laravel 11.x releases (11.x is EOL); no 11.x fix exists. Upgrade to Laravel 12 recommended.",
+          "PKSA-3r5d-mb8f-1qw9": "Affects all Laravel 11.x releases (11.x is EOL); no 11.x fix exists. Upgrade to Laravel 12 recommended.",
+          "PKSA-m5cs-t1y6-qpcs": "Affects all Laravel 11.x releases (11.x is EOL); no 11.x fix exists. Upgrade to Laravel 12 recommended.",
+          "PKSA-mdq4-51ck-6kdq": "Affects all Laravel 11.x releases (11.x is EOL); no 11.x fix exists. Upgrade to Laravel 12 recommended.",
+          "PKSA-q46n-4fdk-zjr4": "Affects all Laravel 11.x releases (11.x is EOL); no 11.x fix exists. Upgrade to Laravel 12 recommended.",
+          "PKSA-qzrn-rnz3-85w1": "Affects all Laravel 11.x releases (11.x is EOL); no 11.x fix exists. Upgrade to Laravel 12 recommended.",
+          "PKSA-8qx3-n5y5-vvnd": "Affects all Laravel 11.x releases (11.x is EOL); no 11.x fix exists. Upgrade to Laravel 12 recommended.",
+          "PKSA-w7xr-vk7n-rstm": "Affects all Laravel 11.x releases (11.x is EOL); no 11.x fix exists. Upgrade to Laravel 12 recommended."
+        }
+      }
     }
   },
   "minimum-stability": "stable",

@@ -49,7 +49,7 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: "8.2"
-          extensions: mbstring, pdo_pgsql, pgsql
+          extensions: mbstring, pdo_pgsql, pgsql, pdo_sqlite, sqlite3
           coverage: none
       - name: Lint every PHP file
         run: |
@@ -58,3 +58,22 @@ jobs:
           echo "PHP lint clean"
       - name: Validate composer.json
         run: composer validate --no-check-publish --working-dir=backend
+      # No composer.lock is committed in this repo, so `install` cannot work —
+      # resolve dependencies instead. (Maintainers: consider committing a lock file.)
+      - name: Install dependencies
+        working-directory: backend
+        run: composer update --no-interaction --prefer-dist --no-progress
+      - name: Run backend tests
+        working-directory: backend
+        run: |
+          set +e
+          php artisan test 2>&1 | tee /tmp/trana-tests.log
+          code=${PIPESTATUS[0]}
+          if [ "$code" -ne 0 ]; then
+            # Surface the failure details as annotations (viewable via the API):
+            # everything from the PHPUnit failure summary to the end, one line per annotation.
+            sed -E 's/\x1b\[[0-9;]*m//g' /tmp/trana-tests.log \
+              | sed -n '/FAILURES!/,$p' | cut -c1-450 | head -120 \
+              | while IFS= read -r line; do [ -n "$line" ] && echo "::error::$line"; done
+            exit "$code"
+          fi
