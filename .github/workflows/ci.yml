@@ -101,12 +101,9 @@ jobs:
             if printf '%s\n' "$plain" | grep -qE '^(FAILURES|ERRORS)!'; then
               details=$(printf '%s\n' "$plain" | sed -n '/^\(FAILURES\|ERRORS\)!/,$p')
             else
-              details=$(printf '%s\n' "$plain" | tail -120)
+              details=$(printf '%s\n' "$plain" | tail -60)
             fi
-            # A single compact annotation carrying the log tail (annotations are
-            # capped, so this keeps the whole failure available through the API).
-            echo "::error::TRANA_TEST_LOG_B64:$(printf '%s\n' "$plain" | tail -c 30000 | base64 -w0)"
-            printf '%s\n' "$details" | cut -c1-450 | head -5 \
+            printf '%s\n' "$details" | cut -c1-450 | head -10 \
               | while IFS= read -r line; do [ -n "$line" ] && echo "::error::$line"; done
             exit "$code"
           fi
