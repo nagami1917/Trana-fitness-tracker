@@ -6,6 +6,8 @@
 /storage/framework/sessions/*
 /storage/framework/views/*
 /storage/logs/*
+# but keep the directory skeleton itself
+!/storage/**/.gitkeep
 .env
 .env.backup
 .phpunit.result.cache
