@@ -14,6 +14,13 @@
         <env name="APP_DEBUG" value="true"/>
         <env name="DB_CONNECTION" value="sqlite"/>
         <env name="DB_DATABASE" value=":memory:"/>
+        <!-- Fake conflicting URLs exercise the explicit-field-only configuration. -->
+        <env name="DB_URL" value="postgresql://url-host.invalid:6543/url-database" force="true"/>
+        <env name="DATABASE_URL" value="postgresql://another-url.invalid:6543/url-database" force="true"/>
+        <env name="DB_HOST" value="fields-host.invalid" force="true"/>
+        <env name="DB_USERNAME" value="fields-user" force="true"/>
+        <env name="DB_PORT" value="5432" force="true"/>
+        <env name="DB_SSLMODE" value="require" force="true"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="CACHE_STORE" value="array"/>
         <env name="SESSION_DRIVER" value="array"/>

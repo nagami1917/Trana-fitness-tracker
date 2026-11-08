@@ -59,6 +59,7 @@ jobs:
         run: |
           python3 supabase/tests/check_baseline.py
           php backend/scripts/test_supabase_security_migration.php
+          php backend/scripts/test_database_config.php
       - name: Validate composer.json
         run: composer validate --no-check-publish --working-dir=backend
       # No composer.lock is committed in this repo, so `install` cannot work —
