@@ -13,8 +13,8 @@ Vercel (frontend) ──► Vercel (Laravel API) ──► Supabase Postgres
 
 ## 1. Supabase (database)
 
-The connected project is **Trana** (`tlqyvjhlesmackmcrzyg`); its empty Laravel
-baseline has already been applied. For a different database, see
+The connected Trana project's empty Laravel baseline has already been applied.
+For a different database, see
 [`../supabase/README.md`](../supabase/README.md) and choose either Laravel
 migrations or the one-time SQL baseline. Do not apply both to an existing DB.
 
@@ -30,10 +30,11 @@ password  <database password>
 sslmode   require
 ```
 
-Put the password only in backend environment secrets. The direct host for Trana
-is `db.tlqyvjhlesmackmcrzyg.supabase.co`, but direct connections require IPv6
-unless the IPv4 add-on is enabled. For serverless or IPv4-only hosts, use the
-session pooler supplied by the dashboard. Laravel/Sanctum performs auth; the
+Put the password only in backend environment secrets. Direct connections require
+IPv6 unless the IPv4 add-on is enabled. For serverless or IPv4-only hosts, use
+the session pooler supplied by the dashboard. The Laravel PostgreSQL connection
+uses individual `DB_*` values and ignores `DB_URL` and `DATABASE_URL`; clear
+Laravel's config cache after changing them. Laravel/Sanctum performs auth; the
 Supabase Data API's `anon` and `authenticated` roles cannot read app tables or
 views. Do not seed the known demo account into a real production database.
 

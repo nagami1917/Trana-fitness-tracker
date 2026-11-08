@@ -2,10 +2,14 @@
 
 ```bash
 composer install
-cp .env.example .env
-php artisan key:generate
+# Only for a new environment; never overwrite an existing .env / APP_KEY.
+if [ ! -f .env ]; then
+  cp .env.example .env
+  php artisan key:generate
+fi
 # Set DB_* (including the private database password) and ML_API_URL in .env.
-# See ../supabase/README.md for the connected project and pooler settings.
+# See ../supabase/README.md for the session-pooler settings.
+php artisan config:clear
 php artisan migrate:status
 php artisan migrate
 php artisan serve --host=0.0.0.0 --port=8001
@@ -34,6 +38,9 @@ database/seeders/         DemoSeeder — 8 weeks of realistic history
 
 * **PostgreSQL only.** `DB_CONNECTION=pgsql`; use the Supabase pooler host behind
   serverless hosts.
+* **Database URLs**: the PostgreSQL and SQLite connections ignore `DB_URL` and
+  `DATABASE_URL`; configure the individual `DB_*` values instead. The separate
+  ML training service can still use its own `DATABASE_URL`.
 * **Auth**: Sanctum personal access tokens (`Authorization: Bearer …`). Token
   abilities are ready for scoped apps (`activity:write`, `prediction:read`).
 * **Prediction**: Laravel owns no model. It gathers history, calls FastAPI, shapes

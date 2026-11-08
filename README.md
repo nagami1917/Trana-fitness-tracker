@@ -140,10 +140,11 @@ uvicorn api.main:app --reload --port 8000
 ```bash
 cd backend
 composer install
-cp .env.example .env
-php artisan key:generate
+cp .env.example .env   # only if .env does not already exist
+php artisan key:generate  # only for a new .env
 # Set the Supabase DB_* values (including the private DB_PASSWORD) and ML_API_URL.
 # For this project's connection details, see supabase/README.md.
+php artisan config:clear
 php artisan migrate:status  # verifies the connection
 php artisan migrate         # do not reapply the SQL baseline to an existing database
 php artisan serve --host=0.0.0.0 --port=8001
@@ -167,7 +168,7 @@ in a `VITE_*` variable.
 | Where | Variable | Purpose |
 | --- | --- | --- |
 | frontend | `VITE_API_BASE_URL` | Laravel API origin; `/` ⇒ same-origin API; empty ⇒ demo mode. |
-| backend | `DB_HOST/DB_PORT/DB_DATABASE/DB_USERNAME/DB_PASSWORD/DB_SSLMODE` | Supabase Postgres (session pooler for Vercel). |
+| backend | `DB_HOST/DB_PORT/DB_DATABASE/DB_USERNAME/DB_PASSWORD/DB_SSLMODE` | Supabase Postgres (session pooler for Vercel). Laravel ignores `DB_URL`/`DATABASE_URL` for pgsql. |
 | backend | `ML_API_URL`, `ML_API_TOKEN`, `ML_TIMEOUT` | Python prediction service. |
 | backend | `CORS_ALLOWED_ORIGINS` | Comma-separated frontend origins. |
 | backend | `DEMO_MODE`, `DEMO_EMAIL`, `DEMO_PASSWORD` | Public sandbox login. |

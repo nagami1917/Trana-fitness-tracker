@@ -1,27 +1,42 @@
 # Supabase (Laravel + PostgreSQL)
 
-TRANA uses the **Trana** Supabase project (`tlqyvjhlesmackmcrzyg`) as a
-PostgreSQL database. Laravel and Sanctum continue to own authentication; the
-browser does not connect to the Supabase Data API or hold a database password.
+TRANA uses Supabase as a PostgreSQL database. Laravel and Sanctum own
+authentication; the browser does not connect to the Supabase Data API or hold a
+database password.
 
-## Finish configuring the Laravel connection
+## Configure the Laravel connection
 
-1. In the Supabase dashboard, open **Connect → Session pooler** and copy the
-   exact host, port and username. The pooler host cannot be inferred from the
-   region. For the direct connection, the known host is
-   `db.tlqyvjhlesmackmcrzyg.supabase.co`, port `5432`, username `postgres`;
-   the direct endpoint requires IPv6 unless the project has the IPv4 add-on.
-2. In `backend/.env` (copy `.env.example` if it does not exist), set `DB_HOST`,
-   `DB_PORT`, `DB_DATABASE`, `DB_USERNAME` and `DB_PASSWORD` from that connection
-   string. Keep `DB_CONNECTION=pgsql` and `DB_SSLMODE=require`. For the shared
-   session pooler, the username is normally `postgres.<project-ref>`, and the
-   port is `5432`.
-3. Keep the **database password** in the ignored `.env` file or your hosting
-   provider's secret settings. Do not put it in frontend `VITE_*` variables or
-   commit it. A Supabase publishable/anon key is **not** the database password.
-4. Run `php artisan migrate:status` to verify the connection, followed by
-   `php artisan migrate` for future migrations. Set `APP_KEY` with
-   `php artisan key:generate` if the backend environment does not already have one.
+1. Open your Supabase project and choose **Connect → Session pooler**. Copy the
+   **host**, **port**, **database**, and **username** shown there. Do not guess
+   the pooler hostname from the region; it can vary by project. The shared
+   session pooler uses port `5432`.
+2. Edit `backend/.env`. If it does not exist yet, copy `backend/.env.example`
+   first; never overwrite an existing `.env` containing your settings. Replace
+   the clearly marked placeholders below with your own project details:
+
+   ```dotenv
+   DB_CONNECTION=pgsql
+   DB_HOST=YOUR_SESSION_POOLER_HOST
+   DB_PORT=5432
+   DB_DATABASE=postgres
+   DB_USERNAME=YOUR_SESSION_POOLER_USERNAME
+   DB_PASSWORD=YOUR_DATABASE_PASSWORD
+   DB_SSLMODE=require
+   ```
+
+   `DB_HOST` is the host **only**: no `https://`, brackets, port, path, or full
+   connection string. Copy `DB_USERNAME` exactly from the session pooler
+   (typically `postgres.<project-ref>`). `DB_DATABASE` is normally `postgres`;
+   verify it in the dashboard. Enter your database password privately; it is
+   **not** an API key or your Supabase account password.
+3. Laravel's PostgreSQL and SQLite connection configurations deliberately ignore
+   `DB_URL` and `DATABASE_URL` so that the individual `DB_*` values above are
+   used. Remove or comment out any old URL variables in `backend/.env` to avoid
+   confusion. The separate Python training service may use `DATABASE_URL`.
+4. Run `php artisan config:clear`, then `php artisan migrate:status` to verify the
+   connection. Run `php artisan migrate` for outstanding migrations; do not
+   reapply the SQL baseline to an existing database. Generate `APP_KEY` with
+   `php artisan key:generate` only when setting up a new `.env`.
 
 The connected Trana project has already received the baseline migration; it
 contains empty application tables and Laravel migration records, not demo data.
