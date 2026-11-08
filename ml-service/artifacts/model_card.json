@@ -1,6 +1,6 @@
 {
   "name": "TRANA duration model",
-  "version": "20261108.0405",
+  "version": "20261108.0445",
   "algorithm": "GradientBoostingRegressor (quantile loss, q10/q50/q90)",
   "target": "log(duration / flat-equivalent time at the athlete's own reference speed)",
   "output": "activity duration in minutes (base \u00d7 exp(prediction))",
@@ -35,6 +35,6 @@
     "is_run": 0.0086,
     "is_walk": 0.0056
   },
-  "trained_at": "2026-11-08T04:05:03+00:00",
+  "trained_at": "2026-11-08T04:45:29+00:00",
   "corpus_rows": 7988
 }

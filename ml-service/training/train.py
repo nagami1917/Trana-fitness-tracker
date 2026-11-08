@@ -84,13 +84,13 @@ def load_activities(source: str, csv_path: str | None) -> pd.DataFrame:
 
 def train(activities: pd.DataFrame, seed: int = 7) -> dict:
     frame = training_frame(activities)
-    x = frame[FEATURE_ORDER]
+    x = frame[FEATURE_ORDER].to_numpy(dtype=float)
     # The model learns a log pace factor; minutes are recovered via the athlete's
     # own reference speed so predictions stay anchored to their ability.
-    y = frame["log_pace_factor"]
+    y = frame["log_pace_factor"].to_numpy(dtype=float)
 
     x_train, x_test, y_train, y_test, base_train, base_test = train_test_split(
-        x, y, frame["base_minutes"], test_size=0.2, random_state=seed
+        x, y, frame["base_minutes"].to_numpy(), test_size=0.2, random_state=seed
     )
 
     models: dict[str, GradientBoostingRegressor] = {}
@@ -109,14 +109,11 @@ def train(activities: pd.DataFrame, seed: int = 7) -> dict:
         models[name] = model
 
     # Everything below is evaluated in minutes, which is what the user sees.
-    import numpy as _np
-
-    pred_median = _np.exp(models["q50"].predict(x_test)) * base_test.to_numpy()
-    lo = _np.exp(models["q10"].predict(x_test)) * base_test.to_numpy()
-    hi = _np.exp(models["q90"].predict(x_test)) * base_test.to_numpy()
-    y_test_min = y_test.to_numpy()
-    base_test_np = base_test.to_numpy()
-    y_test = _np.exp(y_test_min) * base_test_np
+    # (Predictions are log pace factors; multiply by the flat-equivalent time.)
+    pred_median = np.exp(models["q50"].predict(x_test)) * base_test
+    lo = np.exp(models["q10"].predict(x_test)) * base_test
+    hi = np.exp(models["q90"].predict(x_test)) * base_test
+    y_test = np.exp(y_test) * base_test
 
     metrics = {
         "mae_min": round(float(mean_absolute_error(y_test, pred_median)), 2),
