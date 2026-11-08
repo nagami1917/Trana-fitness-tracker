@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\HttpClientException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
@@ -13,6 +15,11 @@ use RuntimeException;
  * asks the ML service for a prediction, and persists the result. Keeping this
  * in one place means the model can be retrained and redeployed without
  * touching the API layer.
+ *
+ * Failure contract: predict() and duration() throw RuntimeException whenever
+ * the ML service is unusable (network error or non-2xx after retries), so
+ * callers can answer 503. health()/modelInfo()/reload() never throw — they
+ * return an "unavailable" payload instead.
  */
 class MlClient
 {
@@ -23,7 +30,14 @@ class MlClient
 
     public function predict(array $payload): array
     {
-        $response = $this->request()->post('/predict', $payload);
+        try {
+            $response = $this->request()->post('/predict', $payload);
+        } catch (ConnectionException $e) {
+            throw new RuntimeException(
+                'The prediction service is unreachable: '.$e->getMessage(),
+                previous: $e
+            );
+        }
 
         if ($response->failed()) {
             throw new RuntimeException(
@@ -36,7 +50,11 @@ class MlClient
 
     public function duration(array $payload): array
     {
-        $response = $this->request()->post('/predict/duration', $payload);
+        try {
+            $response = $this->request()->post('/predict/duration', $payload);
+        } catch (ConnectionException $e) {
+            throw new RuntimeException('The duration model could not be reached.', previous: $e);
+        }
 
         if ($response->failed()) {
             throw new RuntimeException('The duration model could not be reached.');
@@ -51,7 +69,11 @@ class MlClient
             return ['status' => 'not_configured'];
         }
 
-        $response = $this->request()->get('/model/info');
+        try {
+            $response = $this->request()->get('/model/info');
+        } catch (HttpClientException $e) {
+            return ['status' => 'unavailable'];
+        }
 
         return $response->successful() ? $response->json() : ['status' => 'unavailable'];
     }
@@ -65,7 +87,11 @@ class MlClient
             $request = $request->withHeaders(['X-Admin-Token' => $token]);
         }
 
-        $response = $request->post('/model/reload');
+        try {
+            $response = $request->post('/model/reload');
+        } catch (HttpClientException $e) {
+            return ['reloaded' => false];
+        }
 
         return $response->successful() ? $response->json() : ['reloaded' => false];
     }
@@ -76,7 +102,11 @@ class MlClient
             return ['status' => 'not_configured'];
         }
 
-        $response = $this->request()->get('/health');
+        try {
+            $response = $this->request()->get('/health');
+        } catch (HttpClientException $e) {
+            return ['status' => 'unavailable'];
+        }
 
         return $response->successful() ? $response->json() : ['status' => 'unavailable'];
     }
@@ -87,11 +117,17 @@ class MlClient
             throw new RuntimeException('ML_API_URL is not configured.');
         }
 
+        // NOTE: retry(..., throw: false) is deliberate. With the default
+        // (throw: true), an HTTP 5xx after the final attempt throws
+        // Illuminate\Http\Client\RequestException — which does NOT extend
+        // RuntimeException — escaping the caller's error handling entirely.
+        // We want the failed response back so predict() can raise a clean
+        // RuntimeException and the controller can answer 503.
         $request = Http::baseUrl((string) config('ml.url'))
             ->acceptJson()
             ->asJson()
             ->timeout((int) config('ml.timeout', 12))
-            ->retry((int) config('ml.retry', 2), 200);
+            ->retry((int) config('ml.retry', 2), 200, throw: false);
 
         if ($token = config('ml.token')) {
             $request = $request->withToken($token);
