@@ -65,4 +65,14 @@ jobs:
         run: composer update --no-interaction --prefer-dist --no-progress
       - name: Run backend tests
         working-directory: backend
-        run: php artisan test
+        run: |
+          set +e
+          php artisan test 2>&1 | tee /tmp/trana-tests.log
+          code=${PIPESTATUS[0]}
+          if [ "$code" -ne 0 ]; then
+            # Surface the failure details as annotations (viewable via the API)
+            sed -E 's/\x1b\[[0-9;]*m//g' /tmp/trana-tests.log \
+              | grep -aEi '(fail|error|exception|assert|Tests:|✘|HTTP)' | head -40 \
+              | while IFS= read -r line; do echo "::error::${line:0:600}"; done
+            exit "$code"
+          fi
