@@ -172,3 +172,49 @@ join public.activities a
   on a.user_id = p.user_id
  and a.activity_type = p.activity_type
  and a.started_at between p.created_at and p.created_at + interval '3 days';
+
+-- ---------------------------------------------------------------------------
+-- Spec-compatible views (read-only) — the original product spec names the
+-- persistence layer user_profiles / planned_activities / nutritional_predictions
+-- (+ activity_routes / user_goals / prediction_history). TRANA stores the
+-- richer real schema; these views expose the spec names without duplicating data.
+-- Writes must keep flowing through the API (read-only views).
+-- ---------------------------------------------------------------------------
+
+create or replace view public.user_profiles as
+select id, user_id, weight_kg, height_cm, birth_year, sex,
+       sweat_profile, experience_level, typical_temperature_c,
+       city, units, onboarded_at, created_at, updated_at
+from public.fitness_profiles;
+
+create or replace view public.planned_activities as
+select id, user_id, activity_type, distance_km, elevation_gain_m,
+       route, planned_for, status,
+       duration_min, duration_low_min, duration_high_min,
+       confidence, payload, model_version, created_at, updated_at
+from public.predictions;
+
+create or replace view public.nutritional_predictions as
+select p.id as prediction_id, p.user_id, p.activity_type, p.planned_for,
+       p.calories, p.carbs_per_hour_g, p.carbs_total_g,
+       p.sodium_per_hour_mg, p.fluid_per_hour_ml,
+       p.intensity, p.met, p.created_at
+from public.predictions p;
+
+create or replace view public.activity_routes as
+select a.id as activity_id, a.user_id, a.distance_km, a.elevation_gain_m,
+       a.started_at, a.route
+from public.activities a
+where a.route is not null;
+
+create or replace view public.user_goals as
+select id, user_id, daily_calories, daily_distance_km, daily_active_min,
+       weekly_calories, weekly_distance_km, carb_target_g,
+       created_at, updated_at
+from public.goals;
+
+create or replace view public.prediction_history as
+select id, user_id, activity_type, planned_for, status,
+       model_version, created_at, updated_at
+from public.predictions
+order by created_at desc;

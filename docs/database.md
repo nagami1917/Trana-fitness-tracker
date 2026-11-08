@@ -82,3 +82,27 @@ users 1──N predictions
 `php artisan db:seed` creates a demo athlete via `DemoSeeder` (32 activities over
 the past months, matching the frontend demo fixtures in `frontend/src/services/seed.js`).
 Backend tests use in-memory SQLite with `RefreshDatabase` — they never touch Postgres.
+
+## Spec-compatible views
+
+The original product spec names the persistence layer `users` / `user_profiles` /
+`activities` / `planned_activities` / `nutritional_predictions` (+ optional
+`activity_routes` / `user_goals` / `prediction_history`). TRANA ships the richer
+real schema above; the migration `backend/database/migrations/2026_11_08_000001_create_spec_compatibility_views.php`
+(and `supabase/sql/001_schema.sql`, identical definitions) exposes the spec names as
+**read-only views** — no data is duplicated and all writes keep flowing through the API:
+
+| Spec view | Definition (source columns) |
+| --- | --- |
+| `user_profiles` | `fitness_profiles` — full athlete profile (weight, sweat profile, experience…) |
+| `planned_activities` | `predictions` — the plan side: distance/route, planned_for, status, predicted interval, `payload`, `model_version` |
+| `nutritional_predictions` | `predictions` — the fueling side: `prediction_id`, calories, carbs/h + total, sodium, fluid, intensity, MET |
+| `activity_routes` | `activities WHERE route IS NOT NULL` — `activity_id`, `user_id`, distance/elevation/time, `route` jsonb |
+| `user_goals` | `goals` — calorie/distance/active-minute/carb targets (daily & weekly) |
+| `prediction_history` | `predictions` — `id`, `status`, `planned_for`, `model_version`, timestamps (history of the plan lifecycle) |
+
+Notes:
+
+- Views are **read-only** by construction; consume them with SQL/BI tools as `authenticated`/`service_role`.
+- Laravel's `migrate:fresh` drops views on PostgreSQL before rebuilding; on SQLite (CI) the database starts empty, so the migration simply creates them.
+- Nutrition is stored **once** (columns + `payload.fueling` of `predictions`) — the views are alternative projections, not copies.
