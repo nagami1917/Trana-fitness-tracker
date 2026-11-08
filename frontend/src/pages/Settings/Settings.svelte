@@ -1,11 +1,11 @@
 <script>
   import { Settings as SettingsIcon, Save, LoaderCircle, LogOut, RefreshCw, Info, Brain, Smartphone, ShieldCheck, User, HeartPulse } from 'lucide-svelte';
-  import Card from '../components/Card.svelte';
-  import Segmented from '../components/Segmented.svelte';
-  import { profile, session, logout, notify, refresh, apiMode, modelCard, activities, plans } from '../stores.js';
-  import { api } from '../api/client.js';
-  import { navigate } from '../router.js';
-  import { nf } from '../format.js';
+  import Card from '../../components/common/Card.svelte';
+  import Segmented from '../../components/common/Segmented.svelte';
+  import { profile, session, logout, notify, refresh, apiMode, modelCard, activities, plans } from '../../stores/index.js';
+  import { api } from '../../services/client.js';
+  import { navigate } from '../../lib/router.js';
+  import { nf } from '../../lib/format.js';
 
   let form = $state({
     name: $profile?.name ?? '',

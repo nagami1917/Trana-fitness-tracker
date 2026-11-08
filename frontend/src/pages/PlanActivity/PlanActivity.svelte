@@ -1,17 +1,17 @@
 <script>
   import { onMount } from 'svelte';
   import { Sparkles, MapPin, Route, Trash2, LoaderCircle, Save, Ruler, Thermometer, Droplets, ArrowRight, Play } from 'lucide-svelte';
-  import Card from '../components/Card.svelte';
-  import ActivityIcon from '../components/ActivityIcon.svelte';
-  import RouteMap from '../components/RouteMap.svelte';
-  import FuelingPlan from '../components/FuelingPlan.svelte';
-  import Segmented from '../components/Segmented.svelte';
-  import { activities, profile, plans, notify, refresh } from '../stores.js';
-  import { api } from '../api/client.js';
-  import { navigate, query } from '../router.js';
-  import { loadModel, predictPlan } from '../ml/index.js';
-  import { routeLengthKm, suggestElevation } from '../ml/index.js';
-  import { nf, km, pace } from '../format.js';
+  import Card from '../../components/common/Card.svelte';
+  import ActivityIcon from '../../components/activities/ActivityIcon.svelte';
+  import RouteMap from '../../components/route/RouteMap.svelte';
+  import FuelingPlan from '../../components/fueling/FuelingPlan.svelte';
+  import Segmented from '../../components/common/Segmented.svelte';
+  import { activities, profile, plans, notify, refresh } from '../../stores/index.js';
+  import { api } from '../../services/client.js';
+  import { navigate, query } from '../../lib/router.js';
+  import { loadModel, predictPlan } from '../../lib/ml/index.js';
+  import { routeLengthKm, suggestElevation } from '../../lib/ml/index.js';
+  import { nf, km, pace } from '../../lib/format.js';
 
   const TYPES = [
     { id: 'run', label: 'Run', hint: 'Road, trail or treadmill' },

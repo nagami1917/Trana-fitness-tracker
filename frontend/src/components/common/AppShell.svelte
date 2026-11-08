@@ -9,12 +9,13 @@
     Search,
     Plus,
     Sparkles,
+    Salad,
     LogOut,
-    User,
+    CircleUserRound,
     ChevronDown,
   } from 'lucide-svelte';
-  import { route, navigate, link, isActive } from '../router.js';
-  import { profile, session, logout, plans } from '../stores.js';
+  import { route, navigate, link, isActive } from '../../lib/router.js';
+  import { profile, session, logout, plans } from '../../stores/index.js';
   import Logo from './Logo.svelte';
 
   let { children } = $props();
@@ -24,7 +25,9 @@
     { href: '/plan', label: 'Plan Activity', Icon: Sparkles },
     { href: '/activities', label: 'Activities', Icon: Footprints },
     { href: '/analytics', label: 'Analytics', Icon: ChartColumn },
+    { href: '/fueling', label: 'Fueling', Icon: Salad },
     { href: '/goals', label: 'Goals', Icon: Target },
+    { href: '/profile', label: 'Profile', Icon: CircleUserRound },
     { href: '/settings', label: 'Settings', Icon: Settings },
   ];
 
@@ -177,8 +180,11 @@
                     <p class="truncate text-[11px] font-semibold text-ink-400">{$session?.email ?? 'demo@trana.app'}</p>
                   </div>
                   <div class="divider my-1"></div>
-                  <a href="/settings" use:link class="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-ink-500 hover:bg-brand-50 hover:text-brand-700">
-                    <User size={15} /> Profile & settings
+                  <a href="/profile" use:link class="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-ink-500 hover:bg-brand-50 hover:text-brand-700">
+                    <CircleUserRound size={15} /> Your profile
+                  </a>
+                  <a href="/fueling" use:link class="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-ink-500 hover:bg-brand-50 hover:text-brand-700">
+                    <Salad size={15} /> Fueling guide
                   </a>
                   <a href="/plan" use:link class="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-ink-500 hover:bg-brand-50 hover:text-brand-700">
                     <Sparkles size={15} /> New prediction

@@ -15,19 +15,19 @@
     Brain,
     MoreHorizontal,
   } from 'lucide-svelte';
-  import StatCard from '../components/StatCard.svelte';
-  import Card from '../components/Card.svelte';
-  import ActivityIcon from '../components/ActivityIcon.svelte';
-  import RouteMap from '../components/RouteMap.svelte';
-  import DonutRing from '../components/DonutRing.svelte';
-  import ProgressBar from '../components/ProgressBar.svelte';
-  import Segmented from '../components/Segmented.svelte';
-  import LineChart from '../components/charts/LineChart.svelte';
-  import { activities, profile, goals, todayStats, weekStats, trends, chartSeries, modelCard, plans } from '../stores.js';
-  import { navigate } from '../router.js';
-  import { loadModel, predictDuration } from '../ml/duration.js';
-  import { recommendFueling, INTENSITY_COPY } from '../ml/fueling.js';
-  import { duration as fmtDuration, kcal, km, nf, dayLabel, timeLabel, greeting, pct, shortDate, activityLabel } from '../format.js';
+  import StatCard from '../../components/dashboard/StatCard.svelte';
+  import Card from '../../components/common/Card.svelte';
+  import ActivityIcon from '../../components/activities/ActivityIcon.svelte';
+  import RouteMap from '../../components/route/RouteMap.svelte';
+  import DonutRing from '../../components/common/DonutRing.svelte';
+  import ProgressBar from '../../components/common/ProgressBar.svelte';
+  import Segmented from '../../components/common/Segmented.svelte';
+  import LineChart from '../../components/analytics/LineChart.svelte';
+  import { activities, profile, goals, todayStats, weekStats, trends, chartSeries, modelCard, plans } from '../../stores/index.js';
+  import { navigate } from '../../lib/router.js';
+  import { loadModel, predictDuration } from '../../lib/ml/duration.js';
+  import { recommendFueling, INTENSITY_COPY } from '../../lib/ml/fueling.js';
+  import { duration as fmtDuration, kcal, km, nf, dayLabel, timeLabel, greeting, pct, shortDate, activityLabel } from '../../lib/format.js';
 
   let model = $state(null);
   let loadingModel = $state(true);

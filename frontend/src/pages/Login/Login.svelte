@@ -1,7 +1,7 @@
 <script>
   import { Lock, Mail, Sparkles, ArrowRight, LoaderCircle, Flame, Timer, Salad } from 'lucide-svelte';
-  import { login, continueAsGuest, notify, apiMode, profile } from '../stores.js';
-  import { navigate } from '../router.js';
+  import { login, continueAsGuest, notify, apiMode, profile } from '../../stores/index.js';
+  import { navigate } from '../../lib/router.js';
 
   let email = $state('nagami@trana.app');
   let password = $state('password');
@@ -143,6 +143,13 @@
       <button class="btn-ghost w-full !py-3" onclick={demo} disabled={loading}>
         <Sparkles size={16} class="text-brand-500" /> Explore with demo data
       </button>
+
+      <p class="mt-4 text-center text-sm font-semibold text-ink-400">
+        New to TRANA?
+        <button class="font-extrabold text-brand-600 transition hover:text-brand-700" onclick={() => navigate('/register')}>
+          Create an account
+        </button>
+      </p>
 
       <p class="mt-6 text-center text-[11px] font-semibold leading-relaxed text-ink-400">
         {$apiMode === 'demo'

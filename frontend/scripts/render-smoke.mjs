@@ -53,22 +53,24 @@ const vite = await createServer({
 let failures = 0;
 
 try {
-  const stores = await vite.ssrLoadModule('/src/lib/stores.js');
+  const stores = await vite.ssrLoadModule('/src/stores/index.js');
   await stores.continueAsGuest();
   await stores.refresh();
 
   const routes = [
     ['/', 'Dashboard'],
-    ['/plan', 'Plan'],
+    ['/plan', 'PlanActivity'],
     ['/activities', 'Activities'],
     ['/analytics', 'Analytics'],
+    ['/fueling', 'Fueling'],
     ['/goals', 'Goals'],
+    ['/profile', 'Profile'],
     ['/settings', 'Settings'],
     ['/nope', 'NotFound'],
   ];
 
   for (const [path, name] of routes) {
-    const file = name === 'NotFound' ? '/src/lib/routes/NotFound.svelte' : `/src/lib/routes/${name}.svelte`;
+    const file = `/src/pages/${name}/${name}.svelte`;
     try {
       const mod = await vite.ssrLoadModule(file);
       const html = render(mod.default).body;
@@ -97,7 +99,7 @@ try {
 
   // Onboarding wizard
   try {
-    const mod = await vite.ssrLoadModule('/src/lib/routes/Onboarding.svelte');
+    const mod = await vite.ssrLoadModule('/src/pages/Onboarding/Onboarding.svelte');
     const html = render(mod.default).body;
     console.log(`✔ /onboarding  Onboarding  ${String(html.length).padStart(5)} chars`);
   } catch (error) {
@@ -105,15 +107,17 @@ try {
     console.error(`✘ Onboarding: ${error.message}`);
   }
 
-  // Login screen (signed out)
+  // Login + register screens (signed out)
   stores.session.set(null);
-  try {
-    const mod = await vite.ssrLoadModule('/src/lib/routes/Login.svelte');
-    const html = render(mod.default).body;
-    console.log(`✔ /login      Login       ${String(html.length).padStart(5)} chars`);
-  } catch (error) {
-    failures += 1;
-    console.error(`✘ Login: ${error.message}`);
+  for (const name of ['Login', 'Register']) {
+    try {
+      const mod = await vite.ssrLoadModule(`/src/pages/${name}/${name}.svelte`);
+      const html = render(mod.default).body;
+      console.log(`✔ /${name.toLowerCase().padEnd(9)} ${name.padEnd(11)} ${String(html.length).padStart(5)} chars`);
+    } catch (error) {
+      failures += 1;
+      console.error(`✘ ${name}: ${error.message}`);
+    }
   }
 } finally {
   await vite.close();

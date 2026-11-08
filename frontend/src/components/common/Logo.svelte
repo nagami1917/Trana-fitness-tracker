@@ -1,5 +1,5 @@
 <script>
-  import { link } from '../router.js';
+  import { link } from '../../lib/router.js';
 
   let { compact = false, size = 44 } = $props();
 </script>

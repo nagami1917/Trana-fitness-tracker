@@ -1,7 +1,7 @@
 <script>
   import { Flame, Salad, Droplets, Waves, Clock, Gauge, Utensils, Candy, CupSoda, Check, Sparkles, Info } from 'lucide-svelte';
-  import { duration as fmtDuration, pace, kcal, nf, ml } from '../format.js';
-  import { INTENSITY_COPY } from '../ml/fueling.js';
+  import { duration as fmtDuration, pace, kcal, nf, ml } from '../../lib/format.js';
+  import { INTENSITY_COPY } from '../../lib/ml/fueling.js';
 
   let { plan, compact = false } = $props();
 

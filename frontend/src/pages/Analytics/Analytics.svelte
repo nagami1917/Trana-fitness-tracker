@@ -1,13 +1,13 @@
 <script>
   import { ChartColumn, Brain, TrendingDown, Flame, Trophy, Gauge, Sparkles, Info, ArrowRight } from 'lucide-svelte';
-  import Card from '../components/Card.svelte';
-  import BarChart from '../components/charts/BarChart.svelte';
-  import LineChart from '../components/charts/LineChart.svelte';
-  import DoughnutChart from '../components/charts/DoughnutChart.svelte';
-  import ActivityIcon from '../components/ActivityIcon.svelte';
-  import { activities, modelCard, typeBreakdown, paceTrend, weekdayLoad, chartSeries, personalBests, streak } from '../stores.js';
-  import { navigate } from '../router.js';
-  import { nf, pace, kcal, km, duration as fmtDuration, shortDate } from '../format.js';
+  import Card from '../../components/common/Card.svelte';
+  import BarChart from '../../components/analytics/BarChart.svelte';
+  import LineChart from '../../components/analytics/LineChart.svelte';
+  import DoughnutChart from '../../components/analytics/DoughnutChart.svelte';
+  import ActivityIcon from '../../components/activities/ActivityIcon.svelte';
+  import { activities, modelCard, typeBreakdown, paceTrend, weekdayLoad, chartSeries, personalBests, streak } from '../../stores/index.js';
+  import { navigate } from '../../lib/router.js';
+  import { nf, pace, kcal, km, duration as fmtDuration, shortDate } from '../../lib/format.js';
 
   const FEATURE_LABELS = {
     elevation_per_km: 'Climbing per km',

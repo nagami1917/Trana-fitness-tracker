@@ -1,7 +1,7 @@
 /**
  * Duration prediction in the browser.
  *
- * This is a faithful JavaScript port of `ml-service/app/features.py` +
+ * This is a faithful JavaScript port of `ml/duration_model/preprocess.py` +
  * `model_store.py`, evaluating the exact same gradient-boosted trees exported
  * from scikit-learn (`public/models/duration_model.json`). It runs when the PWA
  * is offline or in demo mode, so the numbers never drift from the server.

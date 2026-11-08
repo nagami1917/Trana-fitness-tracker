@@ -16,19 +16,28 @@ node scripts/smoke.mjs   # headless prediction pipeline check
 | `https://api…` | **Live mode** — Sanctum bearer tokens against the Laravel API |
 
 Nothing else changes: every screen consumes the same shapes, because
-`src/lib/api/demo.js` mirrors the Laravel contract exactly.
+`src/services/demo.js` mirrors the Laravel contract exactly.
 
 ## Map
 
 ```
 src/
-  App.svelte              router + auth gate
+  App.svelte              auth gate + shell mounting
+  routes/index.js         ROUTES table — maps paths to pages
+  components/
+    common/               AppShell, Card, Modal, Toaster, Logo, Segmented…
+    dashboard/            StatCard, Sparkline
+    activities/           ActivityIcon
+    route/                RouteMap (Leaflet)
+    fueling/              FuelingPlan
+    analytics/            BarChart, DoughnutChart, LineChart, theme.js
+  pages/                  Login · Register · Dashboard · Activities · PlanActivity ·
+                          Fueling · Analytics · Goals · Profile · Settings · Onboarding · NotFound
+  stores/index.js         global state + derived analytics
+  services/               client.js (live API) · demo.js (offline backend) · seed.js
   lib/
-    api/                  client (live) · demo backend · seed dataset
+    router.js             history-API router (no dependency)
     ml/                   duration.js (tree evaluator) · fueling.js · index.js
-    components/           shell, cards, charts, map, modal…
-    routes/               Dashboard · Plan · Activities · Analytics · Goals · Settings
-    stores.js             global state + derived analytics
     format.js             number / date helpers
 public/
   models/                 exported trees + model card (shipped to the browser)
@@ -37,10 +46,10 @@ public/
 
 ## Offline parity
 
-`public/models/duration_model.json` is produced by `ml-service/training/train.py`.
+`public/models/duration_model.json` is produced by `ml/duration_model/train.py`.
 The browser walks the very same trees (`lib/ml/duration.js`), so a prediction made
 offline in the air matches one made by the server. Regenerate the file after every
-retrain — the `train` script writes it to `ml-service/artifacts/`, copy it into
+retrain — the `train` script writes it to `ml/duration_model/`, copy it into
 `frontend/public/models/`.
 
 ## Design tokens

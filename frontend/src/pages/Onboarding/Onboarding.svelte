@@ -1,9 +1,9 @@
 <script>
   import { User, Target, Droplets, ArrowRight, LoaderCircle, Check, MapPin, Sparkles } from 'lucide-svelte';
-  import { profile, notify, refresh, session } from '../stores.js';
-  import { api } from '../api/client.js';
-  import { navigate } from '../router.js';
-  import Segmented from '../components/Segmented.svelte';
+  import { profile, notify, refresh, session } from '../../stores/index.js';
+  import { api } from '../../services/client.js';
+  import { navigate } from '../../lib/router.js';
+  import Segmented from '../../components/common/Segmented.svelte';
 
   const STEPS = [
     { id: 0, label: 'You', Icon: User },

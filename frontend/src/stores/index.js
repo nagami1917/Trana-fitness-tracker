@@ -5,9 +5,9 @@
  */
 
 import { derived, get, writable } from 'svelte/store';
-import { api, onDataChange } from './api/client.js';
-import { loadModelCard } from './ml/index.js';
-import { isSameDay, startOfWeek, weekdayShort } from './format.js';
+import { api, onDataChange } from '../services/client.js';
+import { loadModelCard } from '../lib/ml/index.js';
+import { isSameDay, startOfWeek, weekdayShort } from '../lib/format.js';
 
 export const session = writable(null);
 export const profile = writable(null);
@@ -57,6 +57,13 @@ export async function refresh() {
 
 export async function login(credentials) {
   const user = await api.auth.login(credentials);
+  session.set(user);
+  await refresh();
+  return user;
+}
+
+export async function register(payload) {
+  const user = await api.auth.register(payload);
   session.set(user);
   await refresh();
   return user;

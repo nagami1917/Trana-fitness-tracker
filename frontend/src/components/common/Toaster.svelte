@@ -1,6 +1,6 @@
 <script>
   import { Check, Info, TriangleAlert } from 'lucide-svelte';
-  import { toast } from '../stores.js';
+  import { toast } from '../../stores/index.js';
 
   const TONES = {
     success: { cls: 'border-emerald-200 bg-emerald-50 text-emerald-800', Icon: Check },

@@ -1,17 +1,17 @@
 <script>
   import { onMount } from 'svelte';
   import { Plus, Search, LoaderCircle, Trash2, MapPin, Flame, Timer, Gauge, Route as RouteIcon, Sparkles, TrendingUp, X } from 'lucide-svelte';
-  import Card from '../components/Card.svelte';
-  import ActivityIcon from '../components/ActivityIcon.svelte';
-  import RouteMap from '../components/RouteMap.svelte';
-  import Modal from '../components/Modal.svelte';
-  import EmptyState from '../components/EmptyState.svelte';
-  import { activities, profile, notify, refresh } from '../stores.js';
-  import { api } from '../api/client.js';
-  import { query } from '../router.js';
-  import { loadModel, predictDuration, routeLengthKm } from '../ml/index.js';
-  import { estimateMet } from '../ml/fueling.js';
-  import { duration as fmtDuration, pace, kcal, km, nf, fullDate, timeLabel, dayLabel, activityLabel } from '../format.js';
+  import Card from '../../components/common/Card.svelte';
+  import ActivityIcon from '../../components/activities/ActivityIcon.svelte';
+  import RouteMap from '../../components/route/RouteMap.svelte';
+  import Modal from '../../components/common/Modal.svelte';
+  import EmptyState from '../../components/common/EmptyState.svelte';
+  import { activities, profile, notify, refresh } from '../../stores/index.js';
+  import { api } from '../../services/client.js';
+  import { query } from '../../lib/router.js';
+  import { loadModel, predictDuration, routeLengthKm } from '../../lib/ml/index.js';
+  import { estimateMet } from '../../lib/ml/fueling.js';
+  import { duration as fmtDuration, pace, kcal, km, nf, fullDate, timeLabel, dayLabel, activityLabel } from '../../lib/format.js';
 
   const TYPES = [
     { id: 'all', label: 'All' },

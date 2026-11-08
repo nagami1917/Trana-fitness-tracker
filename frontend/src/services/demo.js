@@ -8,7 +8,7 @@
  */
 
 import { createSeedState } from './seed.js';
-import { predictPlan } from '../ml/index.js';
+import { predictPlan } from '../lib/ml/index.js';
 
 const KEY = 'trana.demo.v1';
 
@@ -61,6 +61,14 @@ export const demoApi = {
     },
     async demo() {
       state.session = { id: 1, name: state.profile.name, email: state.profile.email };
+      persist(state);
+      emit();
+      return clone(state.session);
+    },
+    async register({ name, email }) {
+      const display = name?.trim() || email?.split('@')[0] || 'Athlete';
+      state.session = { id: 1, name: display, email: email || 'you@trana.app' };
+      state.profile = { ...state.profile, name: display };
       persist(state);
       emit();
       return clone(state.session);

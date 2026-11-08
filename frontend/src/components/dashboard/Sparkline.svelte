@@ -1,5 +1,5 @@
 <script>
-  import { sparkPath } from '../format.js';
+  import { sparkPath } from '../../lib/format.js';
 
   let { values = [], width = 92, height = 30, class: cls = '', stroke = '#f9569b' } = $props();
 

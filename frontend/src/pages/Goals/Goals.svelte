@@ -1,11 +1,11 @@
 <script>
   import { Target, Flame, MapPin, Timer, Save, LoaderCircle, Trophy, Check, CalendarDays } from 'lucide-svelte';
-  import Card from '../components/Card.svelte';
-  import DonutRing from '../components/DonutRing.svelte';
-  import ProgressBar from '../components/ProgressBar.svelte';
-  import { activities, goals, todayStats, weekStats, profile, notify, refresh } from '../stores.js';
-  import { api } from '../api/client.js';
-  import { nf, km, duration as fmtDuration, pct, startOfWeek, weekdayShort, kcal } from '../format.js';
+  import Card from '../../components/common/Card.svelte';
+  import DonutRing from '../../components/common/DonutRing.svelte';
+  import ProgressBar from '../../components/common/ProgressBar.svelte';
+  import { activities, goals, todayStats, weekStats, profile, notify, refresh } from '../../stores/index.js';
+  import { api } from '../../services/client.js';
+  import { nf, km, duration as fmtDuration, pct, startOfWeek, weekdayShort, kcal } from '../../lib/format.js';
 
   let form = $state({
     daily_calories: $goals?.daily_calories ?? 2700,

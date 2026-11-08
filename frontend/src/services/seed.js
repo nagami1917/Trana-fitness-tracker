@@ -6,8 +6,8 @@
  * UI needs no knowledge of where data came from.
  */
 
-import { estimateMet } from '../ml/fueling.js';
-import { routeLengthKm } from '../ml/index.js';
+import { estimateMet } from '../lib/ml/fueling.js';
+import { routeLengthKm } from '../lib/ml/index.js';
 
 const CITY = { lat: 14.676, lng: 121.0437 }; // Quezon City
 
