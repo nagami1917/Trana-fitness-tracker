@@ -1,52 +1,66 @@
-# Supabase (PostgreSQL)
+# Supabase (Laravel + PostgreSQL)
 
-TRANA uses **Supabase Postgres** exclusively — there is no MySQL anywhere in the
-stack.
+TRANA uses the **Trana** Supabase project (`tlqyvjhlesmackmcrzyg`) as a
+PostgreSQL database. Laravel and Sanctum continue to own authentication; the
+browser does not connect to the Supabase Data API or hold a database password.
 
-```
-supabase/sql/001_schema.sql   tables, constraints, indexes, analytical views
-supabase/sql/002_rls.sql      row-level security (defence in depth)
-```
+## Finish configuring the Laravel connection
 
-## Apply the schema
+1. In the Supabase dashboard, open **Connect → Session pooler** and copy the
+   exact host, port and username. The pooler host cannot be inferred from the
+   region. For the direct connection, the known host is
+   `db.tlqyvjhlesmackmcrzyg.supabase.co`, port `5432`, username `postgres`;
+   the direct endpoint requires IPv6 unless the project has the IPv4 add-on.
+2. In `backend/.env` (copy `.env.example` if it does not exist), set `DB_HOST`,
+   `DB_PORT`, `DB_DATABASE`, `DB_USERNAME` and `DB_PASSWORD` from that connection
+   string. Keep `DB_CONNECTION=pgsql` and `DB_SSLMODE=require`. For the shared
+   session pooler, the username is normally `postgres.<project-ref>`, and the
+   port is `5432`.
+3. Keep the **database password** in the ignored `.env` file or your hosting
+   provider's secret settings. Do not put it in frontend `VITE_*` variables or
+   commit it. A Supabase publishable/anon key is **not** the database password.
+4. Run `php artisan migrate:status` to verify the connection, followed by
+   `php artisan migrate` for future migrations. Set `APP_KEY` with
+   `php artisan key:generate` if the backend environment does not already have one.
 
-**SQL editor (fastest):** open the Supabase dashboard → SQL Editor, paste
-`001_schema.sql`, run it, then paste `002_rls.sql`.
+The connected Trana project has already received the baseline migration; it
+contains empty application tables and Laravel migration records, not demo data.
+The backend demo endpoint can create a shared account with known default
+credentials in non-production environments. Use it only with an isolated demo
+database, and do not seed that account into a real production database.
+The SQL test in `supabase/tests/verify_security.sql` checks RLS, view security,
+Data API grants, sequences, and migration records.
 
-**CLI:**
+## Initializing another database
 
-```bash
-supabase link --project-ref <your-project-ref>
-psql "$SUPABASE_DB_URL" -f supabase/sql/001_schema.sql
-psql "$SUPABASE_DB_URL" -f supabase/sql/002_rls.sql
-```
+Choose **one** of these methods, and only apply the SQL baseline to a new, empty
+database. The SQL records the equivalent Laravel migrations so that subsequent
+`php artisan migrate` runs do not recreate existing tables.
 
-**From Laravel** (after setting the `DB_*` variables in `backend/.env`):
+* Let Laravel create the schema: configure `DB_*` and run `php artisan migrate`.
+* Apply `supabase/migrations/20261108105133_trana_laravel_baseline.sql` as a
+  single transaction, or use the equivalent source files with:
 
-```bash
-cd backend && php artisan migrate --seed
-```
+  ```bash
+  psql "$SUPABASE_DB_URL" -1 \
+    -f supabase/sql/001_schema.sql -f supabase/sql/002_rls.sql
+  ```
 
-Both paths produce the same tables. Pick one — Laravel migrations for day-to-day
-development, the SQL files when you want the database to exist before the API.
+For an **existing** Laravel database, use Laravel migrations instead of the SQL
+baseline. Never run `migrate:fresh` or reapply the baseline to a database with
+real data; rolling back the baseline is destructive too. The SQL baseline requires
+PostgreSQL 15+ for security-invoker views.
 
-## Connection settings for the Laravel API
+## Security
 
-Supabase → *Project Settings → Database → Connection string → URI*:
+The database connection should use the Supabase `postgres` database role (or a
+properly provisioned backend-only role with the necessary privileges and RLS
+access). The baseline enables RLS on application and Laravel infrastructure
+tables, revokes Data API access from `anon` and `authenticated`, and makes views
+security-invoker. Laravel enforces per-user authorization with Sanctum. Supabase
+Auth is not wired into this app; adding policies comparing its UUIDs with
+Laravel's integer user IDs would not be sufficient.
 
-```
-postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres
-```
-
-Because the API runs on Vercel (serverless, many short-lived processes), use the
-**session pooler** host (`...pooler.supabase.com:5432`) and keep
-`DB_SSLMODE=require`. For long-running workers the direct host on port `5432` is
-fine.
-
-## Views worth knowing
-
-| View | What it is for |
-| --- | --- |
-| `v_athlete_pace` | per-athlete, per-modality reference speed — the ML model's anchor |
-| `v_daily_totals` | dashboard rollups (distance, minutes, calories per day) |
-| `v_prediction_accuracy` | predicted vs. actual duration, used to monitor drift |
+The analytical views `v_athlete_pace`, `v_daily_totals`, and
+`v_prediction_accuracy` are included in the SQL baseline and available to the
+backend database role. They are not exposed to browser Data API roles.

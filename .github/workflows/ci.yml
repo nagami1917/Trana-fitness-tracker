@@ -22,8 +22,7 @@ jobs:
       - run: npm ci
       - run: npx svelte-check --output human
       - run: npm run build
-      - run: node scripts/smoke.mjs
-      - run: node scripts/render-smoke.mjs
+      - run: npm run smoke
 
   ml:
     name: ML (FastAPI + scikit-learn)
@@ -56,6 +55,10 @@ jobs:
           find backend -name '*.php' -not -path '*/vendor/*' -print0 \
             | xargs -0 -n1 -P4 php -l > /tmp/lint.txt || (cat /tmp/lint.txt && exit 1)
           echo "PHP lint clean"
+      - name: Check Supabase baseline and security migration
+        run: |
+          python3 supabase/tests/check_baseline.py
+          php backend/scripts/test_supabase_security_migration.php
       - name: Validate composer.json
         run: composer validate --no-check-publish --working-dir=backend
       # No composer.lock is committed in this repo, so `install` cannot work —

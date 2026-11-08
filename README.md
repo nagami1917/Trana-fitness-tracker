@@ -142,26 +142,31 @@ cd backend
 composer install
 cp .env.example .env
 php artisan key:generate
-# fill in the Supabase DB_* values and ML_API_URL, then:
-php artisan migrate --seed
-php artisan serve --port=8001
+# Set the Supabase DB_* values (including the private DB_PASSWORD) and ML_API_URL.
+# For this project's connection details, see supabase/README.md.
+php artisan migrate:status  # verifies the connection
+php artisan migrate         # do not reapply the SQL baseline to an existing database
+php artisan serve --host=0.0.0.0 --port=8001
 ```
 
 Point the frontend at it:
 
 ```bash
-# frontend/.env
-VITE_API_BASE_URL=http://localhost:8001
+# frontend/.env.local (local development)
+VITE_API_BASE_URL=/
 ```
 
-…or leave the variable empty and let Vite’s dev proxy forward `/api` to
-`http://127.0.0.1:8001` (see `vite.config.js`).
+Vite proxies same-origin `/api` requests to the Laravel server (by default
+`http://127.0.0.1:8001`, server-side only). For separate deployments, set
+`VITE_API_BASE_URL` to the deployed Laravel API origin. An empty value selects
+local demo mode; it does **not** use the proxy. Never put database credentials
+in a `VITE_*` variable.
 
 ### Environment variables
 
 | Where | Variable | Purpose |
 | --- | --- | --- |
-| frontend | `VITE_API_BASE_URL` | Laravel API origin. Empty ⇒ demo mode. |
+| frontend | `VITE_API_BASE_URL` | Laravel API origin; `/` ⇒ same-origin API; empty ⇒ demo mode. |
 | backend | `DB_HOST/DB_PORT/DB_DATABASE/DB_USERNAME/DB_PASSWORD/DB_SSLMODE` | Supabase Postgres (session pooler for Vercel). |
 | backend | `ML_API_URL`, `ML_API_TOKEN`, `ML_TIMEOUT` | Python prediction service. |
 | backend | `CORS_ALLOWED_ORIGINS` | Comma-separated frontend origins. |
@@ -268,7 +273,7 @@ Chart.js for data viz and Leaflet + OpenStreetMap for routes.
 | --- | --- | --- |
 | Frontend | Vercel | `npm run build`, output `dist`, SPA rewrite |
 | API | Vercel (PHP runtime) | `backend/vercel.json` + `api/index.php` |
-| Database | Supabase | Postgres + pooler connection, apply `supabase/sql/*.sql` |
+| Database | Supabase | Postgres + pooler connection; see `supabase/README.md` for schema setup |
 | ML | Render / Railway / Fly.io / Cloud Run | `ml/Dockerfile`, port 8000 |
 
 Step-by-step instructions, including the CORS and connection-string gotchas, are in

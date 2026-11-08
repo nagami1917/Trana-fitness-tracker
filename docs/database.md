@@ -2,11 +2,12 @@
 
 TRANA stores app data in **Supabase PostgreSQL** (Laravel is configured for
 `pgsql` in `backend/.env`). The schema is managed exclusively by Laravel
-migrations in `backend/database/migrations/` — never edit tables by hand.
+migrations in `backend/database/migrations/`. A one-time SQL baseline can also
+initialize a new empty project; see `supabase/README.md`.
 
 ## Tables
 
-### `users` (+ `password_reset_tokens`, `sessions`)
+### `users` (+ `sessions`)
 Laravel's default user table: name, email (unique), password (bcrypt), remember token.
 
 ### `fitness_profiles`
@@ -81,7 +82,9 @@ users 1──N predictions
 
 `php artisan db:seed` creates a demo athlete via `DemoSeeder` (32 activities over
 the past months, matching the frontend demo fixtures in `frontend/src/services/seed.js`).
-Backend tests use in-memory SQLite with `RefreshDatabase` — they never touch Postgres.
+Seed only an isolated development database: the demo account has known default
+credentials. Backend tests use in-memory SQLite with `RefreshDatabase` — they
+never touch Postgres.
 
 ## Spec-compatible views
 
@@ -103,6 +106,9 @@ real schema above; the migration `backend/database/migrations/2026_11_08_000001_
 
 Notes:
 
-- Views are **read-only** by construction; consume them with SQL/BI tools as `authenticated`/`service_role`.
-- Laravel's `migrate:fresh` drops views on PostgreSQL before rebuilding; on SQLite (CI) the database starts empty, so the migration simply creates them.
+- Views are projections for trusted SQL/BI clients; Supabase `anon` and
+  `authenticated` Data API roles have no access. On Postgres 15+ they also use
+  `security_invoker` so underlying RLS applies to callers.
+- `migrate:fresh` is destructive and must never be run on a production database;
+  SQLite tests start with a fresh in-memory database.
 - Nutrition is stored **once** (columns + `payload.fueling` of `predictions`) — the views are alternative projections, not copies.

@@ -1,49 +1,57 @@
--- ===========================================================================
--- TRANA — Row Level Security
--- ===========================================================================
--- Two supported deployment modes:
+-- TRANA uses Laravel/Sanctum, not Supabase Auth. Access is through the Laravel
+-- database connection only; anon/authenticated Supabase Data API roles have no
+-- access. Apply with 001_schema.sql in one transaction on a fresh database.
 --
---  A. Laravel owns authentication (default in this repository).
---     Laravel connects with the Postgres superuser/service role, which
---     bypasses RLS. RLS is still enabled as defence-in-depth: if a leaked
---     anon key ever reaches a browser, it cannot read athlete data.
---
---  B. Supabase Auth (`auth.uid()`) is used directly by another client.
---     Uncomment the second block to let each authenticated user read only
---     their own rows. In that mode, mirror auth.users ids into public.users.
--- ===========================================================================
+-- Views must also be protected: ordinary Postgres views run as their owner and
+-- can bypass the underlying tables' RLS. Postgres 15+ security_invoker views
+-- enforce the caller's permissions and RLS as a second layer of protection.
 
-alter table public.users            enable row level security;
-alter table public.fitness_profiles enable row level security;
-alter table public.activities       enable row level security;
-alter table public.predictions       enable row level security;
-alter table public.goals            enable row level security;
+do $$
+declare
+    relation_name text;
+    sequence_name text;
+    role_name text;
+begin
+    foreach relation_name in array array[
+        'migrations', 'users', 'sessions', 'cache', 'cache_locks', 'jobs',
+        'failed_jobs', 'fitness_profiles', 'activities', 'predictions', 'goals',
+        'personal_access_tokens'
+    ] loop
+        execute format('alter table public.%I enable row level security', relation_name);
+    end loop;
 
--- No policies for the `anon` / `authenticated` roles in mode A: nothing is
--- reachable except through the Laravel API (which uses the service role).
+    foreach relation_name in array array[
+        'user_profiles', 'planned_activities', 'nutritional_predictions',
+        'activity_routes', 'user_goals', 'prediction_history',
+        'v_athlete_pace', 'v_daily_totals', 'v_prediction_accuracy'
+    ] loop
+        execute format('alter view public.%I set (security_invoker = true)', relation_name);
+    end loop;
 
--- --- Mode B (Supabase Auth) ------------------------------------------------
--- create policy "own profile" on public.fitness_profiles
---     for all to authenticated
---     using (user_id = auth.uid())
---     with check (user_id = auth.uid());
---
--- create policy "own activities" on public.activities
---     for all to authenticated
---     using (user_id = auth.uid())
---     with check (user_id = auth.uid());
---
--- create policy "own predictions" on public.predictions
---     for all to authenticated
---     using (user_id = auth.uid())
---     with check (user_id = auth.uid());
---
--- create policy "own goals" on public.goals
---     for all to authenticated
---     using (user_id = auth.uid())
---     with check (user_id = auth.uid());
+    foreach relation_name in array array[
+        'migrations', 'users', 'sessions', 'cache', 'cache_locks', 'jobs',
+        'failed_jobs', 'fitness_profiles', 'activities', 'predictions', 'goals',
+        'personal_access_tokens', 'user_profiles', 'planned_activities',
+        'nutritional_predictions', 'activity_routes', 'user_goals',
+        'prediction_history', 'v_athlete_pace', 'v_daily_totals', 'v_prediction_accuracy'
+    ] loop
+        execute format('revoke all privileges on table public.%I from public', relation_name);
+        for role_name in select rolname from pg_roles where rolname in ('anon', 'authenticated') loop
+            execute format('revoke all privileges on table public.%I from %I', relation_name, role_name);
+        end loop;
+    end loop;
 
--- Grants for the service role used by Laravel.
-grant usage on schema public to service_role;
-grant all privileges on all tables in schema public to service_role;
-grant all privileges on all sequences in schema public to service_role;
+    foreach sequence_name in array array[
+        'migrations_id_seq', 'users_id_seq', 'jobs_id_seq', 'failed_jobs_id_seq',
+        'fitness_profiles_id_seq', 'activities_id_seq', 'predictions_id_seq',
+        'goals_id_seq', 'personal_access_tokens_id_seq'
+    ] loop
+        execute format('revoke all privileges on sequence public.%I from public', sequence_name);
+        for role_name in select rolname from pg_roles where rolname in ('anon', 'authenticated') loop
+            execute format('revoke all privileges on sequence public.%I from %I', sequence_name, role_name);
+        end loop;
+    end loop;
+end $$;
+
+insert into public.migrations (migration, batch) values
+    ('2026_11_08_000002_secure_supabase_data_api', 1);
