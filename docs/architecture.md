@@ -126,8 +126,9 @@ timeline = 3 h before / 30 min before / during (every 45–60 min) / recovery
 
 ## 8. Security
 
-* Sanctum personal access tokens, rate-limited auth (`10/min/IP`) and predictions
-  (`60/min/user`).
+* Stateless Sanctum personal access tokens (no web-session fallback), rate-limited
+  auth (`10/min/IP`) and predictions (`60/min/user`). Cookie authentication, if
+  ever added, requires CSRF protection.
 * All queries are scoped through the authenticated user's relations
   (`$request->user()->activities()`), so ID tampering cannot cross accounts;
   `abort_unless($model->user_id === $user->id, 404)` on every route-model binding.

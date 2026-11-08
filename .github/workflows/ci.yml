@@ -83,6 +83,9 @@ jobs:
           fi
           curl --fail --silent --show-error http://127.0.0.1:18001/api/docs \
             | python3 -c 'import json, sys; assert json.load(sys.stdin)["name"] == "TRANA API"'
+      - name: Test browser-origin bearer authentication over HTTP
+        working-directory: backend
+        run: python3 scripts/test_stateless_api_http.py
       - name: Run backend tests
         working-directory: backend
         run: |
