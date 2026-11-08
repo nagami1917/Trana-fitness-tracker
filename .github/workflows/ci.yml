@@ -58,9 +58,11 @@ jobs:
           echo "PHP lint clean"
       - name: Validate composer.json
         run: composer validate --no-check-publish --working-dir=backend
+      # No composer.lock is committed in this repo, so `install` cannot work —
+      # resolve dependencies instead. (Maintainers: consider committing a lock file.)
       - name: Install dependencies
         working-directory: backend
-        run: composer install --no-interaction --prefer-dist --no-progress
+        run: composer update --no-interaction --prefer-dist --no-progress
       - name: Run backend tests
         working-directory: backend
         run: php artisan test
