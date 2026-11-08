@@ -1,6 +1,6 @@
 <script>
   import { Lock, Mail, Sparkles, ArrowRight, LoaderCircle, Flame, Timer, Salad } from 'lucide-svelte';
-  import { login, continueAsGuest, notify, apiMode } from '../stores.js';
+  import { login, continueAsGuest, notify, apiMode, profile } from '../stores.js';
   import { navigate } from '../router.js';
 
   let email = $state('nagami@trana.app');
@@ -15,7 +15,8 @@
     try {
       await login({ email, password });
       notify('Welcome back! Let’s fuel your next move.');
-      navigate('/');
+      const needsSetup = $profile?.onboarded === false;
+      navigate(needsSetup ? '/onboarding' : '/');
     } catch (err) {
       error = err.message || 'Could not sign in';
     } finally {

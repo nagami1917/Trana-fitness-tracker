@@ -21,6 +21,7 @@ return new class extends Migration
             $table->decimal('typical_temperature_c', 4, 1)->default(26);
             $table->string('city')->nullable();
             $table->string('units', 10)->default('metric');
+            $table->timestampTz('onboarded_at')->nullable();
             $table->timestamps();
         });
 

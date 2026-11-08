@@ -44,6 +44,7 @@ create table if not exists public.fitness_profiles (
     typical_temperature_c  numeric(4, 1) not null default 26,
     city                   varchar(120),
     units                  varchar(10) not null default 'metric',
+    onboarded_at           timestamptz,
     created_at             timestamptz not null default now(),
     updated_at             timestamptz not null default now()
 );

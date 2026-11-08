@@ -32,6 +32,9 @@ class ProfileController extends Controller
             'weight_kg', 'height_cm', 'birth_year', 'sex', 'sweat_profile',
             'experience_level', 'typical_temperature_c', 'city', 'units',
         ]));
+        if (array_key_exists('onboarded', $validated)) {
+            $profileFields['onboarded_at'] = $validated['onboarded'] ? now() : null;
+        }
         if ($profileFields) {
             $profile->update($profileFields);
         }
@@ -84,7 +87,7 @@ class ProfileController extends Controller
             'weekly_calorie_goal' => $goal->weekly_calories,
             'weekly_distance_goal_km' => (float) $goal->weekly_distance_km,
             'daily_carb_goal_g' => $goal->carb_target_g,
-            'onboarded' => $activities > 0,
+            'onboarded' => $profile->onboarded_at !== null,
             'total_activities' => $activities,
         ];
     }

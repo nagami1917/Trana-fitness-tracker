@@ -1,10 +1,11 @@
 <script>
   import { onMount } from 'svelte';
   import { route, navigate } from './lib/router.js';
-  import { bootstrap, session, booting, ready } from './lib/stores.js';
+  import { bootstrap, session, booting, ready, profile } from './lib/stores.js';
   import AppShell from './lib/components/AppShell.svelte';
   import Toaster from './lib/components/Toaster.svelte';
   import Login from './lib/routes/Login.svelte';
+  import Onboarding from './lib/routes/Onboarding.svelte';
   import Dashboard from './lib/routes/Dashboard.svelte';
   import Plan from './lib/routes/Plan.svelte';
   import Activities from './lib/routes/Activities.svelte';
@@ -25,12 +26,21 @@
   onMount(bootstrap);
 
   const isLoginRoute = $derived($route === '/login');
+  const isOnboardingRoute = $derived($route === '/onboarding');
+  const needsOnboarding = $derived(Boolean($session && $profile && $profile.onboarded === false));
   const Page = $derived(PAGES[$route] ?? NotFound);
 
   $effect(() => {
     if (!$ready) return;
-    if (!$session && !isLoginRoute) navigate('/login', { replace: true });
-    if ($session && isLoginRoute) navigate('/', { replace: true });
+    if (!$session && !isLoginRoute) {
+      navigate('/login', { replace: true });
+      return;
+    }
+    if ($session && isLoginRoute) {
+      navigate(needsOnboarding ? '/onboarding' : '/', { replace: true });
+      return;
+    }
+    if (needsOnboarding && !isOnboardingRoute) navigate('/onboarding', { replace: true });
   });
 </script>
 
@@ -47,6 +57,8 @@
   </div>
 {:else if !$session}
   <Login />
+{:else if isOnboardingRoute}
+  <Onboarding />
 {:else}
   <AppShell>
     <Page />

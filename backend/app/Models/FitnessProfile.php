@@ -21,6 +21,7 @@ class FitnessProfile extends Model
         'typical_temperature_c',
         'city',
         'units',
+        'onboarded_at',
     ];
 
     protected function casts(): array
@@ -31,6 +32,7 @@ class FitnessProfile extends Model
             'birth_year' => 'integer',
             'experience_level' => 'integer',
             'typical_temperature_c' => 'float',
+            'onboarded_at' => 'datetime',
         ];
     }
 

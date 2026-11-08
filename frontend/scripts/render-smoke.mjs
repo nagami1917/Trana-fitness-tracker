@@ -95,6 +95,16 @@ try {
     console.error(`✘ App: ${error.message}`);
   }
 
+  // Onboarding wizard
+  try {
+    const mod = await vite.ssrLoadModule('/src/lib/routes/Onboarding.svelte');
+    const html = render(mod.default).body;
+    console.log(`✔ /onboarding  Onboarding  ${String(html.length).padStart(5)} chars`);
+  } catch (error) {
+    failures += 1;
+    console.error(`✘ Onboarding: ${error.message}`);
+  }
+
   // Login screen (signed out)
   stores.session.set(null);
   try {
