@@ -25,6 +25,23 @@ The default proxy target is `http://127.0.0.1:8001` on the Vite server. Set
 Vite. Never put a database password or Supabase service-role key in `VITE_*`
 variables. A failed startup shows a retry screen instead of sample data.
 
+## City / region detection
+
+Onboarding, Profile and Settings allow manual entry or **Use current location**.
+Detection only starts after the user clicks the button and grants browser
+geolocation permission. Geolocation requires a secure context (HTTPS or
+`localhost`) and an internet connection. The browser sends coordinates and its
+IP directly to BigDataCloud's free client-side reverse-geocoding service;
+BigDataCloud uses them to improve IP geolocation, as disclosed in the form. Only
+the resulting editable city / region is sent to TRANA when the user saves or
+finishes setup; coordinates are not stored by TRANA. Failed or denied detection
+leaves manual entry available. This field does not change the activity route map's
+starting point.
+
+The free endpoint is for a device's current, permission-granted location only.
+Never use it from the server, with stored coordinates, or for automated tests;
+`npm test` uses mocked geolocation and responses instead.
+
 ## Map
 
 ```

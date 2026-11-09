@@ -5,6 +5,7 @@
  */
 import Dashboard from '../pages/Dashboard/Dashboard.svelte';
 import PlanActivity from '../pages/PlanActivity/PlanActivity.svelte';
+import Track from '../pages/Track/Track.svelte';
 import Activities from '../pages/Activities/Activities.svelte';
 import Analytics from '../pages/Analytics/Analytics.svelte';
 import Fueling from '../pages/Fueling/Fueling.svelte';
@@ -15,6 +16,7 @@ import Settings from '../pages/Settings/Settings.svelte';
 export const ROUTES = {
   '/': Dashboard,
   '/plan': PlanActivity,
+  '/track': Track,
   '/activities': Activities,
   '/analytics': Analytics,
   '/fueling': Fueling,

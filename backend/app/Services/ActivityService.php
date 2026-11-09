@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Activity;
+use App\Models\FitnessProfile;
 use App\Models\User;
 
 /**
@@ -55,6 +56,7 @@ class ActivityService
             'avg_heart_rate' => $validated['avg_heart_rate'] ?? null,
             'started_at' => $validated['started_at'],
             'route' => $validated['route'] ?? null,
+            'route_geojson' => $validated['route_geojson'] ?? null,
             'notes' => $validated['notes'] ?? null,
             'source' => $validated['source'] ?? 'manual',
         ]);
@@ -81,8 +83,24 @@ class ActivityService
         return (int) round(max(1.6, $met + $climb) * $weightKg * $hours);
     }
 
-    private function syncExperienceLevel(User $user): void
+    /**
+     * Bucket the athlete's fitness level from how many sessions they logged.
+     *
+     * Since Step 4 the athlete can set the level themselves; that choice is
+     * marked `fitness_level_source = user` and is never overwritten here unless
+     * the caller explicitly forces a recompute (PATCH fitness-level with
+     * source=auto).
+     */
+    public function syncExperienceLevel(User $user, bool $force = false): void
     {
+        $profile = $user->fitnessProfile;
+        if (! $profile) {
+            return;
+        }
+        if (! $force && $profile->fitness_level_source === FitnessProfile::LEVEL_SOURCE_USER) {
+            return;
+        }
+
         $count = $user->activities()->count();
         $level = match (true) {
             $count >= 40 => 5,
@@ -91,6 +109,6 @@ class ActivityService
             $count >= 5 => 2,
             default => 1,
         };
-        $user->fitnessProfile?->update(['experience_level' => $level]);
+        $profile->update(['experience_level' => $level]);
     }
 }

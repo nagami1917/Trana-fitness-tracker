@@ -1,44 +1,57 @@
 <script>
   import { onMount } from 'svelte';
-  import { CircleUserRound, Save, LoaderCircle, Flame, Footprints, CalendarDays } from 'lucide-svelte';
+  import { CircleUserRound, Save, LoaderCircle, Flame, Footprints, CalendarDays, Activity, Scale } from 'lucide-svelte';
   import Card from '../../components/common/Card.svelte';
   import Segmented from '../../components/common/Segmented.svelte';
+  import CityRegionInput from '../../components/common/CityRegionInput.svelte';
   import { api } from '../../services/client.js';
   import { profile, session, refresh, notify } from '../../stores/index.js';
 
+  // Step 4 — the fitness profile feeds every prediction. `age` and
+  // `fitness_level` are the spec's names; the API maps them onto the stored
+  // birth_year / experience_level columns.
   let form = $state({
     name: '',
     city: '',
     weight_kg: 60,
     height_cm: '',
+    age: '',
     sex: 'other',
     sweat_profile: 'normal',
-    experience_level: 3,
+    fitness_level: 3,
+    activity_experience: '',
     typical_temperature_c: 26,
     units: 'metric',
   });
+  let quick = $state({ weight_kg: 60, fitness_level: 3, busy: '' });
   let loading = $state(false);
+  let locating = $state(false);
 
-  onMount(() => {
-    const p = $profile;
+  function fillForm(p) {
     if (!p) return;
-    form = {
-      name: p.name ?? '',
-      city: p.city ?? '',
-      weight_kg: p.weight_kg ?? 60,
-      height_cm: p.height_cm ?? '',
-      sex: p.sex ?? 'other',
-      sweat_profile: p.sweat_profile ?? 'normal',
-      experience_level: p.experience_level ?? 3,
-      typical_temperature_c: p.typical_temperature_c ?? 26,
-      units: p.units ?? 'metric',
-    };
-  });
+    form.name = p.name ?? '';
+    form.city = p.city ?? '';
+    form.weight_kg = p.weight_kg ?? 60;
+    form.height_cm = p.height_cm ?? '';
+    form.age = p.age ?? '';
+    form.sex = p.sex ?? 'other';
+    form.sweat_profile = p.sweat_profile ?? 'normal';
+    form.fitness_level = p.fitness_level ?? p.experience_level ?? 3;
+    form.activity_experience = p.activity_experience ?? '';
+    form.typical_temperature_c = p.typical_temperature_c ?? 26;
+    form.units = p.units ?? 'metric';
+    quick.weight_kg = form.weight_kg;
+    quick.fitness_level = form.fitness_level;
+  }
+
+  onMount(() => fillForm($profile));
 
   const initial = $derived((form.name || $session?.name || 'N').slice(0, 1).toUpperCase());
+  const nullableNumber = (value) => (value == null || value === '' ? null : Number(value));
 
   async function save(event) {
     event.preventDefault();
+    if (loading || locating) return;
     loading = true;
     let written = false;
     try {
@@ -46,20 +59,55 @@
         name: form.name.trim() || undefined,
         city: form.city.trim() || null,
         weight_kg: Number(form.weight_kg),
-        height_cm: form.height_cm === '' ? null : Number(form.height_cm),
+        height_cm: nullableNumber(form.height_cm),
+        age: nullableNumber(form.age),
         sex: form.sex,
         sweat_profile: form.sweat_profile,
-        experience_level: Number(form.experience_level),
+        fitness_level: Number(form.fitness_level),
+        activity_experience: nullableNumber(form.activity_experience),
         typical_temperature_c: Number(form.typical_temperature_c),
         units: form.units,
       });
       written = true;
       await refresh();
+      fillForm($profile);
       notify('Profile saved');
     } catch (err) {
       notify(written ? 'Profile saved, but the view could not refresh. Reload when connected.' : (err.message || 'Could not save your profile'), 'error');
     } finally {
       loading = false;
+    }
+  }
+
+  /** PATCH /profile/weight — the value the fueling math depends on. */
+  async function saveWeight() {
+    if (quick.busy) return;
+    quick.busy = 'weight';
+    try {
+      const updated = await api.profile.updateWeight(Number(quick.weight_kg));
+      profile.set(updated);
+      fillForm(updated);
+      notify('Body mass updated');
+    } catch (err) {
+      notify(err.message || 'Could not update your weight', 'error');
+    } finally {
+      quick.busy = '';
+    }
+  }
+
+  /** PATCH /profile/fitness-level — a user-owned level survives activity logging. */
+  async function saveLevel(level) {
+    if (quick.busy) return;
+    quick.busy = 'level';
+    try {
+      const updated = await api.profile.updateFitnessLevel(Number(level));
+      profile.set(updated);
+      fillForm(updated);
+      notify('Fitness level updated');
+    } catch (err) {
+      notify(err.message || 'Could not update your fitness level', 'error');
+    } finally {
+      quick.busy = '';
     }
   }
 </script>
@@ -77,34 +125,100 @@
 </header>
 
 <div class="grid gap-5 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
-  <!-- identity card -->
-  <Card class="flex h-fit flex-col items-center gap-4 p-6 text-center">
-    <div class="grid h-24 w-24 place-items-center rounded-full bg-brand-gradient font-display text-3xl font-extrabold text-white shadow-glow">
-      {initial}
-    </div>
-    <div>
-      <p class="text-lg font-extrabold text-ink-900">{$profile?.name ?? 'Athlete'}</p>
-      <p class="text-xs font-semibold text-ink-400">{$session?.email ?? ''}</p>
-      {#if $profile?.city}<p class="mt-1 text-xs font-bold text-brand-600">{$profile.city}</p>{/if}
-    </div>
-    <div class="grid w-full grid-cols-2 gap-3">
-      <div class="rounded-2xl bg-brand-50/70 px-3 py-3">
-        <Footprints size={16} class="mx-auto text-brand-500" />
-        <p class="mt-1 text-lg font-extrabold leading-none text-ink-900">{$profile?.total_activities ?? 0}</p>
-        <p class="mt-1 text-[10px] font-bold uppercase tracking-wider text-ink-400">activities</p>
+  <div class="flex flex-col gap-5">
+    <!-- identity card -->
+    <Card class="flex h-fit flex-col items-center gap-4 p-6 text-center">
+      <div class="grid h-24 w-24 place-items-center rounded-full bg-brand-gradient font-display text-3xl font-extrabold text-white shadow-glow">
+        {initial}
       </div>
-      <div class="rounded-2xl bg-brand-50/70 px-3 py-3">
-        <Flame size={16} class="mx-auto text-brand-500" />
-        <p class="mt-1 text-lg font-extrabold leading-none text-ink-900">{$profile?.daily_calorie_goal ?? '—'}</p>
-        <p class="mt-1 text-[10px] font-bold uppercase tracking-wider text-ink-400">kcal / day goal</p>
+      <div>
+        <p class="text-lg font-extrabold text-ink-900">{$profile?.name ?? 'Athlete'}</p>
+        <p class="text-xs font-semibold text-ink-400">{$session?.email ?? ''}</p>
+        {#if $profile?.city}<p class="mt-1 text-xs font-bold text-brand-600">{$profile.city}</p>{/if}
       </div>
-    </div>
-    {#if $profile?.age}
-      <p class="flex items-center gap-1.5 text-[11px] font-semibold text-ink-400">
-        <CalendarDays size={12} /> {$profile.age} years · experience level {$profile.experience_level ?? 3}/5
-      </p>
-    {/if}
-  </Card>
+      <div class="grid w-full grid-cols-2 gap-3">
+        <div class="rounded-2xl bg-brand-50/70 px-3 py-3">
+          <Footprints size={16} class="mx-auto text-brand-500" />
+          <p class="mt-1 text-lg font-extrabold leading-none text-ink-900">{$profile?.total_activities ?? 0}</p>
+          <p class="mt-1 text-[10px] font-bold uppercase tracking-wider text-ink-400">activities</p>
+        </div>
+        <div class="rounded-2xl bg-brand-50/70 px-3 py-3">
+          <Flame size={16} class="mx-auto text-brand-500" />
+          <p class="mt-1 text-lg font-extrabold leading-none text-ink-900">{$profile?.daily_calorie_goal ?? '—'}</p>
+          <p class="mt-1 text-[10px] font-bold uppercase tracking-wider text-ink-400">kcal / day goal</p>
+        </div>
+        <div class="rounded-2xl bg-brand-50/70 px-3 py-3">
+          <CalendarDays size={16} class="mx-auto text-brand-500" />
+          <p class="mt-1 text-lg font-extrabold leading-none text-ink-900">{$profile?.age ?? '—'}</p>
+          <p class="mt-1 text-[10px] font-bold uppercase tracking-wider text-ink-400">age</p>
+        </div>
+        <div class="rounded-2xl bg-brand-50/70 px-3 py-3">
+          <Activity size={16} class="mx-auto text-brand-500" />
+          <p class="mt-1 text-lg font-extrabold leading-none text-ink-900">
+            {$profile?.fitness_level ?? $profile?.experience_level ?? 3}<span class="text-xs">/5</span>
+          </p>
+          <p class="mt-1 text-[10px] font-bold uppercase tracking-wider text-ink-400">fitness level</p>
+        </div>
+      </div>
+      {#if $profile?.activity_experience != null}
+        <p class="text-[11px] font-semibold text-ink-400">
+          {$profile.activity_experience} {Number($profile.activity_experience) === 1 ? 'year' : 'years'} of consistent training
+        </p>
+      {/if}
+    </Card>
+
+    <!-- quick updates: the dedicated weight / fitness-level endpoints -->
+    <Card class="flex flex-col gap-4 p-6">
+      <div class="flex items-center gap-2.5">
+        <span class="grid h-9 w-9 place-items-center rounded-xl bg-brand-100 text-brand-600"><Scale size={16} /></span>
+        <div>
+          <p class="text-sm font-extrabold text-ink-900">Quick update</p>
+          <p class="text-[11px] font-semibold text-ink-400">Body mass and fitness level save on their own.</p>
+        </div>
+      </div>
+
+      <div>
+        <label class="label" for="quick-weight">Body mass (kg)</label>
+        <div class="flex gap-2">
+          <input
+            id="quick-weight"
+            type="number"
+            min="25"
+            max="250"
+            step="0.5"
+            class="input"
+            bind:value={quick.weight_kg}
+            disabled={quick.busy !== ''}
+          />
+          <button type="button" class="btn-primary shrink-0 !px-4" onclick={saveWeight} disabled={quick.busy !== ''}>
+            {#if quick.busy === 'weight'}
+              <LoaderCircle size={15} class="animate-spin" />
+            {:else}
+              Save weight
+            {/if}
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <p class="label">Fitness level</p>
+        <Segmented
+          value={String(quick.fitness_level)}
+          onSelect={(id) => saveLevel(id)}
+          options={[
+            { id: '1', label: '1 · New' },
+            { id: '2', label: '2' },
+            { id: '3', label: '3 · Regular' },
+            { id: '4', label: '4' },
+            { id: '5', label: '5 · Elite' },
+          ]}
+        />
+        <p class="mt-2 text-[11px] font-semibold text-ink-400">
+          Your own rating shapes the model and is not overwritten when you log a session.
+        </p>
+      </div>
+    </Card>
+  </div>
 
   <!-- edit form -->
   <Card class="p-6">
@@ -113,10 +227,7 @@
         <label class="label" for="name">Name</label>
         <input id="name" class="input" bind:value={form.name} maxlength="80" required />
       </div>
-      <div>
-        <label class="label" for="city">City</label>
-        <input id="city" class="input" bind:value={form.city} maxlength="120" placeholder="Lusacan" />
-      </div>
+      <CityRegionInput id="profile-city" bind:value={form.city} bind:busy={locating} disabled={loading} />
 
       <div>
         <label class="label" for="weight">Weight (kg)</label>
@@ -125,6 +236,24 @@
       <div>
         <label class="label" for="height">Height (cm)</label>
         <input id="height" type="number" min="100" max="250" step="0.5" class="input" bind:value={form.height_cm} placeholder="optional" />
+      </div>
+
+      <div>
+        <label class="label" for="age">Age (years)</label>
+        <input id="age" type="number" min="10" max="110" step="1" class="input" bind:value={form.age} placeholder="optional" />
+      </div>
+      <div>
+        <label class="label" for="experience-years">Training experience (years)</label>
+        <input
+          id="experience-years"
+          type="number"
+          min="0"
+          max="70"
+          step="0.5"
+          class="input"
+          bind:value={form.activity_experience}
+          placeholder="optional"
+        />
       </div>
 
       <div class="sm:col-span-2">
@@ -154,10 +283,10 @@
       </div>
 
       <div class="sm:col-span-2">
-        <p class="label">Experience</p>
+        <p class="label">Fitness level</p>
         <Segmented
-          value={String(form.experience_level)}
-          onSelect={(id) => (form.experience_level = Number(id))}
+          value={String(form.fitness_level)}
+          onSelect={(id) => (form.fitness_level = Number(id))}
           options={[
             { id: '1', label: '1 · New' },
             { id: '2', label: '2' },
@@ -189,7 +318,7 @@
       </div>
 
       <div class="sm:col-span-2">
-        <button type="submit" class="btn-primary w-full !py-3" disabled={loading}>
+        <button type="submit" class="btn-primary w-full !py-3" disabled={loading || locating}>
           {#if loading}
             <LoaderCircle size={17} class="animate-spin" /> Saving…
           {:else}

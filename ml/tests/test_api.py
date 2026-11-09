@@ -87,6 +87,29 @@ def test_route_overrides_distance():
     assert body["duration"]["minutes"] < 30
 
 
+def test_step4_profile_context_is_accepted():
+    """Step 4 sends age, sex, height, fitness level and training experience."""
+    res = client.post(
+        "/predict",
+        json=payload(age=27, sex="female", height_cm=162, fitness_level=4, activity_experience=6.5),
+    )
+    assert res.status_code == 200, res.text
+    assert res.json()["duration"]["minutes"] > 0
+
+
+def test_fitness_level_aliases_experience_level():
+    legacy = client.post("/predict", json=payload(experience_level=5)).json()
+    spec = client.post("/predict", json=payload(experience_level=1, fitness_level=5)).json()
+    assert spec["duration"]["minutes"] == pytest.approx(legacy["duration"]["minutes"])
+
+
+def test_invalid_profile_context_is_rejected():
+    assert client.post("/predict", json=payload(age=-1)).status_code == 422
+    assert client.post("/predict", json=payload(fitness_level=9)).status_code == 422
+    assert client.post("/predict", json=payload(height_cm=10)).status_code == 422
+    assert client.post("/predict", json=payload(activity_experience=100)).status_code == 422
+
+
 def test_fueling_bands():
     short = recommend(FuelingInput(activity_type="run", duration_min=40, weight_kg=60))
     medium = recommend(FuelingInput(activity_type="run", duration_min=100, weight_kg=60, avg_speed_kmh=10))

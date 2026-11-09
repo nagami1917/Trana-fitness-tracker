@@ -41,14 +41,24 @@ class PredictionService
         $routeContext = $this->routes->effectiveContext($input);
         $distanceKm = $routeContext['distance_km'];
 
+        // Step 4: the profile is the source of the athlete attributes the model
+        // is allowed to see. `predictionContext()` is also stored with the
+        // saved prediction, so every plan records which values produced it.
+        $profileContext = $profile->predictionContext();
+
         $payload = [
             'activity_type' => $input['activity_type'],
             'distance_km' => $distanceKm,
             'elevation_gain_m' => (float) ($input['elevation_gain_m'] ?? 0),
-            'weight_kg' => (float) $profile->weight_kg,
-            'experience_level' => (int) $profile->experience_level,
-            'sweat_profile' => $input['sweat_profile'] ?? ($profile->sweat_profile ?: 'normal'),
-            'temperature_c' => (float) ($input['temperature_c'] ?? $profile->typical_temperature_c ?? 26),
+            'weight_kg' => $profileContext['weight_kg'],
+            'experience_level' => $profileContext['fitness_level'],
+            'age' => $profileContext['age'],
+            'sex' => $profileContext['sex'],
+            'height_cm' => $profileContext['height_cm'],
+            'fitness_level' => $profileContext['fitness_level'],
+            'activity_experience' => $profileContext['activity_experience'],
+            'sweat_profile' => $input['sweat_profile'] ?? $profileContext['sweat_profile'],
+            'temperature_c' => (float) ($input['temperature_c'] ?? $profileContext['typical_temperature_c'] ?? 26),
             'history' => $history,
         ];
 
@@ -82,6 +92,7 @@ class PredictionService
             'duration' => $durationPart['duration'],
             'fueling' => $this->fueling->normalise($result),
             'history_used' => count($history),
+            'profile' => $profileContext,
             'model' => $durationPart['model'],
             'generated_at' => now()->toIso8601String(),
         ];

@@ -21,7 +21,9 @@ One row per athlete, auto-created on first use (`User::ensureProfile()`).
 | `birth_year` | smallint, nullable | `age()` computes from it |
 | `sex` | string(16) | `female`/`male`/`other` |
 | `sweat_profile` | string(16) | `low`/`normal`/`high` — sodium & fluid rates |
-| `experience_level` | tinyint | 1–5; auto-synced from activity count |
+| `experience_level` | tinyint | 1–5; the spec's `fitness_level`. Auto-synced from activity count while `fitness_level_source = auto` |
+| `fitness_level_source` | string(8) | `auto` (session-count heuristic) or `user` (athlete set it via the profile API) |
+| `activity_experience` | decimal(4,1), nullable | Years of consistent training — the spec's `activity_experience` |
 | `typical_temperature_c` | decimal(4,1) | default 26; heat adjustment |
 | `city`, `units` | string | profile display + metric/imperial |
 | `onboarded_at` | timestamptz, nullable | null → app routes to /onboarding |
@@ -95,12 +97,35 @@ real schema above; the migration `backend/database/migrations/2026_11_08_000001_
 
 | Spec view | Definition (source columns) |
 | --- | --- |
-| `user_profiles` | `fitness_profiles` — full athlete profile (weight, sweat profile, experience…) |
+| `user_profiles` | `fitness_profiles` — the Step 4 field list: `id, user_id, age, sex, height_cm, weight_kg, fitness_level, activity_experience, created_at, updated_at` |
 | `planned_activities` | `predictions` — the plan side: distance/route, planned_for, status, predicted interval, `payload`, `model_version` |
 | `nutritional_predictions` | `predictions` — the fueling side: `prediction_id`, calories, carbs/h + total, sodium, fluid, intensity, MET |
 | `activity_routes` | `activities WHERE route IS NOT NULL` — `activity_id`, `user_id`, distance/elevation/time, `route` jsonb |
 | `user_goals` | `goals` — calorie/distance/active-minute/carb targets (daily & weekly) |
 | `prediction_history` | `predictions` — `id`, `status`, `planned_for`, `model_version`, timestamps (history of the plan lifecycle) |
+
+### Step 4 — the fitness profile
+
+`user_profiles` is the spec's view of the one writable profile row:
+
+| Spec column | Source |
+| --- | --- |
+| `id`, `user_id`, `sex`, `height_cm`, `weight_kg`, `created_at`, `updated_at` | same-named columns |
+| `age` | derived: `current_year − birth_year` (null when no birth year is stored) |
+| `fitness_level` | `experience_level` (1–5) |
+| `activity_experience` | `activity_experience` (years of consistent training) |
+
+Clients create/view/edit the profile through the Laravel API
+(`POST/GET/PUT/PATCH /api/profile`, plus `/api/profile/weight` and
+`/api/profile/fitness-level`); the view is read-only, for SQL and BI clients.
+Every prediction stores the profile values it used in
+`predictions.payload.profile`, so a saved plan can be audited against the
+profile that produced it.
+
+`fitness_level_source` protects a deliberate choice: once the athlete sets a
+level (`user`), logging activities no longer overwrites it. Onboarding counts as
+an explicit choice. `PATCH /api/profile/fitness-level` with `source=auto`
+returns the level to the activity-count heuristic.
 
 Notes:
 

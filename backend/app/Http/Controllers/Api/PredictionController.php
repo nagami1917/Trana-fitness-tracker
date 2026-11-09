@@ -90,14 +90,22 @@ class PredictionController extends Controller
                 'route' => $request->input('route'),
             ])['distance_km'];
 
+            // Same Step 4 profile context the saved-prediction path sends.
+            $context = $request->user()->ensureProfile()->predictionContext();
+
             $result = $this->ml->predict([
                 'activity_type' => $request->input('activity_type'),
                 'distance_km' => $distance,
                 'elevation_gain_m' => (float) $request->input('elevation_gain_m', 0),
-                'weight_kg' => (float) ($request->user()->fitnessProfile?->weight_kg ?? 60),
-                'experience_level' => (int) ($request->user()->fitnessProfile?->experience_level ?? 3),
-                'sweat_profile' => $request->input('sweat_profile') ?? $request->user()->fitnessProfile?->sweat_profile ?? 'normal',
-                'temperature_c' => (float) $request->input('temperature_c', 26),
+                'weight_kg' => $context['weight_kg'],
+                'experience_level' => $context['fitness_level'],
+                'age' => $context['age'],
+                'sex' => $context['sex'],
+                'height_cm' => $context['height_cm'],
+                'fitness_level' => $context['fitness_level'],
+                'activity_experience' => $context['activity_experience'],
+                'sweat_profile' => $request->input('sweat_profile') ?? $context['sweat_profile'],
+                'temperature_c' => (float) $request->input('temperature_c', $context['typical_temperature_c']),
                 'history' => $this->activities->history($request->user()),
             ]);
         } catch (RuntimeException $e) {

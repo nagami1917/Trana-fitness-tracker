@@ -131,7 +131,13 @@ export const api = {
 
   profile: {
     get: () => request('/profile').then((d) => d.data),
+    // POST creates; the server answers 409 once a profile exists.
+    create: (payload) => request('/profile', { method: 'POST', body: payload }).then((d) => d.data),
     update: (patch) => request('/profile', { method: 'PUT', body: patch }).then((d) => d.data),
+    updateWeight: (weightKg) =>
+      request('/profile/weight', { method: 'PATCH', body: { weight_kg: weightKg } }).then((d) => d.data),
+    updateFitnessLevel: (level, source = 'user') =>
+      request('/profile/fitness-level', { method: 'PATCH', body: { fitness_level: level, source } }).then((d) => d.data),
   },
 
   activities: {

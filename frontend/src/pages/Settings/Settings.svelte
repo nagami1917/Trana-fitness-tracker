@@ -2,6 +2,7 @@
   import { Settings as SettingsIcon, Save, LoaderCircle, LogOut, Info, Brain, Smartphone, ShieldCheck, User, HeartPulse } from 'lucide-svelte';
   import Card from '../../components/common/Card.svelte';
   import Segmented from '../../components/common/Segmented.svelte';
+  import CityRegionInput from '../../components/common/CityRegionInput.svelte';
   import { profile, session, logout, notify, refresh, modelCard, activities } from '../../stores/index.js';
   import { api } from '../../services/client.js';
   import { navigate } from '../../lib/router.js';
@@ -11,8 +12,8 @@
     name: $profile?.name ?? '',
     email: $profile?.email ?? '',
     weight_kg: $profile?.weight_kg ?? 60,
-    height_cm: $profile?.height_cm ?? 165,
-    birth_year: $profile?.birth_year ?? 1998,
+    height_cm: $profile?.height_cm ?? '',
+    birth_year: $profile?.birth_year ?? '',
     sex: $profile?.sex ?? 'female',
     city: $profile?.city ?? '',
     sweat_profile: $profile?.sweat_profile ?? 'normal',
@@ -21,6 +22,7 @@
     units: $profile?.units ?? 'metric',
   });
   let saving = $state(false);
+  let locating = $state(false);
 
   $effect(() => {
     if ($profile && !form.name) {
@@ -28,8 +30,8 @@
         name: $profile.name ?? '',
         email: $profile.email ?? '',
         weight_kg: $profile.weight_kg ?? 60,
-        height_cm: $profile.height_cm ?? 165,
-        birth_year: $profile.birth_year ?? 1998,
+        height_cm: $profile.height_cm ?? '',
+        birth_year: $profile.birth_year ?? '',
         sex: $profile.sex ?? 'female',
         city: $profile.city ?? '',
         sweat_profile: $profile.sweat_profile ?? 'normal',
@@ -41,16 +43,17 @@
   });
 
   async function save() {
+    if (saving || locating) return;
     saving = true;
     let written = false;
     try {
       await api.profile.update({
         name: form.name,
         weight_kg: Number(form.weight_kg),
-        height_cm: Number(form.height_cm),
-        birth_year: Number(form.birth_year),
+        height_cm: form.height_cm == null || form.height_cm === '' ? null : Number(form.height_cm),
+        birth_year: form.birth_year == null || form.birth_year === '' ? null : Number(form.birth_year),
         sex: form.sex,
-        city: form.city,
+        city: form.city.trim() || null,
         sweat_profile: form.sweat_profile,
         experience_level: Number(form.experience_level),
         typical_temperature_c: Number(form.typical_temperature_c),
@@ -79,7 +82,7 @@
       <h1 class="font-display text-2xl sm:text-3xl">Profile & preferences</h1>
       <p class="mt-1 text-sm font-semibold text-ink-400">Body mass, sweat profile and experience all feed the model.</p>
     </div>
-    <button class="btn-primary self-start" onclick={save} disabled={saving}>
+    <button class="btn-primary self-start" onclick={save} disabled={saving || locating}>
       {#if saving}<LoaderCircle size={15} class="animate-spin" /> Saving…{:else}<Save size={15} /> Save changes{/if}
     </button>
   </div>
@@ -106,17 +109,14 @@
             <input class="input" type="number" step="0.5" min="30" bind:value={form.weight_kg} />
           </div>
           <div>
-            <span class="label">Height (cm)</span>
+            <span class="label">Height (cm, optional)</span>
             <input class="input" type="number" step="1" min="120" bind:value={form.height_cm} />
           </div>
           <div>
-            <span class="label">Birth year</span>
-            <input class="input" type="number" min="1930" max="2015" bind:value={form.birth_year} />
+            <span class="label">Birth year (optional)</span>
+            <input class="input" type="number" min="1930" max={new Date().getFullYear()} bind:value={form.birth_year} />
           </div>
-          <div>
-            <span class="label">City / region</span>
-            <input class="input" bind:value={form.city} placeholder="Quezon City, PH" />
-          </div>
+          <CityRegionInput id="settings-city" bind:value={form.city} bind:busy={locating} disabled={saving} />
         </div>
 
         <div class="mt-3">

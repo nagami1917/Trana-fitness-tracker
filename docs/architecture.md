@@ -16,7 +16,9 @@ Laravel API, and the ML service holds no credentials at all.
 ## 2. Data model
 
 ```text
-users 1───1 fitness_profiles        weight, height, sex, sweat profile, experience
+users 1───1 fitness_profiles        weight, height, sex, sweat profile,
+  │                                 fitness level (1–5, user or auto),
+  │                                 activity experience (years), age (birth_year)
   │
   ├──1───1 goals                    daily/weekly energy, distance, active minutes, carbs
   │
@@ -49,7 +51,7 @@ POST /api/predictions
         ├─ load profile + last 300 activities
         ├─ if route drawn → recompute distance with haversine (server-side truth)
         ├─ POST {ML_API_URL}/predict
-        │      payload: plan + profile + history
+        │      payload: plan + profile (age, sex, height, mass, fitness level, experience) + history
         │      response: duration{q10,q50,q90}, fueling{calories,carbs,sodium,fluid,timeline,notes}
         ├─ normalise snake_case → camelCase (PredictionService::normalise)
         ├─ persist predictions row (payload jsonb = audit trail)

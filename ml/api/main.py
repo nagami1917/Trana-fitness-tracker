@@ -76,7 +76,7 @@ def predict_duration(payload: PredictRequest) -> dict:
         elevation_gain_m=payload.elevation_gain_m,
         weight_kg=payload.weight_kg,
         history=[h.model_dump() for h in payload.history],
-        experience=payload.experience_level,
+        experience=payload.experience,
     )
 
 
@@ -89,7 +89,7 @@ def predict_fueling(payload: PredictRequest, duration_min: float | None = None) 
         elevation_gain_m=payload.elevation_gain_m,
         weight_kg=payload.weight_kg,
         history=[h.model_dump() for h in payload.history],
-        experience=payload.experience_level,
+        experience=payload.experience,
     )["minutes"]
 
     inp = FuelingInput(
@@ -114,7 +114,7 @@ def predict_all(payload: PredictRequest) -> PredictResponse:
         elevation_gain_m=payload.elevation_gain_m,
         weight_kg=payload.weight_kg,
         history=[h.model_dump() for h in payload.history],
-        experience=payload.experience_level,
+        experience=payload.experience,
     )
 
     fueling = recommend(
