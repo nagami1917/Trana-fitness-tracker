@@ -2,29 +2,31 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\MapsProfileFields;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
+/**
+ * PUT|PATCH /api/profile — edit any part of the profile (plus the athlete's
+ * name and goal targets, which the profile screen edits together).
+ */
 class UpdateProfileRequest extends FormRequest
 {
+    use MapsProfileFields;
+
     public function authorize(): bool
     {
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        $this->mapProfileFieldAliases();
+    }
+
     public function rules(): array
     {
-        return [
+        return $this->profileFieldRules() + [
             'name' => ['sometimes', 'string', 'max:80'],
-            'weight_kg' => ['sometimes', 'numeric', 'min:25', 'max:250'],
-            'height_cm' => ['sometimes', 'nullable', 'numeric', 'min:100', 'max:250'],
-            'birth_year' => ['sometimes', 'nullable', 'integer', 'min:1930', 'max:'.(int) date('Y')],
-            'sex' => ['sometimes', Rule::in(['female', 'male', 'other'])],
-            'sweat_profile' => ['sometimes', Rule::in(['low', 'normal', 'high'])],
-            'experience_level' => ['sometimes', 'integer', 'min:1', 'max:5'],
-            'typical_temperature_c' => ['sometimes', 'numeric', 'min:-10', 'max:50'],
-            'city' => ['sometimes', 'nullable', 'string', 'max:120'],
-            'units' => ['sometimes', Rule::in(['metric', 'imperial'])],
             'daily_calorie_goal' => ['sometimes', 'integer', 'min:800', 'max:8000'],
             'daily_distance_goal_km' => ['sometimes', 'numeric', 'min:1', 'max:300'],
             'daily_active_min_goal' => ['sometimes', 'integer', 'min:5', 'max:600'],

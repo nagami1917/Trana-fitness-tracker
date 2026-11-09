@@ -44,6 +44,11 @@ curl -s -X POST localhost:8000/predict -H 'Content-Type: application/json' -d '{
   "elevation_gain_m": 220,
   "weight_kg": 55,
   "experience_level": 3,
+  "fitness_level": 3,
+  "age": 27,
+  "sex": "female",
+  "height_cm": 162,
+  "activity_experience": 6.5,
   "temperature_c": 26,
   "history": [
     {"activity_type":"run","distance_km":5,"duration_min":29},
@@ -51,6 +56,11 @@ curl -s -X POST localhost:8000/predict -H 'Content-Type: application/json' -d '{
   ]
 }' | jq
 ```
+
+`age`, `sex`, `height_cm`, `fitness_level` and `activity_experience` are optional
+profile context sent by Laravel (spec step 4). Only `weight_kg` and the 1–5
+fitness level (`fitness_level`, falling back to `experience_level`) change the
+model output today; the rest is validated and carried for auditing.
 
 CLI predictor (no server):
 

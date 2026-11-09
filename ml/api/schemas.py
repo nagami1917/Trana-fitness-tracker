@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 ActivityType = Literal["run", "ride", "walk", "hike"]
 SweatProfile = Literal["low", "normal", "high"]
+Sex = Literal["female", "male", "other"]
 
 
 class HistoryItem(BaseModel):
@@ -25,6 +26,17 @@ class PredictRequest(BaseModel):
     elevation_gain_m: float = Field(default=0, ge=0, le=12000)
     weight_kg: float = Field(ge=25, le=250)
     experience_level: int = Field(default=3, ge=1, le=5)
+
+    # Step 4 athlete profile context. Laravel fills these from user_profiles;
+    # they are optional so existing clients keep working. Only body mass and the
+    # fitness level change the model output today — the rest is carried as
+    # validated context for future features and for auditing a prediction.
+    age: int | None = Field(default=None, ge=10, le=110)
+    sex: Sex = "other"
+    height_cm: float | None = Field(default=None, ge=100, le=250)
+    fitness_level: int | None = Field(default=None, ge=1, le=5)
+    activity_experience: float | None = Field(default=None, ge=0, le=70)
+
     history: list[HistoryItem] = Field(default_factory=list, max_length=400)
     sweat_profile: SweatProfile = "normal"
     temperature_c: float = Field(default=22, ge=-20, le=55)
@@ -33,6 +45,11 @@ class PredictRequest(BaseModel):
         default=None,
         description="Optional [[lat, lng], ...] polyline; used to derive distance when distance_km is omitted",
     )
+
+    @property
+    def experience(self) -> int:
+        """Step 4's fitness_level wins over the legacy experience_level."""
+        return self.fitness_level if self.fitness_level is not None else self.experience_level
 
 
 class Range(BaseModel):

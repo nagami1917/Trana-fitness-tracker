@@ -37,13 +37,31 @@ This does not check FastAPI or verify that all migrations are applied.
 
 ## Profile
 
-`GET /profile`
+The athlete's fitness profile (spec step 4). One row per account, created on
+registration. Its values are attached to every prediction.
+
+Spec fields: `id, user_id, age, sex, height_cm, weight_kg, fitness_level,
+activity_experience, created_at, updated_at`. Responses also include the richer
+settings that share the same row (`birth_year, sweat_profile, experience_level,
+typical_temperature_c, city, units`, goal targets, `onboarded`,
+`total_activities`).
+
+`age` is derived from `birth_year`, and `fitness_level` is the stored 1–5
+`experience_level` — both are returned in every profile response and accepted on
+write (send `age` instead of `birth_year`, `fitness_level` instead of
+`experience_level`).
+
+### `GET /profile` — view
+
+Creates a default row on first call so the client always has a profile.
 ```json
 {
   "data": {
     "id": 1, "name": "Nagami", "email": "nagami@trana.app",
     "weight_kg": 55, "height_cm": 162, "birth_year": 1999, "age": 27,
-    "sex": "female", "sweat_profile": "normal", "experience_level": 4,
+    "sex": "female", "sweat_profile": "normal",
+    "fitness_level": 4, "fitness_level_source": "user", "activity_experience": 6.5,
+    "experience_level": 4,
     "typical_temperature_c": 27, "city": "Quezon City, PH", "units": "metric",
     "daily_calorie_goal": 2700, "daily_distance_goal_km": 10, "daily_active_min_goal": 90,
     "weekly_calorie_goal": 15000, "weekly_distance_goal_km": 45,
@@ -52,8 +70,43 @@ This does not check FastAPI or verify that all migrations are applied.
 }
 ```
 
-`PUT /profile` accepts any subset of:
-`name, weight_kg, height_cm, birth_year, sex(female|male|other), sweat_profile(low|normal|high), experience_level(1-5), typical_temperature_c, city, units, daily_calorie_goal, daily_distance_goal_km, daily_active_min_goal, weekly_calorie_goal, weekly_distance_goal_km, daily_carb_goal_g`.
+### `POST /profile` — create
+
+```json
+{ "weight_kg": 55, "height_cm": 162, "sex": "female", "age": 27,
+  "fitness_level": 4, "activity_experience": 6.5 }
+```
+`weight_kg` is required; everything else is optional and falls back to the
+column defaults. `201` → the full profile. `409` if this account already has one
+(edit it with `PUT`/`PATCH` instead); the existing profile is returned in `data`.
+
+### `PUT|PATCH /profile` — edit any subset
+
+Accepts any subset of:
+`name, age (or birth_year), sex(female|male|other), height_cm, weight_kg,
+fitness_level (or experience_level, 1-5), activity_experience (0-70 years),
+sweat_profile(low|normal|high), typical_temperature_c, city, units,
+daily_calorie_goal, daily_distance_goal_km, daily_active_min_goal,
+weekly_calorie_goal, weekly_distance_goal_km, daily_carb_goal_g, onboarded`.
+Sending `age: null` clears the birth year.
+
+### `PATCH /profile/weight` — update body mass only
+
+```json
+{ "weight_kg": 62.5 }
+```
+`200` → full profile · `422` outside 25–250 kg. This is the value the MET/fueling
+math reads, so it can be updated without resending the rest of the profile.
+
+### `PATCH /profile/fitness-level` — update the 1–5 level only
+
+```json
+{ "fitness_level": 4 }
+```
+`200` → full profile · `422` outside 1–5. A level set by the athlete sets
+`fitness_level_source` to `user`, and logging activities no longer overwrites it
+with the session-count heuristic. Send `{ "source": "auto" }` to hand the level
+back to that heuristic; it is recomputed immediately.
 
 ---
 
@@ -88,7 +141,7 @@ The default page size is 200 (maximum 500). Request subsequent pages until
 }
 ```
 `201` → `{ data: { …activity } }`. `calories` is computed server-side (MET formula)
-when omitted. Adding an activity also re-buckets `experience_level`.
+when omitted. Adding an activity re-buckets `experience_level` only while the athlete has not set a fitness level themselves (source `auto`).
 
 ### `GET /activities/{id}` · `DELETE /activities/{id}` → `{ deleted: true }`
 
@@ -124,7 +177,7 @@ when omitted. Adding an activity also re-buckets `experience_level`.
   "route": [[14.65, 121.02], [14.70, 121.09]]
 }
 ```
-If `route` has ≥ 2 points the server measures it (haversine) and uses that distance; the measured route must be 0.1–500 km. The optional `sweat_profile` overrides the profile for this estimate only.
+If `route` has ≥ 2 points the server measures it (haversine) and uses that distance; the measured route must be 0.1–500 km. The optional `sweat_profile` overrides the profile for this estimate only. The athlete's profile values (age, sex, height, body mass, fitness level, training experience) are sent to the ML service and echoed in the saved plan as `data.profile`.
 
 `201`
 ```json
@@ -199,6 +252,7 @@ Model card proxied from the ML service: algorithm, version, metrics, feature imp
 | --- | --- |
 | 401 | Missing/invalid bearer token |
 | 404 | Not found **or** owned by another athlete |
+| 409 | The resource already exists (for example, `POST /profile` on an account that has one) |
 | 422 | Validation — `{ message, errors: { field: [msg] } }` |
 | 429 | Rate limit (auth 10/min/IP, predictions 60/min/user) |
 | 503 | Database unavailable on `/health`, or ML service unavailable for predictions |

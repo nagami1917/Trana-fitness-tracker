@@ -79,6 +79,9 @@ create table public.fitness_profiles (
     sex varchar(16) not null default 'other',
     sweat_profile varchar(16) not null default 'normal',
     experience_level smallint not null default 1,
+    -- Step 4: years of consistent training, and who owns the 1-5 level.
+    activity_experience numeric(4, 1),
+    fitness_level_source varchar(8) not null default 'auto',
     typical_temperature_c numeric(4, 1) not null default 26,
     city varchar(255),
     units varchar(10) not null default 'metric',
@@ -169,9 +172,17 @@ create index personal_access_tokens_tokenable_type_tokenable_id_index
     on public.personal_access_tokens (tokenable_type, tokenable_id);
 
 -- Spec-compatible views from 2026_11_08_000001_create_spec_compatibility_views.
+-- user_profiles carries the Step 4 field list (2026_11_08_000003): age is
+-- derived from birth_year, fitness_level is experience_level, and
+-- activity_experience is stored on fitness_profiles.
 create view public.user_profiles as
-select id, user_id, weight_kg, height_cm, birth_year, sex, sweat_profile,
-       experience_level, typical_temperature_c, city, units, onboarded_at, created_at, updated_at
+select id, user_id,
+       case when birth_year is null then null
+            else cast(extract(year from current_date) as integer) - birth_year end as age,
+       sex, height_cm, weight_kg,
+       experience_level as fitness_level,
+       activity_experience,
+       created_at, updated_at
 from public.fitness_profiles;
 
 create view public.planned_activities as
@@ -230,7 +241,8 @@ insert into public.migrations (migration, batch) values
     ('0001_01_01_000002_create_jobs_table', 1),
     ('2026_01_01_000000_create_trana_tables', 1),
     ('2026_01_01_000001_create_personal_access_tokens_table', 1),
-    ('2026_11_08_000001_create_spec_compatibility_views', 1);
+    ('2026_11_08_000001_create_spec_compatibility_views', 1),
+    ('2026_11_08_000003_add_user_profile_spec_fields', 1);
 -- TRANA uses Laravel/Sanctum, not Supabase Auth. Access is through the Laravel
 -- database connection only; anon/authenticated Supabase Data API roles have no
 -- access. Apply with 001_schema.sql in one transaction on a fresh database.

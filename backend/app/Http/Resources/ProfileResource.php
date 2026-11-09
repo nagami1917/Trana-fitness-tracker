@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Models\FitnessProfile;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -28,7 +29,11 @@ class ProfileResource extends JsonResource
             'sex' => $profile->sex,
             'city' => $profile->city,
             'sweat_profile' => $profile->sweat_profile,
-            'experience_level' => (int) $profile->experience_level,
+            // Step 4's spec names. `experience_level` stays for existing clients.
+            'fitness_level' => $profile->fitnessLevel(),
+            'fitness_level_source' => $profile->fitness_level_source ?? FitnessProfile::LEVEL_SOURCE_AUTO,
+            'activity_experience' => $profile->activityExperienceYears(),
+            'experience_level' => $profile->fitnessLevel(),
             'typical_temperature_c' => (float) $profile->typical_temperature_c,
             'units' => $profile->units,
             'daily_calorie_goal' => $goal->daily_calories,

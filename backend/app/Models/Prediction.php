@@ -86,6 +86,8 @@ class Prediction extends Model
             ],
             'fueling' => $this->payload['fueling'] ?? [],
             'history_used' => $this->payload['history_used'] ?? null,
+            // The profile values (Step 4) that informed this prediction.
+            'profile' => $this->payload['profile'] ?? null,
             'model' => $this->payload['model'] ?? [],
             'created_at' => $this->created_at?->toIso8601String(),
         ];
