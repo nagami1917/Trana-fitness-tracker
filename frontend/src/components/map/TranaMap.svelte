@@ -9,6 +9,7 @@
   import ActivityMarker from './ActivityMarker.svelte';
   import NutritionMarker from './NutritionMarker.svelte';
   import MapControls from './MapControls.svelte';
+  import RoadLayer from './RoadLayer.svelte';
 
   let {
     // Route data
@@ -25,6 +26,10 @@
     following = true,         // false once the user drags the map themselves
     fitRoute = false,         // fit bounds to the whole route when it changes
     fitPadding = 60,
+
+    // Road snapping
+    showRoads = false,        // show nearby roads as a visual reference
+    roadSnapping = false,     // snap GPS points to nearest road
   } = $props();
 
   let container;
@@ -106,8 +111,11 @@
   aria-label="TRANA activity map"
   bind:this={container}
 >
+  {#if showRoads && currentPosition}
+    <RoadLayer map={map} center={currentPosition} radiusM={1500} />
+  {/if}
   <PlannedRoute {map} {plannedRoute} />
-  <ActivityRoute {map} {points} />
+  <ActivityRoute {map} {points} {roadSnapping} />
   <ActivityMarker {map} {currentPosition} {startPosition} {finishPosition} />
   {#if showNutrition}
     <NutritionMarker {map} {nutritionMarkers} />
