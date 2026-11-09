@@ -97,6 +97,23 @@ export const NUTRITION_CHECKPOINTS = [
 
 export const NUTRITION_MAX_MARKERS = 6; // keep the map uncluttered
 
+/* ----------------------------------------------------- road snapping */
+
+// Road snapping uses the free Overpass API (OpenStreetMap) — no API key required.
+// Query road ways near the GPS point and snap to the nearest road segment.
+export const ROAD_SNAPPING = {
+  enabled: true,                    // toggle road snapping on/off
+  maxSearchRadiusM: 50,             // max metres to search for a road
+  snapThresholdM: 100,              // if nearest road is farther than this, keep raw point
+  overpassUrl: 'https://overpass-api.de/api/interpreter',
+  // OSM road types to include in snapping
+  roadTypes: [
+    'motorway', 'trunk', 'primary', 'secondary', 'tertiary',
+    'residential', 'unclassified', 'road', 'living_street',
+    'service', 'track', 'path', 'cycleway', 'footway',
+  ],
+};
+
 /* -------------------------------------------------------- layer helpers */
 
 // Base-style layer ids to restyle for the TRANA dark theme. Applied only when

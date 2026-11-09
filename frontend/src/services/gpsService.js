@@ -7,6 +7,8 @@
  * without the athlete's explicit action — this service only observes.
  */
 
+import { snapToRoad } from './roadSnappingService.js';
+
 const DEFAULT_OPTIONS = {
   enableHighAccuracy: true,
   timeout: 10000,
@@ -55,8 +57,14 @@ export function trackPoint(coords, timestamp) {
  * onError({ error }) when the device cannot locate the user.
  *
  * Returns { stop: () => void }. The returned watch id is cleared on stop.
+ *
+ * @param {Object} params
+ * @param {Function} [params.onPoint] - Called with each track point
+ * @param {Function} [params.onError] - Called on GPS errors
+ * @param {Object} [params.options] - Geolocation watchPosition options
+ * @param {boolean} [params.snapToRoad=false] - Snap points to nearest road
  */
-export function watch({ onPoint, onError, options = {} } = {}) {
+export function watch({ onPoint, onError, options = {}, snapToRoadEnabled = false } = {}) {
   const geolocation = typeof navigator !== 'undefined' ? navigator.geolocation : null;
   if (!geolocation || typeof geolocation.watchPosition !== 'function') {
     onError?.(new GpsError('unsupported'));
@@ -64,9 +72,24 @@ export function watch({ onPoint, onError, options = {} } = {}) {
   }
 
   const watchId = geolocation.watchPosition(
-    (position) => {
+    async (position) => {
       try {
         const point = trackPoint(position.coords, position.timestamp);
+
+        // Optionally snap to nearest road (Overpass API)
+        if (snapToRoadEnabled) {
+          try {
+            const snapped = await snapToRoad(point.latitude, point.longitude);
+            if (snapped) {
+              point.latitude = snapped.lat;
+              point.longitude = snapped.lng;
+              point.snappedToRoad = snapped.snapped;
+            }
+          } catch {
+            // Silently keep raw point if snapping fails
+          }
+        }
+
         onPoint?.(point);
       } catch (error) {
         onError?.(error instanceof GpsError ? error : new GpsError('invalid'));

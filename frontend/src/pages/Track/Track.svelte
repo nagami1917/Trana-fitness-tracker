@@ -45,6 +45,9 @@ let finishPosition = $state(null);
 let autoCenter = $state(true);
 let following = $state(true);
 
+let roadSnapping = $state(true);   // snap GPS points to nearest road
+let showRoads = $state(true);      // show nearby roads on the map
+
   let watcher = null;
 
   /* ── derived stats ───────────────────────────────────────────────── */
@@ -114,6 +117,7 @@ let following = $state(true);
         gpsMessage = error.message;
         notify(error.message, 'error');
       },
+      snapToRoadEnabled: roadSnapping,
     });
   }
 
@@ -218,14 +222,38 @@ let following = $state(true);
       {following}
       fitRoute={!tracking}
       fitPadding={72}
+      {roadSnapping}
+      {showRoads}
     />
   </div>
 
   <!-- GPS status bar -->
   <div class="border-t border-brand-100 bg-white/80 backdrop-blur px-4 py-2 flex items-center justify-between">
     <GPSStatus {gpsStatus} {gpsMessage} />
-    <div class="text-xs font-bold text-ink-500">
-      {activityType.charAt(0).toUpperCase() + activityType.slice(1)}
+    <div class="flex items-center gap-3">
+      <label class="flex items-center gap-2 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          class="form-checkbox rounded text-brand-500 focus:ring-brand-500"
+          checked={roadSnapping}
+          onchange={(e) => (roadSnapping = e.target.checked)}
+          aria-label="Snap to roads"
+        />
+        <span class="text-xs font-bold text-ink-700">Road snap</span>
+      </label>
+      <label class="flex items-center gap-2 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          class="form-checkbox rounded text-brand-500 focus:ring-brand-500"
+          checked={showRoads}
+          onchange={(e) => (showRoads = e.target.checked)}
+          aria-label="Show roads"
+        />
+        <span class="text-xs font-bold text-ink-700">Show roads</span>
+      </label>
+      <div class="text-xs font-bold text-ink-500">
+        {activityType.charAt(0).toUpperCase() + activityType.slice(1)}
+      </div>
     </div>
   </div>
 
