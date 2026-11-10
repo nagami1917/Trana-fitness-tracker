@@ -127,6 +127,57 @@ npm run build          # production bundle + service worker
 node scripts/smoke.mjs # headless check of the whole prediction pipeline
 ```
 
+### 4.4 Start everything together (3 terminals)
+
+TRANA needs **three services running at the same time**. Open three terminal
+windows/tabs and run each block:
+
+#### Terminal 1 — Backend (Laravel API)
+
+```powershell
+cd D:\Trana-fitness-tracker\backend
+php artisan config:clear
+php artisan migrate
+php -S 127.0.0.1:8001 -t public
+```
+Leave this open. API runs at **http://127.0.0.1:8001**.
+
+> If `php artisan migrate` complains about the database, edit `backend\.env` with
+> your Supabase session pooler values (host, username, password) from
+> Supabase Dashboard → Connect → Session pooler, then run `migrate` again.
+
+#### Terminal 2 — Frontend (Svelte PWA)
+
+```powershell
+cd D:\Trana-fitness-tracker\frontend
+npm install
+npm run dev          # http://localhost:5173
+```
+Leave this open.
+
+> If the backend is on a port other than 8001, create `frontend\.env.local` with:
+> `VITE_PROXY_TARGET=http://127.0.0.1:<your-port>`
+
+#### Terminal 3 — Python ML Service
+
+```powershell
+cd D:\Trana-fitness-tracker\ml
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+uvicorn api.main:app --reload --port 8000
+```
+Leave this open. ML runs at **http://127.0.0.1:8000**.
+
+#### Open the app
+
+Go to **http://localhost:5173** in your browser:
+
+1. Register an account
+2. Complete onboarding
+3. Go to **Track Activity** to test the map with live GPS and road snapping
+
+Keep all three terminals open while using the app.
+
 ### 4.2 Machine learning service
 
 ```bash
