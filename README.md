@@ -224,6 +224,7 @@ Vite. Never put database credentials in a `VITE_*` variable.
 | Where | Variable | Purpose |
 | --- | --- | --- |
 | frontend | `VITE_API_BASE_URL`, `VITE_PROXY_TARGET` | Blank or `/` uses same-origin `/api`; Vite forwards it to the server-side proxy target. |
+| frontend | `VITE_ORS_API_KEY` | OpenRouteService key — drawn routes snap onto real roads. Optional; without it the map falls back to straight lines. |
 | backend | `DB_HOST/DB_PORT/DB_DATABASE/DB_USERNAME/DB_PASSWORD/DB_SSLMODE` | Supabase Postgres (session pooler for Vercel). Laravel ignores `DB_URL`/`DATABASE_URL` for pgsql. |
 | backend | `ML_API_URL`, `ML_API_TOKEN`, `ML_ADMIN_TOKEN`, `ML_TIMEOUT` | Python prediction service and optional server-to-server secrets. |
 | backend | `CORS_ALLOWED_ORIGINS` | Comma-separated frontend origins. |

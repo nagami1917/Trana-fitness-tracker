@@ -11,6 +11,7 @@
   import { navigate, query } from '../../lib/router.js';
   import { loadModel, predictPlan } from '../../lib/ml/index.js';
   import { routeLengthKm, suggestElevation } from '../../lib/ml/index.js';
+  import { routeThroughRoads, routingEnabled, waypointsFromPath } from '../../services/roadRoutingService.js';
   import { nf, km, pace } from '../../lib/format.js';
 
   const TYPES = [
@@ -37,6 +38,11 @@
 
   let prediction = $state(null);
   let computing = $state(false);
+  // Road-snapped geometry for the planner's waypoints ([] → straight lines).
+  let routePath = $state([]);
+  let routing = $state(false);
+  let snapTimer;
+  let snapSeq = 0;
 
   onMount(async () => {
     model = await loadModel();
@@ -47,12 +53,26 @@
     if (params.get('elevation')) form.elevation_gain_m = Number(params.get('elevation'));
     form.temperature_c = $profile?.typical_temperature_c ?? 26;
     form.sweat_profile = $profile?.sweat_profile ?? 'normal';
-    if ($activities[0]?.route?.length) form.route = $activities[0].route;
+    // Saved routes are dense road paths; keep the path for exact distance and
+    // thin it back to editing waypoints for the markers.
+    if ($activities[0]?.route?.length) {
+      form.route = waypointsFromPath($activities[0].route);
+      routePath = $activities[0].route.length > 2 ? [...$activities[0].route] : [];
+    }
     await run();
   });
 
-  const routeKm = $derived(form.route.length > 1 ? routeLengthKm(form.route) : 0);
+  const routeKm = $derived(
+    routePath.length > 1
+      ? routeLengthKm(routePath)
+      : form.route.length > 1
+        ? routeLengthKm(form.route)
+        : 0,
+  );
   const effectiveDistance = $derived(routeKm > 0.05 ? routeKm : Number(form.distance_km) || 0);
+  const plannedRoute = $derived(
+    routePath.length > 1 ? routePath : form.route.length > 1 ? form.route : null,
+  );
 
   async function run() {
     if (!$profile || !model) return;
@@ -64,7 +84,7 @@
           distance_km: effectiveDistance,
           elevation_gain_m: Number(form.elevation_gain_m) || 0,
           temperature_c: Number(form.temperature_c),
-          route: form.route.length > 1 ? form.route : null,
+          route: plannedRoute,
         },
         profile: { ...$profile, sweat_profile: form.sweat_profile },
         activities: $activities,
@@ -85,6 +105,7 @@
     void form.sweat_profile;
     void form.planned_for;
     void form.route.length;
+    void routePath;
     void $activities.length;
     saved = null;
     clearTimeout(timer);
@@ -101,6 +122,7 @@
       sweat_profile: $profile?.sweat_profile ?? 'normal',
       planned_for: '',
     };
+    resetSnap();
     saved = null;
     prediction = null;
     drawing = false;
@@ -111,6 +133,42 @@
     if (!form.route.length) {
       form.elevation_gain_m = suggestElevation(Number(form.distance_km) || 0, id);
     }
+    scheduleSnap(); // routing profile follows the activity type
+  }
+
+  function resetSnap() {
+    clearTimeout(snapTimer);
+    snapSeq += 1;
+    routePath = [];
+    routing = false;
+  }
+
+  /** Re-route the planner's waypoints along roads (debounced, stale-safe). */
+  function scheduleSnap() {
+    clearTimeout(snapTimer);
+    if (!routingEnabled() || form.route.length < 2) {
+      snapSeq += 1;
+      routePath = [];
+      routing = false;
+      return;
+    }
+    routing = true;
+    snapTimer = setTimeout(runSnap, 450);
+  }
+
+  async function runSnap() {
+    const seq = ++snapSeq;
+    const waypoints = [...form.route];
+    const activityType = form.activity_type;
+    const result = await routeThroughRoads(waypoints, activityType);
+    if (seq !== snapSeq) return; // a newer edit superseded this request
+    routePath = result?.path ?? [];
+    routing = false;
+  }
+
+  function clearRoute() {
+    form.route = [];
+    resetSnap();
   }
 
   function onPick(mode, index, latlng) {
@@ -119,6 +177,7 @@
     form.route = mode === 'move'
       ? form.route.map((existing, i) => (i === index ? point : existing))
       : [...form.route, point];
+    scheduleSnap();
   }
 
   function useRouteDistance() {
@@ -138,7 +197,7 @@
         activity_type: form.activity_type,
         distance_km: Number(effectiveDistance.toFixed(2)),
         elevation_gain_m: Number(form.elevation_gain_m) || 0,
-        route: form.route.length > 1 ? form.route : null,
+        route: plannedRoute,
         temperature_c: Number(form.temperature_c),
         sweat_profile: form.sweat_profile,
         planned_for: form.planned_for ? new Date(form.planned_for).toISOString() : null,
@@ -264,7 +323,7 @@
               <Route size={13} /> {drawing ? 'Drawing…' : 'Draw'}
             </button>
             {#if form.route.length}
-              <button class="btn-chip" onclick={() => (form.route = [])}><Trash2 size={13} /> Clear</button>
+              <button class="btn-chip" onclick={clearRoute}><Trash2 size={13} /> Clear</button>
             {/if}
           </div>
         </div>
@@ -272,6 +331,7 @@
         <div class="mt-3">
           <RouteMap
             points={form.route}
+            path={routePath}
             height={250}
             interactive={drawing}
             onPick={onPick}
@@ -281,6 +341,9 @@
         <div class="mt-3 flex flex-wrap items-center gap-2">
           <span class="pill"><MapPin size={12} /> {form.route.length ? `${form.route.length} points` : 'No route yet'}</span>
           <span class="pill"><Ruler size={12} /> {routeKm > 0 ? `${nf(routeKm, 2)} km` : '—'}</span>
+          {#if routing}
+            <span class="pill"><LoaderCircle size={12} class="animate-spin" /> Snapping to roads…</span>
+          {/if}
           {#if routeKm > 0}
             <button class="btn-chip ml-auto" onclick={useRouteDistance}>
               Use this distance
@@ -289,7 +352,7 @@
         </div>
         {#if drawing}
           <p class="mt-2 text-[11px] font-semibold text-ink-400">
-            Tap along the map to drop points. Drag any dot to adjust it.
+            Tap along the map to drop points. Drag any dot to adjust it — the pink line follows the roads.
           </p>
         {/if}
       </Card>

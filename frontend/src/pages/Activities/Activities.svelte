@@ -11,6 +11,7 @@
   import { query } from '../../lib/router.js';
   import { loadModel, predictDuration, routeLengthKm } from '../../lib/ml/index.js';
   import { estimateMet } from '../../lib/ml/fueling.js';
+  import { routeThroughRoads, routingEnabled } from '../../services/roadRoutingService.js';
   import { duration as fmtDuration, pace, kcal, km, nf, fullDate, timeLabel, dayLabel, activityLabel } from '../../lib/format.js';
 
   const TYPES = [
@@ -30,6 +31,11 @@
   let draft = $state(blankDraft());
   let draftRouteOpen = $state(false);
   let confirmingDelete = $state(null);
+  // Road-snapped geometry for the draft's waypoints (null/[] → straight lines).
+  let routePath = $state([]);
+  let routing = $state(false);
+  let snapTimer;
+  let snapSeq = 0;
 
   onMount(async () => {
     model = await loadModel();
@@ -82,7 +88,13 @@
     ),
   );
 
-  const draftRouteKm = $derived(draft.route.length > 1 ? routeLengthKm(draft.route) : 0);
+  const draftRouteKm = $derived(
+    routePath.length > 1
+      ? routeLengthKm(routePath)
+      : draft.route.length > 1
+        ? routeLengthKm(draft.route)
+        : 0,
+  );
 
   const draftCalories = $derived.by(() => {
     if (draft.calories_override) return Number(draft.calories_override);
@@ -121,7 +133,48 @@
     draft = blankDraft();
     draft.activity_type = filter === 'all' ? 'run' : filter;
     draftRouteOpen = false;
+    resetSnap();
     addOpen = true;
+  }
+
+  function resetSnap() {
+    clearTimeout(snapTimer);
+    snapSeq += 1;
+    routePath = [];
+    routing = false;
+  }
+
+  /** Re-route the draft's waypoints along roads (debounced, stale-safe). */
+  function scheduleSnap() {
+    clearTimeout(snapTimer);
+    if (!routingEnabled() || draft.route.length < 2) {
+      snapSeq += 1;
+      routePath = [];
+      routing = false;
+      return;
+    }
+    routing = true;
+    snapTimer = setTimeout(runSnap, 450);
+  }
+
+  async function runSnap() {
+    const seq = ++snapSeq;
+    const waypoints = [...draft.route];
+    const activityType = draft.activity_type;
+    const result = await routeThroughRoads(waypoints, activityType);
+    if (seq !== snapSeq) return; // a newer edit superseded this request
+    routePath = result?.path ?? [];
+    routing = false;
+  }
+
+  function clearRoute() {
+    draft.route = [];
+    resetSnap();
+  }
+
+  function setDraftType(id) {
+    draft.activity_type = id;
+    scheduleSnap(); // routing profile follows the activity type
   }
 
   async function submit() {
@@ -137,7 +190,7 @@
         calories: draftCalories,
         avg_heart_rate: null,
         started_at: new Date(draft.started_at).toISOString(),
-        route: draft.route.length > 1 ? draft.route : null,
+        route: routePath.length > 1 ? routePath : draft.route.length > 1 ? draft.route : null,
         notes: draft.notes || null,
       });
       written = true;
@@ -171,6 +224,7 @@
     draft.route = mode === 'move'
       ? draft.route.map((existing, i) => (i === index ? point : existing))
       : [...draft.route, point];
+    scheduleSnap();
   }
 </script>
 
@@ -271,7 +325,7 @@
             class="flex items-center justify-center gap-1.5 rounded-2xl border py-2.5 text-xs font-extrabold transition {draft.activity_type === type.id
               ? 'border-transparent bg-brand-gradient text-white shadow-glow'
               : 'border-brand-100 bg-white text-ink-500 hover:border-brand-200'}"
-            onclick={() => (draft.activity_type = type.id)}
+            onclick={() => setDraftType(type.id)}
           >
             {type.label}
           </button>
@@ -316,11 +370,16 @@
       </div>
       {#if draftRouteOpen}
         <div class="mt-2">
-          <RouteMap points={draft.route} height={220} interactive onPick={onPick} />
+          <RouteMap points={draft.route} path={routePath} height={220} interactive onPick={onPick} />
         </div>
-        {#if draft.route.length}
-          <button class="btn-chip mt-2" onclick={() => (draft.route = [])}><Trash2 size={12} /> Clear route</button>
-        {/if}
+        <div class="mt-2 flex flex-wrap items-center gap-2">
+          {#if draft.route.length}
+            <button class="btn-chip" onclick={clearRoute}><Trash2 size={12} /> Clear route</button>
+          {/if}
+          {#if routing}
+            <span class="pill"><LoaderCircle size={12} class="animate-spin" /> Snapping to roads…</span>
+          {/if}
+        </div>
       {/if}
     </div>
 
