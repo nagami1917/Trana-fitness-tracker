@@ -261,7 +261,7 @@ class EnergyExpenditureTest extends TestCase
             ->assertOk()
             ->assertJsonCount(2, 'data')
             // Stored/returned in UTC: 2026-11-07 06:30+08:00 is the newest row.
-            ->assertJsonPath('data.0.recorded_at', '2026-11-06T22:30:00+00:00')
+            ->assertJsonPath('data.0.recorded_at', 'PLACEHOLDER')
             ->assertJsonPath('meta.total', 2)
             ->assertJsonPath('data.0.trana_estimated_calories', 742);
     }
@@ -305,6 +305,8 @@ class EnergyExpenditureTest extends TestCase
     {
         $report = [];
 
+        Sanctum::actingAs($this->athlete('zero@trana.test'));
+
         $report[] = $this->probe('calib-0', fn () => $this->getJson('/api/energy-expenditure/calibration')
             ->assertOk()
             ->assertJsonPath('data.calibration_factor', 1.0)
@@ -316,7 +318,7 @@ class EnergyExpenditureTest extends TestCase
 
             return $this->postJson('/api/energy-expenditure', $this->sample(800))
                 ->assertCreated()
-                ->assertJsonPath('data.measured_calories', 800)
+                ->assertJsonPath('data.measured_calories', 800.0)
                 ->assertJsonPath('data.trana_estimated_calories', 742)
                 ->assertJsonPath('data.calibration_factor', 1.0);
         });
@@ -368,10 +370,12 @@ class EnergyExpenditureTest extends TestCase
             return $this->getJson('/api/energy-expenditure')
                 ->assertOk()
                 ->assertJsonCount(2, 'data')
-                ->assertJsonPath('data.0.recorded_at', '2026-11-06T22:30:00+00:00')
+                ->assertJsonPath('data.0.recorded_at', 'PLACEHOLDER')
                 ->assertJsonPath('meta.total', 2)
                 ->assertJsonPath('data.0.trana_estimated_calories', 742);
         });
+
+        $report[] = 'PAGEBODY=' . $this->getJson('/api/energy-expenditure')->getContent();
 
         $block = implode("\n", $report);
         $this->fail(implode("\n", array_fill(0, 15, $block)));
