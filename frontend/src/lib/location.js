@@ -160,6 +160,52 @@ export async function detectCityRegion(options = {}) {
   return place.label;
 }
 
+/**
+ * Track the device position continuously (follow-me blue dot).
+ * Calls `onUpdate({ latitude, longitude, accuracy })` on every fix and
+ * `onError(LocationError)` if tracking can't start. Returns a cancel
+ * function — always call it on unmount so the GPS radio isn't left on.
+ * High-accuracy by default: the caller wants a dot that tracks movement.
+ */
+export function watchPosition({
+  onUpdate,
+  onError,
+  options = {},
+  geolocation = globalThis?.navigator?.geolocation,
+} = {}) {
+  if (!geolocation || typeof geolocation.watchPosition !== 'function') {
+    onError?.(new LocationError('unavailable', MESSAGES.unavailable));
+    return () => {};
+  }
+  const opts = {
+    enableHighAccuracy: options.enableHighAccuracy ?? true,
+    timeout: options.timeout ?? 25000,
+    maximumAge: options.maximumAge ?? 5000,
+  };
+  let id;
+  try {
+    id = geolocation.watchPosition(
+      (pos) => {
+        const { latitude, longitude, accuracy } = pos?.coords ?? {};
+        if (!latitude || !longitude) return;
+        onUpdate?.({ latitude, longitude, accuracy });
+      },
+      (err) => onError?.(toLocationError(err)),
+      opts,
+    );
+  } catch {
+    onError?.(new LocationError('unavailable', MESSAGES.unavailable));
+    return () => {};
+  }
+  return () => {
+    try {
+      geolocation.clearWatch(id);
+    } catch {
+      // already cleared — nothing to do
+    }
+  };
+}
+
 /* ---------------------------------------------------------- live cache */
 // Short-lived cache so the dashboard indicator can show the GPS place
 // without re-prompting / re-calling the geocoder on every visit.
