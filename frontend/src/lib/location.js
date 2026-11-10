@@ -4,13 +4,16 @@
  * only the resulting place name is returned to the caller for manual review.
  */
 const LOOKUP_URL = 'https://api.bigdatacloud.net/data/reverse-geocode-client';
-const POSITION_OPTIONS = { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 };
+// Mobile in-app browsers (Messenger, Facebook, Instagram) often need longer
+// than desktop to produce a first fix; accept a recent cached position so
+// repeat taps resolve instantly instead of forcing a brand-new fix every time.
+const POSITION_OPTIONS = { enableHighAccuracy: false, timeout: 25000, maximumAge: 60000 };
 
 const MESSAGES = {
   unsupported: 'Location is unavailable in this browser. Use HTTPS or localhost, or enter it manually.',
   denied: 'Location permission was denied. Allow it in your browser settings or enter it manually.',
-  unavailable: 'Your device could not find your location. Try again or enter it manually.',
-  timeout: 'Finding your location timed out. Try again or enter it manually.',
+  unavailable: 'Your device could not find your location. Turn on GPS/Wi-Fi and try again or enter it manually.',
+  timeout: 'Finding your location took too long. Turn on GPS/Wi-Fi and try again, or enter it manually. Opening the page in Chrome often helps.',
   invalid: 'Your device returned an invalid location. Please enter it manually.',
   lookup: 'The city lookup is unavailable. Check your connection or enter your location manually.',
   lookup_timeout: 'The city lookup timed out. Try again or enter your location manually.',
