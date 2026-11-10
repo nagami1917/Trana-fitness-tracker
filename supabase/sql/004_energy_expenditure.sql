@@ -39,15 +39,37 @@ create index energy_expenditure_user_id_index
 -- Row-level security: Laravel (Sanctum) is the only access path; Supabase
 -- Data API roles get nothing on this table, matching 002_rls.sql.
 do $$
+declare
+    relation_name text;
+    role_name text;
 begin
-    execute format('alter table public.%I enable row level security', 'energy_expenditure');
-    execute format('revoke all privileges on table public.%I from public', 'energy_expenditure');
-    for role_name in select rolname from pg_roles where rolname in ('anon', 'authenticated') loop
-        execute format('revoke all privileges on table public.%I from %I', 'energy_expenditure', role_name);
+    foreach relation_name in array array[
+        'energy_expenditure'
+    ] loop
+        execute format('alter table public.%I enable row level security', relation_name);
+        execute format('revoke all privileges on table public.%I from public', relation_name);
+        for role_name in select rolname from pg_roles where rolname in ('anon', 'authenticated') loop
+            execute format('revoke all privileges on table public.%I from %I', relation_name, role_name);
+        end loop;
     end loop;
 end $$;
 
-revoke all privileges on sequence public.energy_expenditure_id_seq from public;
+-- Supabase grants the Data API roles USAGE on new sequences by default; take
+-- it back so the browser roles cannot even touch the id generator.
+do $$
+declare
+    sequence_name text;
+    role_name text;
+begin
+    foreach sequence_name in array array[
+        'energy_expenditure_id_seq'
+    ] loop
+        execute format('revoke all privileges on sequence public.%I from public', sequence_name);
+        for role_name in select rolname from pg_roles where rolname in ('anon', 'authenticated') loop
+            execute format('revoke all privileges on sequence public.%I from %I', sequence_name, role_name);
+        end loop;
+    end loop;
+end $$;
 
 insert into public.migrations (migration, batch) values
     ('2026_11_08_120000_create_energy_expenditure_table', 3);
