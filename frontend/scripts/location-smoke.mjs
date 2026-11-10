@@ -1,12 +1,13 @@
 /** Location detection tests with fake device and HTTP responses; no real coordinates leave the machine. */
 import assert from 'node:assert/strict';
-import { cityRegionFromResult, detectCityRegion } from '../src/lib/location.js';
+import { cityRegionFromResult, detectCityRegion, watchPosition } from '../src/lib/location.js';
 
 const coords = { latitude: 12.34, longitude: 56.78 };
 const place = { city: 'Test City', locality: 'Test Village', principalSubdivision: 'Test Region', lookupSource: 'reverseGeocoding' };
 const geo = (position = coords) => ({
   getCurrentPosition(success, _error, options) {
-    assert.deepEqual(options, { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 });
+    // Slow-mobile-friendly options (PR #30): 25 s timeout, 60 s cached fix.
+    assert.deepEqual(options, { enableHighAccuracy: false, timeout: 25000, maximumAge: 60000 });
     queueMicrotask(() => success({ coords: position }));
   },
 });
@@ -106,5 +107,33 @@ const inFlight = detectCityRegion({
   onLookup: () => queueMicrotask(() => lookupController.abort()),
 });
 await assert.rejects(inFlight, { name: 'AbortError' });
+
+// watchPosition (follow-me blue dot): emits fixes, cancel stops the watch.
+{
+  const seen = [];
+  let cleared = null;
+  const watching = {
+    watchPosition(success) {
+      queueMicrotask(() => success({ coords: { ...coords, accuracy: 5 } }));
+      return 42;
+    },
+    clearWatch(id) {
+      cleared = id;
+    },
+  };
+  const stop = watchPosition({ geolocation: watching, onUpdate: (p) => seen.push(p) });
+  await new Promise((resolve) => queueMicrotask(resolve));
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].latitude, 12.34);
+  assert.equal(seen[0].longitude, 56.78);
+  assert.equal(seen[0].accuracy, 5);
+  stop();
+  assert.equal(cleared, 42, 'Cancel must clear the geolocation watch.');
+
+  let watchError = null;
+  const stopUnsupported = watchPosition({ geolocation: null, onError: (e) => { watchError = e; } });
+  assert.equal(watchError?.code, 'unavailable');
+  stopUnsupported(); // no-op cancel must not throw
+}
 
 console.log('Location detection, privacy, cancellation and error checks passed');
