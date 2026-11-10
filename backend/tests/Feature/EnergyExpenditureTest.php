@@ -307,4 +307,75 @@ class EnergyExpenditureTest extends TestCase
 
         $this->fail('DIAGVALS ' . implode(' | ', $info));
     }
+
+    // ---- TEMPORARY hypothesis probes (one assertion each) ----
+    private function diagSetup(): void
+    {
+        Sanctum::actingAs($this->athlete());
+        foreach (['2026-11-06', '2026-11-07'] as $day) {
+            $this->postJson('/api/energy-expenditure', $this->sample(800, "{$day}T06:30:00+08:00"))
+                ->assertCreated();
+        }
+    }
+
+    public function test_diag_h_factor_is_1_0(): void
+    {
+        $this->diagSetup();
+        $this->getJson('/api/energy-expenditure/calibration')
+            ->assertJsonPath('data.calibration_factor', 1.0);
+    }
+
+    public function test_diag_h_factor_is_1_0781671(): void
+    {
+        $this->diagSetup();
+        $this->getJson('/api/energy-expenditure/calibration')
+            ->assertJsonPath('data.calibration_factor', 1.0781671);
+    }
+
+    public function test_diag_h_factor_is_2_0(): void
+    {
+        $this->diagSetup();
+        $this->getJson('/api/energy-expenditure/calibration')
+            ->assertJsonPath('data.calibration_factor', 2.0);
+    }
+
+    public function test_diag_h_factor_is_0_5(): void
+    {
+        $this->diagSetup();
+        $this->getJson('/api/energy-expenditure/calibration')
+            ->assertJsonPath('data.calibration_factor', 0.5);
+    }
+
+    public function test_diag_h_factor_is_1_0_int(): void
+    {
+        $this->diagSetup();
+        $this->getJson('/api/energy-expenditure/calibration')
+            ->assertJsonPath('data.calibration_factor', 1);
+    }
+
+    public function test_diag_h_sample_count_is_2(): void
+    {
+        $this->diagSetup();
+        $this->getJson('/api/energy-expenditure/calibration')
+            ->assertJsonPath('data.sample_count', 2);
+    }
+
+    public function test_diag_h_sample_count_is_3(): void
+    {
+        $this->diagSetup();
+        $this->getJson('/api/energy-expenditure/calibration')
+            ->assertJsonPath('data.sample_count', 3);
+    }
+
+    public function test_diag_h_row_count_is_2(): void
+    {
+        $this->diagSetup();
+        $this->assertSame(2, DB::table('energy_expenditure')->count());
+    }
+
+    public function test_diag_h_row_count_is_3(): void
+    {
+        $this->diagSetup();
+        $this->assertSame(3, DB::table('energy_expenditure')->count());
+    }
 }
