@@ -71,10 +71,6 @@
       guide.remove();
       guide = null;
     }
-    if (locationMarker) {
-      locationMarker.remove();
-      locationMarker = null;
-    }
 
     const snapped = Array.isArray(path) && path.length > 1;
     // The rendered line: while editing, the snapped road path when we have it
@@ -122,21 +118,6 @@
         ? [linePoints[0], linePoints[linePoints.length - 1]]
         : linePoints;
 
-    // Current-position blue dot (Dashboard "you are here" indicator).
-    if (
-      Array.isArray(userLocation) &&
-      userLocation.length === 2 &&
-      Number.isFinite(userLocation[0]) &&
-      Number.isFinite(userLocation[1])
-    ) {
-      locationMarker = L.marker(userLocation, {
-        icon: hereIcon(),
-        interactive: false,
-        keyboard: false,
-        zIndexOffset: 1000,
-      }).addTo(layerGroup);
-    }
-
     markerPoints.forEach((point, index) => {
       const isStart = index === 0;
       const isEnd = index === markerPoints.length - 1;
@@ -157,7 +138,38 @@
       map.fitBounds(L.latLngBounds(snapped ? path : points).pad(0.22), { animate: false });
     } else if (interactive && points.length === 1) {
       map.setView(points[0], zoom, { animate: false });
-    } else if (locationMarker) {
+    }
+  }
+
+  /**
+   * Current-position blue dot (Dashboard "you are here" indicator).
+   * Deliberately separate from draw(): GPS ticks redraw only this one
+   * marker instead of rebuilding the whole route. Recentres only when no
+   * route is shown — route bounds always win while a route is visible.
+   */
+  function drawLocation() {
+    if (!map || !layerGroup) return;
+    if (locationMarker) {
+      locationMarker.remove();
+      locationMarker = null;
+    }
+    const valid =
+      Array.isArray(userLocation) &&
+      userLocation.length === 2 &&
+      Number.isFinite(userLocation[0]) &&
+      Number.isFinite(userLocation[1]);
+    if (!valid) return;
+    locationMarker = L.marker(userLocation, {
+      icon: hereIcon(),
+      interactive: false,
+      keyboard: false,
+      zIndexOffset: 1000,
+    }).addTo(layerGroup);
+
+    const snapped = Array.isArray(path) && path.length > 1;
+    const linePoints = interactive ? [] : snapped ? path : points;
+    const hasRouteView = linePoints.length > 1 || (interactive && points.length > 0);
+    if (!hasRouteView) {
       // No route yet — centre on the device's GPS position.
       map.setView(userLocation, zoom, { animate: false });
     }
@@ -207,13 +219,19 @@
     // Redraw markers, the snapped path and map behaviour when they change.
     void points;
     void path;
-    void userLocation;
     void interactive;
     if (map) {
       if (interactive) map.doubleClickZoom.disable();
       else map.doubleClickZoom.enable();
       draw();
     }
+  });
+
+  $effect(() => {
+    // Follow-me dot: GPS ticks (and route changes that affect the view)
+    // redraw only the blue dot — never the route itself.
+    void userLocation;
+    drawLocation();
   });
 </script>
 
