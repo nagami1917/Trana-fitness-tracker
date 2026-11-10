@@ -3,6 +3,12 @@
 use App\Http\Controllers\Api\ActivityController;
 use App\Http\Controllers\Api\ActivityPointController;
 use App\Http\Controllers\Api\AuthController;
+<<<<<<< HEAD
+use App\Http\Controllers\Api\DailySessionController;
+use App\Http\Controllers\Api\DailySessionFoodController;
+=======
+>>>>>>> origin/arena/68aad5a6-trana-fitness-tracker
+use App\Http\Controllers\Api\EnergyExpenditureController;
 use App\Http\Controllers\Api\GoalController;
 use App\Http\Controllers\Api\PredictionController;
 use App\Http\Controllers\Api\ProfileController;
@@ -86,8 +92,22 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::apiResource('routes', RouteController::class)->only(['index', 'store', 'show']);
 
+    // Wearable energy expenditure (e.g. WEEE dataset) for calorie calibration
+    Route::get('/energy-expenditure', [EnergyExpenditureController::class, 'index']);
+    Route::post('/energy-expenditure', [EnergyExpenditureController::class, 'store']);
+    Route::get('/energy-expenditure/calibration', [EnergyExpenditureController::class, 'calibration']);
+
     Route::get('/goals', [GoalController::class, 'show']);
     Route::put('/goals', [GoalController::class, 'update']);
+
+    // Daily sessions — daily progress tracking that resets at midnight
+    Route::get('/daily-sessions/today', [DailySessionController::class, 'today']);
+    Route::apiResource('daily-sessions', DailySessionController::class)->only(['index', 'show', 'update', 'destroy']);
+
+    // Daily session foods — breakfast, lunch, dinner, snack
+    Route::post('/daily-sessions/{dailySession}/foods', [DailySessionFoodController::class, 'store']);
+    Route::put('/daily-sessions/{dailySession}/foods/{dailySessionFood}', [DailySessionFoodController::class, 'update']);
+    Route::delete('/daily-sessions/{dailySession}/foods/{dailySessionFood}', [DailySessionFoodController::class, 'destroy']);
 
     Route::middleware('throttle:predictions')->group(function () {
         Route::post('/predictions/preview', [PredictionController::class, 'preview']);
