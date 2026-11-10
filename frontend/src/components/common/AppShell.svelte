@@ -16,7 +16,8 @@
     MapPin,
   } from 'lucide-svelte';
   import { route, navigate, link, isActive } from '../../lib/router.js';
-  import { profile, session, logout, plans } from '../../stores/index.js';
+  import { profile, session, logout, plans, todayStats } from '../../stores/index.js';
+  import { nf } from '../../lib/format.js';
   import Logo from './Logo.svelte';
 
   let { children } = $props();
@@ -77,9 +78,10 @@
     </svg>
   </div>
 
-  <div class="mx-auto flex w-full max-w-[1500px]">
+  <!-- full-width shell: fills the screen at any zoom/monitor size -->
+  <div class="flex w-full">
     <!-- sidebar (desktop) -->
-    <aside class="sticky top-0 hidden h-screen w-[260px] shrink-0 flex-col gap-6 border-r border-white/60 bg-white/45 px-5 py-6 backdrop-blur-xl lg:flex">
+    <aside class="sticky top-0 hidden h-screen w-[260px] shrink-0 flex-col gap-6 overflow-y-auto border-r border-white/60 bg-white/45 px-5 py-6 backdrop-blur-xl lg:flex">
       <Logo />
 
       <nav class="flex flex-col gap-1">
@@ -95,6 +97,33 @@
           </a>
         {/each}
       </nav>
+
+      <!-- dashboard stats, visible on every desktop page -->
+      <div class="rounded-3xl border border-white/70 bg-white/70 p-4 shadow-soft">
+        <div class="flex items-center justify-between">
+          <p class="text-[11px] font-extrabold uppercase tracking-[0.12em] text-brand-500">Today</p>
+          <button
+            class="text-[10px] font-bold text-ink-400 transition hover:text-brand-600"
+            onclick={() => navigate('/')}
+          >
+            Dashboard →
+          </button>
+        </div>
+        <div class="mt-2 grid grid-cols-3 gap-1 text-center">
+          <div class="min-w-0">
+            <p class="truncate text-sm font-extrabold text-ink-900">{nf($todayStats.distance, 1)}</p>
+            <p class="text-[9px] font-bold uppercase tracking-wide text-ink-400">km</p>
+          </div>
+          <div class="min-w-0">
+            <p class="truncate text-sm font-extrabold text-ink-900">{Math.round($todayStats.minutes)}</p>
+            <p class="text-[9px] font-bold uppercase tracking-wide text-ink-400">min</p>
+          </div>
+          <div class="min-w-0">
+            <p class="truncate text-sm font-extrabold text-ink-900">{Math.round($todayStats.calories)}</p>
+            <p class="text-[9px] font-bold uppercase tracking-wide text-ink-400">kcal</p>
+          </div>
+        </div>
+      </div>
 
       <div class="mt-2 rounded-3xl border border-white/70 bg-gradient-to-br from-white/90 to-brand-100/70 p-4 shadow-soft">
         <p class="text-[11px] font-extrabold uppercase tracking-[0.12em] text-brand-500">Next up</p>
