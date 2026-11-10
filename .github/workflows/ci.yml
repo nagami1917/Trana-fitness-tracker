@@ -103,7 +103,7 @@ jobs:
             else
               details=$(printf '%s\n' "$plain" | tail -60)
             fi
-            printf '%s\n' "$details" | cut -c1-450 | head -45 \
+            printf '%s\n' "$details" | cut -c1-450 | head -10 \
               | while IFS= read -r line; do [ -n "$line" ] && echo "::error::$line"; done
             exit "$code"
           fi
