@@ -89,8 +89,9 @@ export function cityRegionFromResult(result) {
 /**
  * Ask the device for its current position and look it up in the browser.
  * Never fall back to IP-only lookup, and never call the provider on denial.
+ * Returns { label, latitude, longitude } — coords stay in the browser.
  */
-export async function detectCityRegion({
+export async function detectPlace({
   geolocation = globalThis.navigator?.geolocation,
   fetcher = globalThis.fetch,
   signal,
@@ -137,7 +138,8 @@ export async function detectCityRegion({
     if (!response.ok) throw new LocationError('lookup');
     const result = await response.json();
     if (signal?.aborted) throw abortedError();
-    return cityRegionFromResult(result);
+    const label = cityRegionFromResult(result);
+    return { label, latitude, longitude };
   } catch (error) {
     if (signal?.aborted) throw abortedError();
     if (timedOut) throw new LocationError('lookup_timeout');
@@ -146,5 +148,48 @@ export async function detectCityRegion({
   } finally {
     clearTimeout(timer);
     signal?.removeEventListener('abort', onAbort);
+  }
+}
+
+/** Label-only wrapper kept for CityRegionInput (same contract as before). */
+export async function detectCityRegion(options = {}) {
+  const place = await detectPlace(options);
+  return place.label;
+}
+
+/* ---------------------------------------------------------- live cache */
+// Short-lived cache so the dashboard indicator can show the GPS place
+// without re-prompting / re-calling the geocoder on every visit.
+const PLACE_CACHE_KEY = 'trana:live-place:v1';
+const PLACE_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+/** @returns {{label:string, latitude:number, longitude:number, at:number}|null} */
+export function readCachedPlace(maxAgeMs = PLACE_CACHE_TTL_MS) {
+  try {
+    const raw = globalThis.localStorage?.getItem(PLACE_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed.label !== 'string' || !parsed.label) return null;
+    if (!Number.isFinite(parsed.latitude) || !Number.isFinite(parsed.longitude)) return null;
+    if (Date.now() - Number(parsed.at || 0) > maxAgeMs) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function writeCachedPlace(place) {
+  try {
+    globalThis.localStorage?.setItem(
+      PLACE_CACHE_KEY,
+      JSON.stringify({
+        label: place.label,
+        latitude: place.latitude,
+        longitude: place.longitude,
+        at: Date.now(),
+      }),
+    );
+  } catch {
+    // storage unavailable (private mode) — detection simply runs again next time
   }
 }

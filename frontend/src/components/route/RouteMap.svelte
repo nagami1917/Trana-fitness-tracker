@@ -10,6 +10,7 @@
     interactive = false,
     center = [14.676, 121.0437],
     zoom = 13,
+    userLocation = null, // [lat, lng] — blue-dot "you are here" indicator
     onPick = null,
     class: cls = '',
     showAttribution = true,
@@ -21,6 +22,7 @@
   let layerGroup;
   let line;
   let guide;
+  let locationMarker;
   let markers = [];
 
   const startIcon = () =>
@@ -47,6 +49,16 @@
       iconAnchor: [6, 6],
     });
 
+  // Google-Maps-style blue dot for the device's current GPS position.
+  const hereIcon = () =>
+    L.divIcon({
+      className: '',
+      html:
+        '<span style="display:block;width:18px;height:18px;border-radius:9999px;background:#3b82f6;border:3.5px solid #fff;box-shadow:0 0 0 6px rgba(59,130,246,.22),0 2px 8px rgba(0,0,0,.3)"></span>',
+      iconSize: [18, 18],
+      iconAnchor: [9, 9],
+    });
+
   function draw() {
     if (!map) return;
     markers.forEach((m) => m.remove());
@@ -58,6 +70,10 @@
     if (guide) {
       guide.remove();
       guide = null;
+    }
+    if (locationMarker) {
+      locationMarker.remove();
+      locationMarker = null;
     }
 
     const snapped = Array.isArray(path) && path.length > 1;
@@ -106,6 +122,21 @@
         ? [linePoints[0], linePoints[linePoints.length - 1]]
         : linePoints;
 
+    // Current-position blue dot (Dashboard "you are here" indicator).
+    if (
+      Array.isArray(userLocation) &&
+      userLocation.length === 2 &&
+      Number.isFinite(userLocation[0]) &&
+      Number.isFinite(userLocation[1])
+    ) {
+      locationMarker = L.marker(userLocation, {
+        icon: hereIcon(),
+        interactive: false,
+        keyboard: false,
+        zIndexOffset: 1000,
+      }).addTo(layerGroup);
+    }
+
     markerPoints.forEach((point, index) => {
       const isStart = index === 0;
       const isEnd = index === markerPoints.length - 1;
@@ -126,6 +157,9 @@
       map.fitBounds(L.latLngBounds(snapped ? path : points).pad(0.22), { animate: false });
     } else if (interactive && points.length === 1) {
       map.setView(points[0], zoom, { animate: false });
+    } else if (locationMarker) {
+      // No route yet — centre on the device's GPS position.
+      map.setView(userLocation, zoom, { animate: false });
     }
   }
 
@@ -173,6 +207,7 @@
     // Redraw markers, the snapped path and map behaviour when they change.
     void points;
     void path;
+    void userLocation;
     void interactive;
     if (map) {
       if (interactive) map.doubleClickZoom.disable();

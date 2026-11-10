@@ -25,17 +25,54 @@
   import LineChart from '../../components/analytics/LineChart.svelte';
   import { activities, profile, goals, todayStats, weekStats, trends, chartSeries, modelCard, plans } from '../../stores/index.js';
   import { navigate } from '../../lib/router.js';
+  import { api } from '../../services/client.js';
+  import { detectPlace, readCachedPlace, writeCachedPlace } from '../../lib/location.js';
   import { loadModel, predictDuration } from '../../lib/ml/duration.js';
   import { recommendFueling, INTENSITY_COPY } from '../../lib/ml/fueling.js';
   import { duration as fmtDuration, kcal, km, nf, dayLabel, timeLabel, greeting, pct, shortDate, activityLabel } from '../../lib/format.js';
 
   let model = $state(null);
   let loadingModel = $state(true);
+  let livePlace = $state(null); // { label, latitude, longitude } from device GPS
+  let locating = $state(false);
   let draft = $state({ type: 'run', distance: 5, elevation: 45 });
   let range = $state('7D');
   let metric = $state('calories');
 
+  /**
+   * Keep the location indicator on whatever the device GPS currently says:
+   * cached place within 10 min (no prompt), otherwise detect + reverse-geocode,
+   * then keep the saved profile city in step. Any failure falls back silently
+   * to the stored city — the chip never blocks or errors.
+   */
+  async function locateLive() {
+    const cached = readCachedPlace();
+    if (cached) {
+      livePlace = cached;
+      return;
+    }
+    locating = true;
+    try {
+      const place = await detectPlace();
+      livePlace = place;
+      writeCachedPlace(place);
+      if ($profile && ($profile.city ?? '').trim() !== place.label) {
+        try {
+          await api.profile.update({ city: place.label });
+          profile.update((p) => (p ? { ...p, city: place.label } : p));
+        } catch {
+          // Persisting is best-effort — the indicator already shows the live place.
+        }
+      }
+    } catch {
+      // Permission denied / offline / lookup failed → keep the saved city.
+    } finally {
+      locating = false;
+    }
+  }
+
   onMount(async () => {
+    void locateLive();
     model = await loadModel();
     loadingModel = false;
   });
@@ -146,13 +183,15 @@
     <div class="flex items-center gap-2 self-start rounded-2xl border border-white/80 bg-white/80 px-4 py-2.5 shadow-soft">
       <MapPin size={15} class="shrink-0 text-brand-500" />
       <div class="min-w-0 max-w-[15rem]">
-        {#if $profile?.city?.trim()}
-          <p class="truncate text-xs font-extrabold text-ink-700" title={$profile.city}>{$profile.city}</p>
+        {#if livePlace?.label || $profile?.city?.trim()}
+          <p class="truncate text-xs font-extrabold text-ink-700" title={livePlace?.label ?? $profile.city}>
+            {livePlace?.label ?? $profile.city}
+          </p>
         {:else}
           <button class="text-xs font-extrabold text-brand-600 hover:underline" onclick={() => navigate('/profile')}>Add city / region</button>
         {/if}
         <p class="text-[10px] font-semibold text-ink-400">
-          {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+          {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}{#if locating}<span class="text-brand-500"> · locating…</span>{/if}
         </p>
       </div>
     </div>
@@ -256,7 +295,13 @@
           </div>
 
           <div class="relative">
-            <RouteMap points={previewRoute} height={214} showAttribution={false} class="!rounded-2xl">
+            <RouteMap
+              points={previewRoute}
+              height={214}
+              showAttribution={false}
+              userLocation={livePlace ? [livePlace.latitude, livePlace.longitude] : null}
+              class="!rounded-2xl"
+            >
               <div class="pointer-events-none absolute left-3 top-3 rounded-xl bg-white/85 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-brand-600 shadow-soft">
                 Your last route
               </div>
