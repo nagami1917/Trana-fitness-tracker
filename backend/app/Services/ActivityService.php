@@ -3,8 +3,10 @@
 namespace App\Services;
 
 use App\Models\Activity;
+use App\Models\EnergyExpenditure;
 use App\Models\FitnessProfile;
 use App\Models\User;
+use App\Services\EnergyExpenditureCalibrationService;
 
 /**
  * Activity log access: ML-shaped history for predictions, plus the
@@ -12,6 +14,10 @@ use App\Models\User;
  */
 class ActivityService
 {
+    public function __construct(
+        private readonly EnergyExpenditureCalibrationService $calibration,
+    ) {}
+
     /** The athlete's session history, newest first, shaped for the ML service. */
     public function history(User $user, int $limit = 300): array
     {
@@ -38,7 +44,7 @@ class ActivityService
      */
     public function store(User $user, array $validated): Activity
     {
-        $calories = $validated['calories']
+        $rawCalories = $validated['calories']
             ?? $this->estimateCalories(
                 $validated['activity_type'],
                 (float) $validated['distance_km'],
@@ -46,6 +52,9 @@ class ActivityService
                 (int) ($validated['elevation_gain_m'] ?? 0),
                 (float) ($user->fitnessProfile?->weight_kg ?? 60),
             );
+
+        // Apply wearable calibration factor if the user has enough data
+        $calories = (int) round($this->calibration->applyCalibration((float) $rawCalories, $user));
 
         $activity = $user->activities()->create([
             'activity_type' => $validated['activity_type'],
