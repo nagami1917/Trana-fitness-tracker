@@ -110,7 +110,9 @@ def main():
             $out[] = "driver=" . DB::connection()->getDriverName();
             $out[] = "db=" . DB::connection()->getDatabaseName();
             $out[] = "conn=" . config("database.default");
-            $out[] = "tables=" . implode(",", Schema::getTables());
+            $tbls = Schema::getTables();
+            $names = array_map(function ($t) { return is_array($t) ? ($t["name"] ?? "?") : $t; }, $tbls);
+            $out[] = "tables=" . implode(",", $names);
             $out[] = "has_ee=" . var_export(Schema::hasTable("energy_expenditure"), true);
             if (Schema::hasTable("energy_expenditure")) {
                 $out[] = "ee_cols=" . implode(",", Schema::getColumnListing("energy_expenditure"));
