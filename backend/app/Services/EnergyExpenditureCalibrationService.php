@@ -24,10 +24,14 @@ class EnergyExpenditureCalibrationService
      */
     public function calculateFactor($user): float
     {
-        $rows = EnergyExpenditure::forUser($user->id)
-            ->withMeasured()
-            ->whereNotNull('trana_estimated_calories')
-            ->get();
+        try {
+            $rows = EnergyExpenditure::forUser($user->id)
+                ->withMeasured()
+                ->whereNotNull('trana_estimated_calories')
+                ->get();
+        } catch (\Throwable $e) {
+            return 1.0; // TEMP DIAGNOSTIC
+        }
 
         $count = $rows->count();
         if ($count < self::MIN_SAMPLES) {
