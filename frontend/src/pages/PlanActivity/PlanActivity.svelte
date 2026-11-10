@@ -1,7 +1,8 @@
 <script>
   import { onMount } from 'svelte';
-  import { Sparkles, MapPin, Route, Trash2, LoaderCircle, Save, Ruler, Thermometer, Droplets, ArrowRight, Play } from 'lucide-svelte';
+  import { Sparkles, MapPin, Route, Trash2, LoaderCircle, Save, Ruler, Thermometer, Droplets, ArrowRight, Play, Undo2 } from 'lucide-svelte';
   import Card from '../../components/common/Card.svelte';
+  import BusyOverlay from '../../components/common/BusyOverlay.svelte';
   import ActivityIcon from '../../components/activities/ActivityIcon.svelte';
   import RouteMap from '../../components/route/RouteMap.svelte';
   import FuelingPlan from '../../components/fueling/FuelingPlan.svelte';
@@ -177,6 +178,13 @@
     resetSnap();
   }
 
+  /** Remove only the last waypoint — keeps the rest of the drawn route. */
+  function undoPoint() {
+    if (!form.route.length) return;
+    form.route = form.route.slice(0, -1);
+    scheduleSnap();
+  }
+
   function onPick(mode, index, latlng) {
     if (!latlng) return;
     const point = [Number(latlng.lat.toFixed(5)), Number(latlng.lng.toFixed(5))];
@@ -218,6 +226,8 @@
     }
   }
 </script>
+
+<BusyOverlay open={saving} label="Saving your plan…" />
 
 <div class="space-y-5">
   <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -322,6 +332,7 @@
               <Route size={13} /> {drawing ? 'Drawing…' : 'Draw'}
             </button>
             {#if form.route.length}
+              <button class="btn-chip" onclick={undoPoint}><Undo2 size={13} /> Undo</button>
               <button class="btn-chip" onclick={clearRoute}><Trash2 size={13} /> Clear</button>
             {/if}
           </div>

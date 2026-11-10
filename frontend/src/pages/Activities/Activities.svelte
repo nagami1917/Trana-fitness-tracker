@@ -1,10 +1,11 @@
 <script>
   import { onMount } from 'svelte';
-  import { Plus, Search, LoaderCircle, Trash2, MapPin, Flame, Timer, Gauge, Route as RouteIcon, Sparkles, TrendingUp, X } from 'lucide-svelte';
+  import { Plus, Search, LoaderCircle, Trash2, MapPin, Flame, Timer, Gauge, Route as RouteIcon, Sparkles, TrendingUp, X, Undo2 } from 'lucide-svelte';
   import Card from '../../components/common/Card.svelte';
   import ActivityIcon from '../../components/activities/ActivityIcon.svelte';
   import RouteMap from '../../components/route/RouteMap.svelte';
   import Modal from '../../components/common/Modal.svelte';
+  import BusyOverlay from '../../components/common/BusyOverlay.svelte';
   import EmptyState from '../../components/common/EmptyState.svelte';
   import { activities, profile, notify, refresh } from '../../stores/index.js';
   import { api } from '../../services/client.js';
@@ -178,6 +179,13 @@
     resetSnap();
   }
 
+  /** Remove only the last waypoint — keeps the rest of the drawn route. */
+  function undoPoint() {
+    if (!draft.route.length) return;
+    draft.route = draft.route.slice(0, -1);
+    scheduleSnap();
+  }
+
   function setDraftType(id) {
     draft.activity_type = id;
     scheduleSnap(); // routing profile follows the activity type
@@ -320,6 +328,9 @@
   {/if}
 </div>
 
+<!-- busy overlay -->
+<BusyOverlay open={saving} label="Logging your activity…" />
+
 <!-- add modal -->
 <Modal open={addOpen} title="Log an activity" subtitle="Real numbers make every future prediction better." onclose={() => (addOpen = false)} wide>
   <div class="grid gap-4 sm:grid-cols-2">
@@ -388,6 +399,7 @@
         </div>
         <div class="mt-2 flex flex-wrap items-center gap-2">
           {#if draft.route.length}
+            <button class="btn-chip" onclick={undoPoint}><Undo2 size={12} /> Undo</button>
             <button class="btn-chip" onclick={clearRoute}><Trash2 size={12} /> Clear route</button>
           {/if}
           {#if routing}

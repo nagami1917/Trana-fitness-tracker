@@ -10,6 +10,7 @@
   import GPSStatus from '../../components/activity/GPSStatus.svelte';
   import DailyProgress from '../../components/activity/DailyProgress.svelte';
   import FoodLogger from '../../components/activity/FoodLogger.svelte';
+  import BusyOverlay from '../../components/common/BusyOverlay.svelte';
 
   import { watch, getCurrentPosition, trackPoint, GpsError } from '../../services/gpsService.js';
   import {
@@ -231,6 +232,7 @@
 </script>
 
 <div class="min-h-[calc(100vh-64px)] w-full flex flex-col">
+  <BusyOverlay open={saving} label="Saving your track…" />
   <!-- Map occupies most of the screen -->
   <div class="flex-1 min-h-0 relative">
     <TranaMap
