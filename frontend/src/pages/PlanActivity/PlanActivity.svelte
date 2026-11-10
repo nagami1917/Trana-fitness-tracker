@@ -74,6 +74,12 @@
     routePath.length > 1 ? routePath : form.route.length > 1 ? form.route : null,
   );
 
+  // Navigation-app behaviour: while a route exists, the distance field itself
+  // shows the measured (road-snapped) route length — not the typed value.
+  $effect(() => {
+    if (routeKm > 0.05) form.distance_km = Number(routeKm.toFixed(2));
+  });
+
   async function run() {
     if (!$profile || !model) return;
     computing = true;
@@ -180,13 +186,6 @@
     scheduleSnap();
   }
 
-  function useRouteDistance() {
-    if (routeKm > 0) {
-      form.distance_km = Number(routeKm.toFixed(2));
-      drawing = false;
-    }
-  }
-
   async function save() {
     if (!prediction) return;
     saving = true;
@@ -272,7 +271,7 @@
               <span class="grid w-14 shrink-0 place-items-center rounded-2xl border border-brand-100 bg-brand-50 text-xs font-extrabold text-ink-500">km</span>
             </div>
             {#if routeKm > 0}
-              <p class="mt-1 text-[10px] font-bold text-brand-600">Route measured {nf(routeKm, 2)} km</p>
+              <p class="mt-1 text-[10px] font-bold text-brand-600">Measured from your drawn route</p>
             {/if}
           </div>
 
@@ -343,11 +342,6 @@
           <span class="pill"><Ruler size={12} /> {routeKm > 0 ? `${nf(routeKm, 2)} km` : '—'}</span>
           {#if routing}
             <span class="pill"><LoaderCircle size={12} class="animate-spin" /> Snapping to roads…</span>
-          {/if}
-          {#if routeKm > 0}
-            <button class="btn-chip ml-auto" onclick={useRouteDistance}>
-              Use this distance
-            </button>
           {/if}
         </div>
         {#if drawing}
