@@ -15,6 +15,9 @@ class EnergyExpenditure extends Model
 {
     use HasFactory;
 
+    /** Eloquent would derive `energy_expenditures`; the table is singular. */
+    protected $table = 'energy_expenditure';
+
     protected $fillable = [
         'user_id',
         'device_type',
