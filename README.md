@@ -22,6 +22,7 @@ carbohydrate, sodium and fluid targets, and lays them out on a timeline
 | --- | --- |
 | **Duration prediction** | Your own distance→time curve (Riegel log-log fit, per sport) anchors a gradient-boosted **pace-factor** model that learns how climbing, body mass and experience slow you down. Three quantile models return a *range*, not a false-precision number. |
 | **Energy (kcal)** | ACSM metabolic equations — `MET × body mass × hours`, with MET derived from your predicted speed and gradient. |
+| **Wearable calibration** | Import what your Garmin/Strava-style device *measured* and the server learns the gap to its own estimate; from 3 samples on, new calorie estimates are scaled by your personal factor (clamped 0.5×–2.0×). |
 | **Carbohydrate** | Duration + intensity bands following sports-nutrition guidance (0 g/h under an hour → up to 85–90 g/h for multi-hour efforts), expressed as gels / bottles / real food. |
 | **Sodium & fluid** | Baseline sweat profile (light / average / heavy sweater), adjusted for heat and session length. |
 | **Fueling timeline** | Pre-session meal, top-up snack, during-session interval, recovery window — each with grams and millilitres. |
@@ -345,7 +346,8 @@ Step-by-step instructions, including the CORS and connection-string gotchas, are
 - Live GPS recording during a session, imported via GPX
 - Elevation profiles from a routing API (currently entered by hand or estimated)
 - Per-athlete model fine-tuning once ≥ 40 sessions exist
-- Wearable import (Garmin / Strava) to remove manual logging
+- Full wearable activity import (GPX/FIT routes and sessions) — calorie-sample
+  import and calibration already ship via `/api/energy-expenditure`
 
 ---
 

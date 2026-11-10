@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\ActivityController;
 use App\Http\Controllers\Api\ActivityPointController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\EnergyExpenditureController;
 use App\Http\Controllers\Api\GoalController;
 use App\Http\Controllers\Api\PredictionController;
 use App\Http\Controllers\Api\ProfileController;
@@ -53,6 +54,9 @@ Route::get('/docs', fn () => response()->json([
         'GET  /api/activities/{id}',
         'DEL  /api/activities/{id}',
         'GET  /api/activities/summary',
+        'GET  /api/energy-expenditure',
+        'POST /api/energy-expenditure',
+        'GET  /api/energy-expenditure/calibration',
         'GET  /api/goals',
         'PUT  /api/goals',
         'GET  /api/predictions',
@@ -83,6 +87,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/activities/summary', [ActivityController::class, 'summary']);
     Route::apiResource('activities', ActivityController::class)->only(['index', 'store', 'show', 'destroy']);
     Route::post('/activities/{activity}/points', [ActivityPointController::class, 'store']);
+
+    // Wearable energy-expenditure samples + the calibration they produce.
+    Route::get('/energy-expenditure/calibration', [EnergyExpenditureController::class, 'calibration']);
+    Route::get('/energy-expenditure', [EnergyExpenditureController::class, 'index']);
+    Route::post('/energy-expenditure', [EnergyExpenditureController::class, 'store']);
 
     Route::apiResource('routes', RouteController::class)->only(['index', 'store', 'show']);
 

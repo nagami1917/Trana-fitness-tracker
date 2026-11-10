@@ -36,6 +36,11 @@ class User extends Authenticatable
         return $this->hasMany(Activity::class);
     }
 
+    public function energyExpenditure(): HasMany
+    {
+        return $this->hasMany(EnergyExpenditure::class);
+    }
+
     public function plannedRoutes(): HasMany
     {
         return $this->hasMany(PlannedRoute::class);

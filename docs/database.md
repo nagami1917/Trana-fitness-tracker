@@ -46,6 +46,31 @@ The athlete's training log — the *only* source of truth for pace history.
 
 Indexes: `(user_id, started_at)`, `(user_id, activity_type)`.
 
+### `energy_expenditure`
+One row per device-reported session — the ground truth used to calibrate the
+MET calorie estimate (see [api.md](api.md#energy-expenditure)).
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `user_id` | FK → users | cascade on delete |
+| `device_type` | string(32) | `garmin`, `strava`, `polar`, `apple`, `coros`, `suunto`, `wahoo`, `whoop`, `other` |
+| `activity_type` | string(16) | `run` · `ride` · `walk` · `hike` |
+| `distance_km` | decimal(8,3) | |
+| `duration_min` | decimal(8,2) | |
+| `avg_heart_rate` | smallint, nullable | bpm, device-reported |
+| `weight_kg` | decimal(5,2), nullable | body mass when recorded; the profile's is used when null |
+| `measured_calories` | uint | what the device reported |
+| `recorded_at` | timestamptz | when the session happened (not when it was imported) |
+
+Indexes: unique `(user_id, device_type, recorded_at)` — re-importing the same
+device session updates the row instead of duplicating it — and
+`(user_id, activity_type)`.
+
+The calibration factor is `sum(measured_calories) / sum(MET estimate)` over
+the athlete's rows, clamped to 0.5–2.0 and only applied from 3 samples on.
+`ActivityService::store()` scales the calories of every new activity by it, so
+the stats screen shows calibrated values.
+
 ### `predictions`
 Saved plans produced by the ML pipeline (see [ml-methodology.md](ml-methodology.md)).
 

@@ -1,12 +1,14 @@
 <script>
-  import { Settings as SettingsIcon, Save, LoaderCircle, LogOut, Info, Brain, Smartphone, ShieldCheck, User, HeartPulse } from 'lucide-svelte';
+  import { Settings as SettingsIcon, Save, LoaderCircle, LogOut, Info, Brain, Smartphone, ShieldCheck, User, HeartPulse, Flame, Upload } from 'lucide-svelte';
   import Card from '../../components/common/Card.svelte';
   import Segmented from '../../components/common/Segmented.svelte';
   import CityRegionInput from '../../components/common/CityRegionInput.svelte';
   import { profile, session, logout, notify, refresh, modelCard, activities } from '../../stores/index.js';
   import { api } from '../../services/client.js';
+  import { energyApi, importBatch, parseCsv, CSV_COLUMNS } from '../../services/energyService.js';
   import { navigate } from '../../lib/router.js';
   import { nf } from '../../lib/format.js';
+  import { onMount } from 'svelte';
 
   let form = $state({
     name: $profile?.name ?? '',
@@ -23,6 +25,50 @@
   });
   let saving = $state(false);
   let locating = $state(false);
+
+  // Wearable energy-expenditure calibration (services/energyService.js).
+  let calibration = $state(null);
+  let csvText = $state('');
+  let importing = $state(false);
+  let importError = $state('');
+  let importNote = $state('');
+
+  onMount(loadCalibration);
+
+  async function loadCalibration() {
+    try {
+      calibration = await energyApi.calibration();
+    } catch {
+      // An older API without the endpoint: hide the panel's status block.
+      calibration = null;
+    }
+  }
+
+  async function importMeasurements() {
+    if (importing) return;
+    importError = '';
+    importNote = '';
+    const entries = parseCsv(csvText);
+    if (entries.length === 0) {
+      importError = 'Paste at least one CSV row using the columns below.';
+      return;
+    }
+    importing = true;
+    try {
+      const result = await importBatch(entries);
+      calibration = result.calibration;
+      csvText = '';
+      importNote = `Imported ${result.imported} new and updated ${result.updated} existing sessions.`;
+      notify('Wearable samples imported.');
+    } catch (error) {
+      const rows = error.fields?.map((row) => `row ${row.index + 1} (${row.errors.join(', ')})`);
+      importError = rows?.length
+        ? `Fix ${rows.join('; ')}.`
+        : (error.message || 'Could not import the samples.');
+    } finally {
+      importing = false;
+    }
+  }
 
   $effect(() => {
     if ($profile && !form.name) {
@@ -219,6 +265,45 @@
           </p>
           <button class="btn-ghost w-full justify-start !text-rose-500" onclick={signOut}><LogOut size={15} /> Sign out</button>
         </div>
+      </Card>
+
+      <Card>
+        <div class="flex items-center gap-2">
+          <Flame size={17} class="text-brand-500" />
+          <h2 class="text-lg">Energy calibration</h2>
+        </div>
+        <p class="mt-2 text-[12px] font-semibold leading-relaxed text-ink-500">
+          Import what your watch measured and TRANA scales its calorie estimates to match.
+          {#if calibration && !calibration.applied}
+            {Math.max(0, calibration.min_samples - calibration.samples)} more
+            {calibration.min_samples - calibration.samples === 1 ? 'sample' : 'samples'} until calibration kicks in.
+          {/if}
+        </p>
+
+        {#if calibration}
+          <div class="mt-3 space-y-1.5 text-[12px] font-semibold text-ink-600">
+            <p class="flex justify-between"><span class="text-ink-400">Calibration factor</span><span>{calibration.applied ? `${calibration.factor.toFixed(2)}×` : 'not active'}</span></p>
+            <p class="flex justify-between"><span class="text-ink-400">Device samples</span><span>{calibration.samples} / {calibration.min_samples}</span></p>
+            {#if calibration.applied}
+              <p class="flex justify-between"><span class="text-ink-400">Measured vs estimate</span><span>{nf(calibration.measured_calories)} vs {nf(calibration.estimated_calories)} kcal</span></p>
+            {/if}
+          </div>
+        {/if}
+
+        <div class="mt-3">
+          <span class="label">Paste CSV — {CSV_COLUMNS.join(', ')}</span>
+          <textarea
+            class="input h-24 font-mono text-[11px]"
+            bind:value={csvText}
+            placeholder="device_type,activity_type,distance_km,duration_min,avg_heart_rate,weight_kg,measured_calories,recorded_at
+garmin,run,5.2,32.5,158,68,420,2026-11-09T08:00:00+08:00"
+          ></textarea>
+        </div>
+        <button class="btn-primary mt-2 w-full justify-center" onclick={importMeasurements} disabled={importing}>
+          {#if importing}<LoaderCircle size={15} class="animate-spin" /> Importing…{:else}<Upload size={15} /> Import samples{/if}
+        </button>
+        {#if importNote}<p class="mt-2 text-[11px] font-semibold text-emerald-600">{importNote}</p>{/if}
+        {#if importError}<p class="mt-2 text-[11px] font-semibold text-rose-500">{importError}</p>{/if}
       </Card>
 
       <Card>
