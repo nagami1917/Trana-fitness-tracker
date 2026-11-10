@@ -308,40 +308,24 @@ class EnergyExpenditureTest extends TestCase
         $this->fail('DIAGVALS ' . implode(' | ', $info));
     }
 
-    // ---- TEMPORARY hypothesis probes ----
-    private function diagSetup(): void
+    // ---- TEMPORARY diagnostic: one failure, message repeated so the
+    //      annotation window (tail -60 | head -10) always shows it. ----
+    public function test_diag_values(): void
     {
         Sanctum::actingAs($this->athlete());
         foreach (['2026-11-06', '2026-11-07'] as $day) {
             $this->postJson('/api/energy-expenditure', $this->sample(800, "{$day}T06:30:00+08:00"))
                 ->assertCreated();
         }
-    }
 
-    public function test_diag_h_calibration_handler_ran(): void
-    {
-        $this->diagSetup();
-        $this->getJson('/api/energy-expenditure/calibration')
-            ->assertJsonPath('data.min_samples', 3);
-    }
+        $rows = DB::table('energy_expenditure')->get();
+        $parts = ['n=' . $rows->count()];
+        foreach ($rows as $r) {
+            $parts[] = "u{$r->user_id}/m{$r->measured_calories}/e{$r->trana_estimated_calories}/{$r->recorded_at}";
+        }
+        $body = $this->getJson('/api/energy-expenditure/calibration')->getContent();
+        $line = 'DIAGDATA ' . implode(' ', $parts) . ' BODY=' . $body;
 
-    public function test_diag_h_index_handler_ran(): void
-    {
-        $this->diagSetup();
-        $this->getJson('/api/energy-expenditure/calibration')
-            ->assertJsonStructure(['meta']);
-    }
-
-    public function test_diag_h_row_count_is_2(): void
-    {
-        $this->diagSetup();
-        $this->assertSame(2, DB::table('energy_expenditure')->count());
-    }
-
-    public function test_diag_h_factor_is_1_0(): void
-    {
-        $this->diagSetup();
-        $this->getJson('/api/energy-expenditure/calibration')
-            ->assertJsonPath('data.calibration_factor', 1.0);
+        $this->fail(implode("\n", array_fill(0, 90, $line)));
     }
 }
