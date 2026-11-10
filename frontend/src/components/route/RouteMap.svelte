@@ -1,10 +1,11 @@
-﻿<script>
+<script>
   import { onMount } from 'svelte';
   import L from 'leaflet';
   import 'leaflet/dist/leaflet.css';
 
   let {
     points = [],
+    path = [],
     height = 260,
     interactive = false,
     center = [14.676, 121.0437],
@@ -19,6 +20,7 @@
   let map;
   let layerGroup;
   let line;
+  let guide;
   let markers = [];
 
   const startIcon = () =>
@@ -53,20 +55,60 @@
       line.remove();
       line = null;
     }
-    if (!points?.length) return;
+    if (guide) {
+      guide.remove();
+      guide = null;
+    }
 
-    line = L.polyline(points, {
-      color: '#f9569b',
-      weight: interactive ? 4 : 5,
-      opacity: 0.95,
-      lineJoin: 'round',
-      lineCap: 'round',
-      dashArray: interactive ? '1 8' : null,
-    }).addTo(layerGroup);
+    const snapped = Array.isArray(path) && path.length > 1;
+    // The rendered line: while editing, the snapped road path when we have it
+    // and a dashed guide through the raw taps otherwise; when viewing, the
+    // stored route (which is the snapped path for newly saved activities).
+    const linePoints = interactive ? [] : snapped ? path : points;
+    if (!interactive && !linePoints.length) return;
+    if (interactive && !points?.length && !snapped) return;
 
-    points.forEach((point, index) => {
+    if (interactive) {
+      if (points.length) {
+        guide = L.polyline(points, {
+          color: '#f9569b',
+          weight: 3,
+          opacity: snapped ? 0.4 : 0.95,
+          lineJoin: 'round',
+          lineCap: 'round',
+          dashArray: '1 8',
+        }).addTo(layerGroup);
+      }
+      if (snapped) {
+        line = L.polyline(path, {
+          color: '#f9569b',
+          weight: 4,
+          opacity: 0.95,
+          lineJoin: 'round',
+          lineCap: 'round',
+        }).addTo(layerGroup);
+      }
+    } else {
+      line = L.polyline(linePoints, {
+        color: '#f9569b',
+        weight: 5,
+        opacity: 0.95,
+        lineJoin: 'round',
+        lineCap: 'round',
+      }).addTo(layerGroup);
+    }
+
+    // Interactive maps get a marker per waypoint (draggable). View-only maps
+    // only show start/finish — saved routes can be hundreds of road vertices.
+    const markerPoints = interactive
+      ? points
+      : linePoints.length > 2
+        ? [linePoints[0], linePoints[linePoints.length - 1]]
+        : linePoints;
+
+    markerPoints.forEach((point, index) => {
       const isStart = index === 0;
-      const isEnd = index === points.length - 1;
+      const isEnd = index === markerPoints.length - 1;
       const marker = L.marker(point, {
         icon: isStart ? startIcon() : isEnd && !interactive ? finishIcon() : dotIcon(),
         draggable: interactive,
@@ -78,9 +120,11 @@
       markers.push(marker);
     });
 
-    if (points.length > 1) {
-      map.fitBounds(L.latLngBounds(points).pad(0.22), { animate: false });
-    } else {
+    if (linePoints.length > 1) {
+      map.fitBounds(L.latLngBounds(linePoints).pad(0.22), { animate: false });
+    } else if (interactive && points.length > 1) {
+      map.fitBounds(L.latLngBounds(snapped ? path : points).pad(0.22), { animate: false });
+    } else if (interactive && points.length === 1) {
       map.setView(points[0], zoom, { animate: false });
     }
   }
@@ -126,8 +170,9 @@
   });
 
   $effect(() => {
-    // Redraw markers and update map behaviour when drawing is toggled.
+    // Redraw markers, the snapped path and map behaviour when they change.
     void points;
+    void path;
     void interactive;
     if (map) {
       if (interactive) map.doubleClickZoom.disable();

@@ -114,6 +114,23 @@ export const ROAD_SNAPPING = {
   ],
 };
 
+/* ---------------------------------------------------------- road routing */
+// OpenRouteService directions used to snap routes drawn on the map onto the
+// real road network. Requires the VITE_ORS_API_KEY build-time env var
+// (Vercel → trana-web); without a key the app falls back to straight lines.
+export const ROUTING = {
+  baseUrl: 'https://api.openrouteservice.org/v2/directions',
+  timeoutMs: 10000, // give up and keep straight lines after 10s
+  // activity type → ORS routing profile
+  profiles: {
+    run: 'foot-walking',
+    walk: 'foot-walking',
+    hike: 'foot-hiking',
+    ride: 'cycling-regular',
+  },
+  defaultProfile: 'foot-walking',
+};
+
 /* -------------------------------------------------------- layer helpers */
 
 // Base-style layer ids to restyle for the TRANA dark theme. Applied only when

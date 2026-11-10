@@ -151,6 +151,7 @@ vercel --prod
 | Build command | `npm run build` |
 | Output directory | `dist` |
 | `VITE_API_BASE_URL` | `https://<api>.vercel.app` |
+| `VITE_ORS_API_KEY` | OpenRouteService key — snaps drawn routes onto roads (optional; without it routes draw as straight lines) |
 
 Add a SPA rewrite so deep links (`/analytics`, `/plan`) resolve:
 
@@ -185,6 +186,7 @@ alone does not prove end-to-end integration.
 | Variable | frontend | backend | ml |
 | --- | :---: | :---: | :---: |
 | `VITE_API_BASE_URL` | ✅ | | |
+| `VITE_ORS_API_KEY` (optional) | ✅ | | |
 | `APP_KEY`, `APP_ENV`, `APP_DEBUG`, `APP_URL` | | ✅ | |
 | `DB_*`, `DB_SSLMODE` | | ✅ | |
 | `CORS_ALLOWED_ORIGINS` | | ✅ | |
