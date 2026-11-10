@@ -96,6 +96,12 @@
         : 0,
   );
 
+  // Navigation-app behaviour: while a route exists, the distance field itself
+  // shows the measured (road-snapped) route length — not the typed value.
+  $effect(() => {
+    if (draftRouteKm > 0.05) draft.distance_km = Number(draftRouteKm.toFixed(2));
+  });
+
   const draftCalories = $derived.by(() => {
     if (draft.calories_override) return Number(draft.calories_override);
     const kmValue = draftRouteKm > 0 ? draftRouteKm : Number(draft.distance_km) || 0;
@@ -334,10 +340,18 @@
     </div>
 
     <div>
-      <span class="label">Distance (km)</span>
-      <input class="input" type="number" min="0.1" step="0.1" bind:value={draft.distance_km} />
+      <span class="label">Distance (km) {draftRouteKm > 0 ? '(from route)' : ''}</span>
+      <input
+        class="input"
+        type="number"
+        min="0.1"
+        step="0.1"
+        bind:value={draft.distance_km}
+        disabled={draftRouteKm > 0}
+        class:bg-brand-50={draftRouteKm > 0}
+      />
       {#if draftRouteKm > 0}
-        <p class="mt-1 text-[10px] font-bold text-brand-600">Route measured {nf(draftRouteKm, 2)} km</p>
+        <p class="mt-1 text-[10px] font-bold text-brand-600">Measured from your drawn route</p>
       {/if}
     </div>
 
