@@ -3,7 +3,7 @@
   import { dailySessionApi, groupFoodsByMeal, summarizeFoods } from '../../services/dailySessionService.js';
   import { notify } from '../../stores/index.js';
 
-  export let session = null; // DailySession with foods loaded
+  let { session = null } = $props(); // DailySession with foods loaded
 
   let adding = $state(false);
   let form = $state({
@@ -38,9 +38,9 @@
     }
   });
 
-  $: foods = session?.foods ?? [];
-  $: meals = groupFoodsByMeal(foods);
-  $: totals = summarizeFoods(foods);
+  let foods = $derived(session?.foods ?? []);
+  let meals = $derived(groupFoodsByMeal(foods));
+  let totals = $derived(summarizeFoods(foods));
 
   async function addFood() {
     if (!session) {
@@ -195,7 +195,7 @@
     </div>
 
     {#if adding}
-      <form class="rounded-xl border border-brand-100 bg-white p-4 shadow-sm" onsubmit|prevent={addFood}>
+      <form class="rounded-xl border border-brand-100 bg-white p-4 shadow-sm" onsubmit={(event) => { event.preventDefault(); addFood(); }}>
         <div class="grid grid-cols-2 gap-3 mb-3">
           <div class="col-span-2">
             <label class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Food Name</label>
@@ -257,7 +257,7 @@
     {/if}
 
     {#if editingFoodId !== null}
-      <form class="rounded-xl border border-rose-200 bg-rose-50 p-4 shadow-sm" onsubmit|prevent={saveEdit}>
+      <form class="rounded-xl border border-rose-200 bg-rose-50 p-4 shadow-sm" onsubmit={(event) => { event.preventDefault(); saveEdit(); }}>
         <h4 class="text-xs font-extrabold text-rose-600 uppercase tracking-[0.1em] mb-3">Edit Food</h4>
         <div class="grid grid-cols-2 gap-3 mb-3">
           <div class="col-span-2">

@@ -16,6 +16,23 @@ class EnergyExpenditureController extends Controller
     ) {}
 
     /**
+     * JSON encoding options for this resource.
+     *
+     * A calibration factor is a ratio that very often lands on an exact whole
+     * number: 1.0 while the athlete has fewer than the minimum samples, and
+     * 2.0 once the ceiling clamps it. PHP encodes those floats as the integers
+     * `1` and `2` by default, so a strict JSON consumer would see the type of
+     * `calibration_factor` change with the data. Preserving the fraction keeps
+     * it a float no matter what the athlete's samples look like.
+     */
+    private const ENCODING = JSON_PRESERVE_ZERO_FRACTION;
+
+    private function respond(array $payload, int $status = 200): JsonResponse
+    {
+        return response()->json($payload, $status, [], self::ENCODING);
+    }
+
+    /**
      * List the authenticated user's energy expenditure entries.
      */
     public function index(Request $request): JsonResponse
@@ -31,7 +48,11 @@ class EnergyExpenditureController extends Controller
             ->orderByDesc('id')
             ->paginate($validated['limit'] ?? 30, ['*'], 'page', $validated['page'] ?? 1);
 
-        return response()->json([
+        // Computed once: the factor is a property of the athlete, not the row,
+        // and recalculating it per row would reload every sample each time.
+        $factor = $this->calibration->calculateFactor($request->user());
+
+        return $this->respond([
             'data' => $rows->getCollection()->map(fn ($row) => [
                 'id' => $row->id,
                 'device_type' => $row->device_type,
@@ -46,7 +67,7 @@ class EnergyExpenditureController extends Controller
                 'sex' => $row->sex,
                 'measured_calories' => (float) $row->measured_calories,
                 'trana_estimated_calories' => $row->trana_estimated_calories ? (int) $row->trana_estimated_calories : null,
-                'calibration_factor' => $this->calibration->calculateFactor($request->user()),
+                'calibration_factor' => $factor,
                 'recorded_at' => $row->recorded_at?->toIso8601String(),
             ])->values(),
             'meta' => [
@@ -89,7 +110,7 @@ class EnergyExpenditureController extends Controller
             'recorded_at' => $validated['recorded_at'],
         ]);
 
-        return response()->json([
+        return $this->respond([
             'data' => [
                 'id' => $entry->id,
                 'measured_calories' => (float) $entry->measured_calories,
@@ -104,11 +125,14 @@ class EnergyExpenditureController extends Controller
      */
     public function calibration(Request $request): JsonResponse
     {
-        return response()->json([
-            'calibration_factor' => $this->calibration->calculateFactor($request->user()),
-            'sample_count' => EnergyExpenditure::forUser($request->user()->id)
-                ->withMeasured()
-                ->count(),
+        return $this->respond([
+            'data' => [
+                'calibration_factor' => $this->calibration->calculateFactor($request->user()),
+                'sample_count' => EnergyExpenditure::forUser($request->user()->id)
+                    ->withMeasured()
+                    ->count(),
+                'min_samples' => EnergyExpenditureCalibrationService::MIN_SAMPLES,
+            ],
         ]);
     }
 }

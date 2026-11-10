@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -34,10 +35,37 @@ return new class extends Migration
             $table->index(['user_id', 'recorded_at']);
             $table->index('user_id');
         });
+
+        $this->secureDataApi();
     }
 
     public function down(): void
     {
         Schema::dropIfExists('energy_expenditure');
+    }
+
+    /**
+     * Laravel owns authentication; Supabase's Data API roles must not read an
+     * athlete's samples (mirrors 2026_11_08_000002 for the earlier tables).
+     * No-op on SQLite tests.
+     */
+    private function secureDataApi(): void
+    {
+        if (DB::getDriverName() !== 'pgsql') {
+            return;
+        }
+
+        $roles = ['PUBLIC'];
+        foreach (DB::select("select rolname from pg_roles where rolname in ('anon', 'authenticated')") as $role) {
+            // Both names come from the fixed allowlist above, not from user input.
+            $roles[] = '"'.$role->rolname.'"';
+        }
+
+        DB::statement('alter table public."energy_expenditure" enable row level security');
+        DB::statement('revoke all privileges on sequence public."energy_expenditure_id_seq" from "PUBLIC"');
+        foreach ($roles as $role) {
+            DB::statement("revoke all privileges on table public.\"energy_expenditure\" from {$role}");
+            DB::statement("revoke all privileges on sequence public.\"energy_expenditure_id_seq\" from {$role}");
+        }
     }
 };

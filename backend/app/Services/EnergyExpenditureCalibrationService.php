@@ -14,7 +14,7 @@ use App\Models\EnergyExpenditure;
 class EnergyExpenditureCalibrationService
 {
     /** Minimum number of measurements before applying calibration. */
-    private const MIN_SAMPLES = 3;
+    public const MIN_SAMPLES = 3;
 
     /**
      * Calculate the calibration multiplier for a user.

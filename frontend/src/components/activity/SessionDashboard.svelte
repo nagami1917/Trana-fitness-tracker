@@ -19,12 +19,14 @@
     }
   });
 
-  $: totalDays = sessions.length;
-  $: totalBurned = sessions.reduce((s, d) => s + Number(d.calories_burned || 0), 0);
-  $: totalEaten = sessions.reduce((s, d) => s + Number(d.calories_eaten || 0), 0);
-  $: avgNet = sessions.length > 0
-    ? Math.round(sessions.reduce((s, d) => s + (Number(d.net_calories || 0)), 0) / sessions.length)
-    : 0;
+  let totalDays = $derived(sessions.length);
+  let totalBurned = $derived(sessions.reduce((s, d) => s + Number(d.calories_burned || 0), 0));
+  let totalEaten = $derived(sessions.reduce((s, d) => s + Number(d.calories_eaten || 0), 0));
+  let avgNet = $derived(
+    sessions.length > 0
+      ? Math.round(sessions.reduce((s, d) => s + (Number(d.net_calories || 0)), 0) / sessions.length)
+      : 0
+  );
 </script>
 
 <div class="rounded-2xl border border-brand-100 bg-white shadow-card p-4 sm:p-6">

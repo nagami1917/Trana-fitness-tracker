@@ -48,14 +48,33 @@ create index daily_session_foods_daily_session_id_meal_index
 
 -- Row-level security.
 do $$
+declare
+    relation_name text;
+    role_name text;
 begin
-    execute format('alter table public.%I enable row level security', 'daily_sessions');
-    execute format('alter table public.%I enable row level security', 'daily_session_foods');
-    execute format('revoke all privileges on table public.%I from public', 'daily_sessions');
-    execute format('revoke all privileges on table public.%I from public', 'daily_session_foods');
-    for role_name in select rolname from pg_roles where rolname in ('anon', 'authenticated') loop
-        execute format('revoke all privileges on table public.%I from %I', 'daily_sessions', role_name);
-        execute format('revoke all privileges on table public.%I from %I', 'daily_session_foods', role_name);
+    foreach relation_name in array array['daily_sessions', 'daily_session_foods'] loop
+        execute format('alter table public.%I enable row level security', relation_name);
+        execute format('revoke all privileges on table public.%I from public', relation_name);
+        for role_name in select rolname from pg_roles where rolname in ('anon', 'authenticated') loop
+            execute format('revoke all privileges on table public.%I from %I', relation_name, role_name);
+        end loop;
+    end loop;
+end $$;
+
+-- Supabase grants the Data API roles USAGE on new sequences by default; take
+-- it back so the browser roles cannot even touch the id generators.
+do $$
+declare
+    sequence_name text;
+    role_name text;
+begin
+    foreach sequence_name in array array[
+        'daily_sessions_id_seq', 'daily_session_foods_id_seq'
+    ] loop
+        execute format('revoke all privileges on sequence public.%I from public', sequence_name);
+        for role_name in select rolname from pg_roles where rolname in ('anon', 'authenticated') loop
+            execute format('revoke all privileges on sequence public.%I from %I', sequence_name, role_name);
+        end loop;
     end loop;
 end $$;
 

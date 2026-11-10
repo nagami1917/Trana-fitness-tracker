@@ -16,13 +16,16 @@ return new class extends Migration
         Schema::create('daily_sessions', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
-            $table->date('session_date')->unique(); // one session per day per user
+            $table->date('session_date');
             $table->unsignedInteger('calories_burned')->default(0); // from activity tracking
             $table->unsignedInteger('calories_eaten')->default(0);  // from food log
             $table->unsignedInteger('water_ml')->default(0);
             $table->text('notes')->nullable();
             $table->timestamps();
 
+            // One session per day *per athlete* — the composite below, not a
+            // unique index on session_date alone (which would let only one
+            // user in the whole system log a session on a given date).
             $table->index(['user_id', 'session_date']);
             $table->unique(['user_id', 'session_date'], 'daily_sessions_user_date_unique');
         });

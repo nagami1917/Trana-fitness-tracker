@@ -3,11 +3,8 @@
 use App\Http\Controllers\Api\ActivityController;
 use App\Http\Controllers\Api\ActivityPointController;
 use App\Http\Controllers\Api\AuthController;
-<<<<<<< HEAD
 use App\Http\Controllers\Api\DailySessionController;
 use App\Http\Controllers\Api\DailySessionFoodController;
-=======
->>>>>>> origin/arena/68aad5a6-trana-fitness-tracker
 use App\Http\Controllers\Api\EnergyExpenditureController;
 use App\Http\Controllers\Api\GoalController;
 use App\Http\Controllers\Api\PredictionController;

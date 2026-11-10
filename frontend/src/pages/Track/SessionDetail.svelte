@@ -6,7 +6,7 @@
   import FoodLogger from '../../components/activity/FoodLogger.svelte';
   import { query } from '../../lib/router.js';
 
-  export let sessionId = null;
+  let { sessionId = null } = $props();
 
   let session = $state(null);
   let loading = $state(true);

@@ -1,6 +1,5 @@
 <script>
-  export let session = null;
-  export let onSelect = () => {};
+  let { session = null, onSelect = () => {} } = $props();
 </script>
 
 <a

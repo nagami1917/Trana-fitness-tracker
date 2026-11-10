@@ -3,8 +3,9 @@
   import { dailySessionApi } from '../../services/dailySessionService.js';
   import { notify } from '../../stores/index.js';
 
-  export let session = null;
-  export let loading = $state(false);
+  let { session: sessionProp = null } = $props();
+  let session = $state(sessionProp);
+  let loading = $state(false);
 
   let editing = $state(false);
   let form = $state({
@@ -32,10 +33,10 @@
     }
   });
 
-  $: netCalories = (Number(form.calories_eaten) || 0) - (Number(form.calories_burned) || 0);
-  $: status = netCalories > 0 ? 'surplus' : netCalories < 0 ? 'deficit' : 'balanced';
-  $: statusLabel = netCalories > 0 ? `+${netCalories} kcal` : netCalories < 0 ? `${netCalories} kcal` : 'Balanced';
-  $: statusColor = netCalories > 0 ? 'text-rose-500' : netCalories < 0 ? 'text-emerald-500' : 'text-ink-500';
+  let netCalories = $derived((Number(form.calories_eaten) || 0) - (Number(form.calories_burned) || 0));
+  let status = $derived(netCalories > 0 ? 'surplus' : netCalories < 0 ? 'deficit' : 'balanced');
+  let statusLabel = $derived(netCalories > 0 ? `+${netCalories} kcal` : netCalories < 0 ? `${netCalories} kcal` : 'Balanced');
+  let statusColor = $derived(netCalories > 0 ? 'text-rose-500' : netCalories < 0 ? 'text-emerald-500' : 'text-ink-500');
 
   async function save() {
     loading = true;
@@ -137,13 +138,13 @@
       <div class="rounded-xl border border-brand-100 bg-white p-4 shadow-sm">
         <p class="text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400">Net</p>
         <div class="flex items-baseline gap-1 mt-1">
-          <span class={statusColor} class="font-display text-2xl font-extrabold">{statusLabel}</span>
+          <span class="{statusColor} font-display text-2xl font-extrabold">{statusLabel}</span>
         </div>
       </div>
     </div>
 
     {#if editing}
-      <form class="mt-4 grid grid-cols-2 gap-3" onsubmit|prevent={save}>
+      <form class="mt-4 grid grid-cols-2 gap-3" onsubmit={(event) => { event.preventDefault(); save(); }}>
         <div class="rounded-xl border border-brand-100 bg-white p-3 shadow-sm">
           <p class="text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400">Calories Burned</p>
           <input
