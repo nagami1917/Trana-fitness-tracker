@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -283,5 +284,27 @@ class EnergyExpenditureTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.calibration_factor', 1.0)
             ->assertJsonPath('data.sample_count', 0);
+    }
+
+    /** TEMPORARY diagnostic — reports the actual calibration response. */
+    public function test_zzz_diag_values(): void
+    {
+        Sanctum::actingAs($this->athlete());
+
+        foreach (['2026-11-06', '2026-11-07'] as $day) {
+            $this->postJson('/api/energy-expenditure', $this->sample(800, "{$day}T06:30:00+08:00"))
+                ->assertCreated();
+        }
+
+        $rows = DB::table('energy_expenditure')->get();
+        $info = ['rowcount=' . $rows->count()];
+        foreach ($rows as $r) {
+            $info[] = "row(id={$r->id},user={$r->user_id},measured={$r->measured_calories},est={$r->trana_estimated_calories},at={$r->recorded_at})";
+        }
+        $response = $this->getJson('/api/energy-expenditure/calibration');
+        $info[] = 'status=' . $response->status();
+        $info[] = 'body=' . $response->getContent();
+
+        $this->fail('DIAGVALS ' . implode(' | ', $info));
     }
 }
