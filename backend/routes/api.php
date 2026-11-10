@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\ActivityController;
 use App\Http\Controllers\Api\ActivityPointController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\EnergyExpenditureController;
 use App\Http\Controllers\Api\GoalController;
 use App\Http\Controllers\Api\PredictionController;
 use App\Http\Controllers\Api\ProfileController;
@@ -85,6 +86,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/activities/{activity}/points', [ActivityPointController::class, 'store']);
 
     Route::apiResource('routes', RouteController::class)->only(['index', 'store', 'show']);
+
+    // Wearable energy expenditure (e.g. WEEE dataset) for calorie calibration
+    Route::get('/energy-expenditure', [EnergyExpenditureController::class, 'index']);
+    Route::post('/energy-expenditure', [EnergyExpenditureController::class, 'store']);
+    Route::get('/energy-expenditure/calibration', [EnergyExpenditureController::class, 'calibration']);
 
     Route::get('/goals', [GoalController::class, 'show']);
     Route::put('/goals', [GoalController::class, 'update']);

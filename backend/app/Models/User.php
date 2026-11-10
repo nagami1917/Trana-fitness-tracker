@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use App\Models\EnergyExpenditure;
 use App\Models\PlannedRoute;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -49,6 +50,11 @@ class User extends Authenticatable
     public function goal(): HasOne
     {
         return $this->hasOne(Goal::class);
+    }
+
+    public function energyExpenditure(): HasMany
+    {
+        return $this->hasMany(EnergyExpenditure::class);
     }
 
     /** Create the paired rows every athlete needs, with sensible defaults. */
