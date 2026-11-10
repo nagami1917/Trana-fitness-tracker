@@ -101,6 +101,34 @@ def main():
             "SANCTUM_STATEFUL_DOMAINS": "localhost:5173,127.0.0.1:5173",
         })
         subprocess.run([php, "artisan", "migrate", "--force", "--no-interaction"], cwd=app, env=env, check=True, capture_output=True)
+        # TEMP DIAGNOSTIC: report the migrated schema as workflow annotations.
+        diag = r'''
+            require "vendor/autoload.php";
+            $app = require "bootstrap/app.php";
+            $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+            $out = [];
+            $out[] = "driver=" . DB::connection()->getDriverName();
+            $out[] = "db=" . DB::connection()->getDatabaseName();
+            $out[] = "conn=" . config("database.default");
+            $t = DB::select("select name from sqlite_master where type=\'table\' order by name");
+            $out[] = "tables=" . implode(",", array_map(fn($x) => $x->name, $t));
+            $out[] = "has_ee=" . var_export(Schema::hasTable("energy_expenditure"), true);
+            if (Schema::hasTable("energy_expenditure")) {
+                $out[] = "ee_cols=" . implode(",", Schema::getColumnListing("energy_expenditure"));
+            }
+            $u = DB::table("users")->insertGetId(["name" => "diag", "email" => "diag@t.test", "password" => "x"]);
+            try {
+                $c = App\Models\EnergyExpenditure::forUser($u)->withMeasured()->whereNotNull("trana_estimated_calories")->count();
+                $out[] = "ee_query_ok=$c";
+            } catch (\Throwable $e) {
+                $out[] = "ee_query_ex=" . get_class($e) . " :: " . $e->getMessage();
+            }
+            echo implode(" | ", $out) . "\n";
+        '''
+        r = subprocess.run([php, "-r", diag], cwd=app, env=env, capture_output=True, text=True)
+        print("::error::DIAG " + r.stdout.strip()[:3000])
+        if r.stderr.strip():
+            print("::error::DIAGERR " + r.stderr.strip()[:3000])
         # Production deployments commonly cache config. Verify that the
         # token-only Sanctum guard survives the package-default merge.
         subprocess.run([php, "artisan", "config:cache"], cwd=app, env=env, check=True, capture_output=True)
