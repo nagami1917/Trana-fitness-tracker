@@ -287,7 +287,7 @@ class EnergyExpenditureTest extends TestCase
     }
 
     /** TEMPORARY diagnostic — reports the actual calibration response. */
-    public function test_zzz_diag_values(): void
+    public function xest_zzz_diag_values(): void
     {
         Sanctum::actingAs($this->athlete());
 
@@ -308,7 +308,7 @@ class EnergyExpenditureTest extends TestCase
         $this->fail('DIAGVALS ' . implode(' | ', $info));
     }
 
-    // ---- TEMPORARY hypothesis probes (one assertion each) ----
+    // ---- TEMPORARY hypothesis probes ----
     private function diagSetup(): void
     {
         Sanctum::actingAs($this->athlete());
@@ -318,53 +318,18 @@ class EnergyExpenditureTest extends TestCase
         }
     }
 
-    public function test_diag_h_factor_is_1_0(): void
+    public function test_diag_h_calibration_handler_ran(): void
     {
         $this->diagSetup();
         $this->getJson('/api/energy-expenditure/calibration')
-            ->assertJsonPath('data.calibration_factor', 1.0);
+            ->assertJsonPath('data.min_samples', 3);
     }
 
-    public function test_diag_h_factor_is_1_0781671(): void
+    public function test_diag_h_index_handler_ran(): void
     {
         $this->diagSetup();
         $this->getJson('/api/energy-expenditure/calibration')
-            ->assertJsonPath('data.calibration_factor', 1.0781671);
-    }
-
-    public function test_diag_h_factor_is_2_0(): void
-    {
-        $this->diagSetup();
-        $this->getJson('/api/energy-expenditure/calibration')
-            ->assertJsonPath('data.calibration_factor', 2.0);
-    }
-
-    public function test_diag_h_factor_is_0_5(): void
-    {
-        $this->diagSetup();
-        $this->getJson('/api/energy-expenditure/calibration')
-            ->assertJsonPath('data.calibration_factor', 0.5);
-    }
-
-    public function test_diag_h_factor_is_1_0_int(): void
-    {
-        $this->diagSetup();
-        $this->getJson('/api/energy-expenditure/calibration')
-            ->assertJsonPath('data.calibration_factor', 1);
-    }
-
-    public function test_diag_h_sample_count_is_2(): void
-    {
-        $this->diagSetup();
-        $this->getJson('/api/energy-expenditure/calibration')
-            ->assertJsonPath('data.sample_count', 2);
-    }
-
-    public function test_diag_h_sample_count_is_3(): void
-    {
-        $this->diagSetup();
-        $this->getJson('/api/energy-expenditure/calibration')
-            ->assertJsonPath('data.sample_count', 3);
+            ->assertJsonStructure(['meta']);
     }
 
     public function test_diag_h_row_count_is_2(): void
@@ -373,9 +338,10 @@ class EnergyExpenditureTest extends TestCase
         $this->assertSame(2, DB::table('energy_expenditure')->count());
     }
 
-    public function test_diag_h_row_count_is_3(): void
+    public function test_diag_h_factor_is_1_0(): void
     {
         $this->diagSetup();
-        $this->assertSame(3, DB::table('energy_expenditure')->count());
+        $this->getJson('/api/energy-expenditure/calibration')
+            ->assertJsonPath('data.calibration_factor', 1.0);
     }
 }
