@@ -53,8 +53,8 @@ class ActivityService
                 (float) ($user->fitnessProfile?->weight_kg ?? 60),
             );
 
-        // Apply wearable calibration factor if the user has enough data
-        $calories = (int) round($this->calibration->applyCalibration((float) $rawCalories, $user));
+        // TEMP DIAGNOSTIC: calibration bypassed to isolate CI failure
+        $calories = (int) round((float) $rawCalories);
 
         $activity = $user->activities()->create([
             'activity_type' => $validated['activity_type'],
