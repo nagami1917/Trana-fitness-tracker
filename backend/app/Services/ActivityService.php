@@ -3,8 +3,10 @@
 namespace App\Services;
 
 use App\Models\Activity;
+use App\Models\EnergyExpenditure;
 use App\Models\FitnessProfile;
 use App\Models\User;
+use App\Services\EnergyExpenditureCalibrationService;
 
 /**
  * Activity log access: ML-shaped history for predictions, plus the
@@ -13,10 +15,8 @@ use App\Models\User;
 class ActivityService
 {
     public function __construct(
-        private readonly CalorieEstimator $estimator,
-        private readonly EnergyExpenditureService $energy,
-    ) {
-    }
+        private readonly EnergyExpenditureCalibrationService $calibration,
+    ) {}
 
     /** The athlete's session history, newest first, shaped for the ML service. */
     public function history(User $user, int $limit = 300): array
@@ -40,23 +40,21 @@ class ActivityService
      * Create an activity, estimating calories from MET when omitted, and keep
      * the athlete's experience bucket in sync with their real history.
      *
-     * The stored calories are scaled by the athlete's calibration factor once
-     * they have imported enough wearable measurements
-     * (EnergyExpenditureService::MIN_SAMPLES) — the factor says how far the
-     * app's estimates sit from what their device measures.
-     *
      * @param  array<string, mixed>  $validated
      */
     public function store(User $user, array $validated): Activity
     {
-        $calories = $this->energy->calibrate($user, $validated['calories']
+        $rawCalories = $validated['calories']
             ?? $this->estimateCalories(
                 $validated['activity_type'],
                 (float) $validated['distance_km'],
                 (float) $validated['duration_min'],
                 (int) ($validated['elevation_gain_m'] ?? 0),
                 (float) ($user->fitnessProfile?->weight_kg ?? 60),
-            ));
+            );
+
+        // Apply wearable calibration factor if the user has enough data
+        $calories = (int) round($this->calibration->applyCalibration((float) $rawCalories, $user));
 
         $activity = $user->activities()->create([
             'activity_type' => $validated['activity_type'],
@@ -80,7 +78,18 @@ class ActivityService
     /** Mirror of the client and the Python fueling module's MET estimate. */
     public function estimateCalories(string $type, float $km, float $minutes, int $elevation, float $weightKg): int
     {
-        return $this->estimator->estimate($type, $km, $minutes, $elevation, $weightKg);
+        $hours = max($minutes, 1) / 60;
+        $speed = $km / max($hours, 0.01);
+        $climb = min(2.6, ($km > 0 ? $elevation / $km : 0) * 0.045);
+
+        $met = match ($type) {
+            'run' => $speed * 1.03,
+            'ride' => 3.2 + $speed * 0.29,
+            'walk' => 2.0 + $speed * 0.45,
+            default => 3.6 + $speed * 0.60,
+        };
+
+        return (int) round(max(1.6, $met + $climb) * $weightKg * $hours);
     }
 
     /**

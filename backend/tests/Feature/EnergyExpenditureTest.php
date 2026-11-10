@@ -10,7 +10,7 @@ use Tests\TestCase;
 /**
  * Wearable energy-expenditure import and calorie calibration.
  *
- * Devices report what a session really cost; these samples teach the server
+ * A watch reports what a session really cost; these samples teach the server
  * how far its MET estimate sits from the athlete's device, and new estimates
  * are scaled by that factor once enough samples exist.
  */
@@ -36,7 +36,7 @@ class EnergyExpenditureTest extends TestCase
      *
      * @return array<string, mixed>
      */
-    private function sample(float $measuredCalories, string $recordedAt = '2026-11-08T06:30:00+08:00', ?float $weightKg = null): array
+    private function sample(float $measuredCalories, string $recordedAt = '2026-11-08T06:30:00+08:00'): array
     {
         return [
             'device_type' => 'garmin',
@@ -44,7 +44,7 @@ class EnergyExpenditureTest extends TestCase
             'distance_km' => 10,
             'duration_min' => 60,
             'avg_heart_rate' => 158,
-            'weight_kg' => $weightKg,
+            'weight_kg' => 72,
             'measured_calories' => $measuredCalories,
             'recorded_at' => $recordedAt,
         ];
@@ -54,55 +54,49 @@ class EnergyExpenditureTest extends TestCase
     {
         $this->getJson('/api/energy-expenditure/calibration')->assertUnauthorized();
         $this->getJson('/api/energy-expenditure')->assertUnauthorized();
-        $this->postJson('/api/energy-expenditure', ['entries' => []])->assertUnauthorized();
+        $this->postJson('/api/energy-expenditure', $this->sample(800))->assertUnauthorized();
     }
 
-    public function test_import_stores_measurements_and_reports_the_calibration(): void
+    public function test_importing_a_sample_stores_the_met_estimate_alongside_it(): void
     {
         $user = $this->athlete();
         Sanctum::actingAs($user);
 
-        $response = $this->postJson('/api/energy-expenditure', [
-            'entries' => [
-                $this->sample(800, '2026-11-06T06:30:00+08:00'),
-                $this->sample(760, '2026-11-07T06:30:00+08:00'),
-            ],
-        ]);
+        $this->postJson('/api/energy-expenditure', $this->sample(800))
+            ->assertCreated()
+            ->assertJsonPath('data.measured_calories', 800)
+            ->assertJsonPath('data.trana_estimated_calories', 742)
+            // One sample: below the minimum, so nothing is calibrated yet.
+            ->assertJsonPath('data.calibration_factor', 1.0);
 
-        $response->assertCreated()
-            ->assertJsonPath('data.imported', 2)
-            ->assertJsonPath('data.updated', 0)
-            // Two samples: below the minimum, so nothing is calibrated yet.
-            ->assertJsonPath('data.calibration.factor', 1.0)
-            ->assertJsonPath('data.calibration.applied', false)
-            ->assertJsonPath('data.calibration.samples', 2)
-            ->assertJsonPath('data.calibration.min_samples', 3);
-
-        $this->assertDatabaseCount('energy_expenditure', 2);
         $this->assertDatabaseHas('energy_expenditure', [
             'user_id' => $user->id,
             'device_type' => 'garmin',
             'activity_type' => 'run',
             'measured_calories' => 800,
+            'trana_estimated_calories' => 742,
         ]);
     }
 
-    public function test_reimporting_the_same_session_updates_instead_of_duplicating(): void
+    public function test_calibration_endpoint_reports_the_factor_and_sample_count(): void
     {
         Sanctum::actingAs($this->athlete());
 
-        $this->postJson('/api/energy-expenditure', ['entries' => [$this->sample(800)]])
-            ->assertCreated()
-            ->assertJsonPath('data.imported', 1);
+        $this->getJson('/api/energy-expenditure/calibration')
+            ->assertOk()
+            ->assertJsonPath('data.calibration_factor', 1.0)
+            ->assertJsonPath('data.sample_count', 0)
+            ->assertJsonPath('data.min_samples', 3);
 
-        // Same device + recorded_at, corrected calories.
-        $this->postJson('/api/energy-expenditure', ['entries' => [$this->sample(820)]])
-            ->assertCreated()
-            ->assertJsonPath('data.imported', 0)
-            ->assertJsonPath('data.updated', 1);
+        foreach (['2026-11-06', '2026-11-07', '2026-11-08'] as $day) {
+            $this->postJson('/api/energy-expenditure', $this->sample(800, "{$day}T06:30:00+08:00"))
+                ->assertCreated();
+        }
 
-        $this->assertDatabaseCount('energy_expenditure', 1);
-        $this->assertDatabaseHas('energy_expenditure', ['measured_calories' => 820]);
+        $this->getJson('/api/energy-expenditure/calibration')
+            ->assertOk()
+            ->assertJsonPath('data.sample_count', 3)
+            ->assertJsonPath('data.min_samples', 3);
     }
 
     public function test_three_samples_calibrate_new_activity_estimates(): void
@@ -110,26 +104,20 @@ class EnergyExpenditureTest extends TestCase
         $user = $this->athlete();
         Sanctum::actingAs($user);
 
-        $this->postJson('/api/energy-expenditure', [
-            'entries' => [
-                $this->sample(800, '2026-11-06T06:30:00+08:00'),
-                $this->sample(800, '2026-11-07T06:30:00+08:00'),
-                $this->sample(800, '2026-11-08T06:30:00+08:00'),
-            ],
-        ])->assertCreated()
-            ->assertJsonPath('data.calibration.applied', true)
-            ->assertJsonPath('data.calibration.samples', 3)
-            // 2400 measured vs 3 × 742 estimated.
-            ->assertJsonPath('data.calibration.factor', 1.0782);
+        foreach (['2026-11-06', '2026-11-07', '2026-11-08'] as $day) {
+            $this->postJson('/api/energy-expenditure', $this->sample(800, "{$day}T06:30:00+08:00"))
+                ->assertCreated();
+        }
 
-        $calibration = $this->getJson('/api/energy-expenditure/calibration')->assertOk()->json('data');
-        $this->assertSame(1.0782, $calibration['factor']);
-        $this->assertSame(3, $calibration['samples']);
-        $this->assertSame(2400, $calibration['measured_calories']);
-        $this->assertSame(2226, $calibration['estimated_calories']);
+        // Mean of the per-session ratios: 800 / 742, three times over.
+        $this->getJson('/api/energy-expenditure/calibration')
+            ->assertOk()
+            ->assertJsonPath('data.sample_count', 3);
+        $factor = (float) $this->getJson('/api/energy-expenditure/calibration')->json('data.calibration_factor');
+        $this->assertEqualsWithDelta(800 / 742, $factor, 0.0001);
 
         // A new activity logged via the map gets the calibrated estimate:
-        // 742 × 1.0782 ≈ 800 kcal.
+        // 742 × (800 / 742) ≈ 800 kcal.
         $activity = $this->postJson('/api/activities', [
             'activity_type' => 'run',
             'distance_km' => 10,
@@ -146,20 +134,43 @@ class EnergyExpenditureTest extends TestCase
             ->assertJsonPath('data.totals.calories', 800);
     }
 
+    public function test_two_samples_leave_estimates_untouched(): void
+    {
+        Sanctum::actingAs($this->athlete());
+
+        foreach (['2026-11-06', '2026-11-07'] as $day) {
+            $this->postJson('/api/energy-expenditure', $this->sample(800, "{$day}T06:30:00+08:00"))
+                ->assertCreated();
+        }
+
+        $this->getJson('/api/energy-expenditure/calibration')
+            ->assertOk()
+            ->assertJsonPath('data.calibration_factor', 1.0)
+            ->assertJsonPath('data.sample_count', 2);
+
+        $activity = $this->postJson('/api/activities', [
+            'activity_type' => 'run',
+            'distance_km' => 10,
+            'duration_min' => 60,
+            'started_at' => '2026-11-09T06:30:00+08:00',
+        ])->assertCreated()->json('data');
+
+        $this->assertSame(742, $activity['calories']); // plain MET estimate
+    }
+
     public function test_the_calibration_factor_is_clamped(): void
     {
         Sanctum::actingAs($this->athlete());
 
-        $this->postJson('/api/energy-expenditure', [
-            'entries' => [
-                $this->sample(2400, '2026-11-06T06:30:00+08:00'),
-                $this->sample(2400, '2026-11-07T06:30:00+08:00'),
-                $this->sample(2400, '2026-11-08T06:30:00+08:00'),
-            ],
-        ])->assertCreated()
-            // 3.23× raw, clamped to the 2.0× ceiling.
-            ->assertJsonPath('data.calibration.factor', 2.0)
-            ->assertJsonPath('data.calibration.raw_factor', 3.2345);
+        foreach (['2026-11-06', '2026-11-07', '2026-11-08'] as $day) {
+            $this->postJson('/api/energy-expenditure', $this->sample(2400, "{$day}T06:30:00+08:00"))
+                ->assertCreated();
+        }
+
+        // 2400 / 742 ≈ 3.23× raw, clamped to the 2.0× ceiling.
+        $this->getJson('/api/energy-expenditure/calibration')
+            ->assertOk()
+            ->assertJsonPath('data.calibration_factor', 2.0);
 
         $activity = $this->postJson('/api/activities', [
             'activity_type' => 'run',
@@ -175,13 +186,14 @@ class EnergyExpenditureTest extends TestCase
     {
         Sanctum::actingAs($this->athlete());
 
-        $this->postJson('/api/energy-expenditure', [
-            'entries' => [
-                $this->sample(120, '2026-11-06T06:30:00+08:00'),
-                $this->sample(120, '2026-11-07T06:30:00+08:00'),
-                $this->sample(120, '2026-11-08T06:30:00+08:00'),
-            ],
-        ])->assertCreated()->assertJsonPath('data.calibration.factor', 0.5);
+        foreach (['2026-11-06', '2026-11-07', '2026-11-08'] as $day) {
+            $this->postJson('/api/energy-expenditure', $this->sample(120, "{$day}T06:30:00+08:00"))
+                ->assertCreated();
+        }
+
+        $this->getJson('/api/energy-expenditure/calibration')
+            ->assertOk()
+            ->assertJsonPath('data.calibration_factor', 0.5);
 
         $activity = $this->postJson('/api/activities', [
             'activity_type' => 'run',
@@ -197,13 +209,10 @@ class EnergyExpenditureTest extends TestCase
     {
         Sanctum::actingAs($this->athlete());
 
-        $this->postJson('/api/energy-expenditure', [
-            'entries' => [
-                $this->sample(800, '2026-11-06T06:30:00+08:00'),
-                $this->sample(800, '2026-11-07T06:30:00+08:00'),
-                $this->sample(800, '2026-11-08T06:30:00+08:00'),
-            ],
-        ])->assertCreated();
+        foreach (['2026-11-06', '2026-11-07', '2026-11-08'] as $day) {
+            $this->postJson('/api/energy-expenditure', $this->sample(800, "{$day}T06:30:00+08:00"))
+                ->assertCreated();
+        }
 
         // The map and the manual form both send their own estimate; the
         // athlete's calibration factor still applies to what gets stored.
@@ -215,86 +224,64 @@ class EnergyExpenditureTest extends TestCase
             'started_at' => '2026-11-09T06:30:00+08:00',
         ])->assertCreated()->json('data');
 
-        $this->assertSame(875, $activity['calories']); // round(812 × 1.0782)
+        $this->assertSame(875, $activity['calories']); // round(812 × 800/742)
     }
 
-    public function test_samples_use_their_own_recorded_weight_for_the_estimate(): void
-    {
-        $user = $this->athlete(); // profile: 72 kg
-        Sanctum::actingAs($user);
-
-        // Each sample carries 80 kg, so the estimate uses 80, not 72:
-        // 10.3 × 80 = 824 kcal per session.
-        $this->postJson('/api/energy-expenditure', [
-            'entries' => [
-                $this->sample(900, '2026-11-06T06:30:00+08:00', 80),
-                $this->sample(900, '2026-11-07T06:30:00+08:00', 80),
-                $this->sample(900, '2026-11-08T06:30:00+08:00', 80),
-            ],
-        ])->assertCreated()
-            ->assertJsonPath('data.calibration.estimated_calories', 2472)
-            ->assertJsonPath('data.calibration.factor', 1.0922); // 2700 / 2472
-    }
-
-    public function test_import_validates_every_entry(): void
+    public function test_import_validates_the_entry(): void
     {
         Sanctum::actingAs($this->athlete());
 
-        $this->postJson('/api/energy-expenditure', ['entries' => []])
+        $this->postJson('/api/energy-expenditure', [])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors('entries');
+            ->assertJsonValidationErrors(['device_type', 'activity_type', 'distance_km', 'duration_min', 'weight_kg', 'measured_calories', 'recorded_at']);
 
         $this->postJson('/api/energy-expenditure', [
-            'entries' => [
-                ['device_type' => 'fitbit', 'activity_type' => 'run', 'distance_km' => 10, 'duration_min' => 60, 'measured_calories' => 800, 'recorded_at' => '2026-11-08T06:30:00+08:00'],
-                ['device_type' => 'garmin', 'activity_type' => 'swim', 'distance_km' => 10, 'duration_min' => 60, 'measured_calories' => 800, 'recorded_at' => '2026-11-08T06:30:00+08:00'],
-                ['device_type' => 'garmin', 'activity_type' => 'run', 'distance_km' => 10, 'duration_min' => 60, 'measured_calories' => 800, 'recorded_at' => '2099-01-01T00:00:00+00:00'],
-            ],
-        ])->assertUnprocessable()
-            ->assertJsonValidationErrors([
-                'entries.0.device_type',
-                'entries.1.activity_type',
-                'entries.2.recorded_at',
-            ]);
+            'device_type' => 'garmin',
+            'activity_type' => 'run',
+            'distance_km' => 10,
+            'duration_min' => 60,
+            'weight_kg' => 5, // below the 30 kg floor
+            'measured_calories' => 800,
+            'recorded_at' => '2026-11-08T06:30:00+08:00',
+        ])->assertUnprocessable()->assertJsonValidationErrors('weight_kg');
 
         $this->assertDatabaseCount('energy_expenditure', 0);
     }
 
-    public function test_samples_can_be_listed_and_filtered_by_device(): void
+    public function test_samples_are_paginated_newest_first(): void
     {
         Sanctum::actingAs($this->athlete());
 
-        $this->postJson('/api/energy-expenditure', [
-            'entries' => [
-                $this->sample(800, '2026-11-06T06:30:00+08:00'),
-                array_merge($this->sample(760, '2026-11-07T06:30:00+08:00'), ['device_type' => 'strava']),
-            ],
-        ])->assertCreated();
+        foreach (['2026-11-06', '2026-11-07'] as $day) {
+            $this->postJson('/api/energy-expenditure', $this->sample(800, "{$day}T06:30:00+08:00"))
+                ->assertCreated();
+        }
 
         $this->getJson('/api/energy-expenditure')
             ->assertOk()
             ->assertJsonCount(2, 'data')
-            ->assertJsonPath('data.0.device_type', 'strava') // newest first
-            ->assertJsonPath('calibration.samples', 2);
-
-        $this->getJson('/api/energy-expenditure?device=garmin')
-            ->assertOk()
-            ->assertJsonCount(1, 'data')
-            ->assertJsonPath('data.0.device_type', 'garmin');
+            // Stored/returned in UTC: 2026-11-07 06:30+08:00 is the newest row.
+            ->assertJsonPath('data.0.recorded_at', '2026-11-06T22:30:00+00:00')
+            ->assertJsonPath('meta.total', 2)
+            ->assertJsonPath('data.0.trana_estimated_calories', 742);
     }
 
     public function test_another_athletes_samples_stay_private(): void
     {
         $owner = $this->athlete('owner@trana.test');
         Sanctum::actingAs($owner);
-        $this->postJson('/api/energy-expenditure', ['entries' => [$this->sample(800)]])->assertCreated();
+        $this->postJson('/api/energy-expenditure', $this->sample(800))->assertCreated();
 
         Sanctum::actingAs($this->athlete('stranger@trana.test'));
 
         $this->getJson('/api/energy-expenditure')
             ->assertOk()
             ->assertJsonCount(0, 'data')
-            ->assertJsonPath('calibration.samples', 0)
-            ->assertJsonPath('calibration.applied', false);
+            ->assertJsonPath('meta.total', 0);
+
+        $this->getJson('/api/energy-expenditure/calibration')
+            ->assertOk()
+            ->assertJsonPath('data.calibration_factor', 1.0)
+            ->assertJsonPath('data.sample_count', 0);
     }
 }

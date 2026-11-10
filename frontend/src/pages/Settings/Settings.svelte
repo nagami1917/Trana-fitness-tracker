@@ -53,18 +53,24 @@
       importError = 'Paste at least one CSV row using the columns below.';
       return;
     }
+    if (entries.length > 200) {
+      importError = 'Import at most 200 rows at a time — each row is sent as its own request.';
+      return;
+    }
     importing = true;
     try {
-      const result = await importBatch(entries);
-      calibration = result.calibration;
+      const results = await importBatch(entries);
+      const saved = results.filter((r) => r.success).length;
+      const failed = results.filter((r) => !r.success);
+      importNote = `Imported ${saved} of ${results.length} ${results.length === 1 ? 'sample' : 'samples'}.`;
+      if (failed.length > 0) {
+        importError = `${failed.length} row(s) failed — first error: ${failed[0].error}`;
+      }
       csvText = '';
-      importNote = `Imported ${result.imported} new and updated ${result.updated} existing sessions.`;
+      await loadCalibration();
       notify('Wearable samples imported.');
     } catch (error) {
-      const rows = error.fields?.map((row) => `row ${row.index + 1} (${row.errors.join(', ')})`);
-      importError = rows?.length
-        ? `Fix ${rows.join('; ')}.`
-        : (error.message || 'Could not import the samples.');
+      importError = error.message || 'Could not import the samples.';
     } finally {
       importing = false;
     }
@@ -274,19 +280,17 @@
         </div>
         <p class="mt-2 text-[12px] font-semibold leading-relaxed text-ink-500">
           Import what your watch measured and TRANA scales its calorie estimates to match.
-          {#if calibration && !calibration.applied}
-            {Math.max(0, calibration.min_samples - calibration.samples)} more
-            {calibration.min_samples - calibration.samples === 1 ? 'sample' : 'samples'} until calibration kicks in.
+          {#if calibration && calibration.sample_count < calibration.min_samples}
+            {calibration.min_samples - calibration.sample_count} more
+            {calibration.min_samples - calibration.sample_count === 1 ? 'sample' : 'samples'} until calibration kicks in.
           {/if}
         </p>
 
         {#if calibration}
+          {@const active = calibration.sample_count >= calibration.min_samples}
           <div class="mt-3 space-y-1.5 text-[12px] font-semibold text-ink-600">
-            <p class="flex justify-between"><span class="text-ink-400">Calibration factor</span><span>{calibration.applied ? `${calibration.factor.toFixed(2)}×` : 'not active'}</span></p>
-            <p class="flex justify-between"><span class="text-ink-400">Device samples</span><span>{calibration.samples} / {calibration.min_samples}</span></p>
-            {#if calibration.applied}
-              <p class="flex justify-between"><span class="text-ink-400">Measured vs estimate</span><span>{nf(calibration.measured_calories)} vs {nf(calibration.estimated_calories)} kcal</span></p>
-            {/if}
+            <p class="flex justify-between"><span class="text-ink-400">Calibration factor</span><span>{active ? `${calibration.calibration_factor.toFixed(2)}×` : 'not active'}</span></p>
+            <p class="flex justify-between"><span class="text-ink-400">Device samples</span><span>{calibration.sample_count} / {calibration.min_samples}</span></p>
           </div>
         {/if}
 

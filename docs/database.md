@@ -53,23 +53,26 @@ MET calorie estimate (see [api.md](api.md#energy-expenditure)).
 | Column | Type | Notes |
 | --- | --- | --- |
 | `user_id` | FK → users | cascade on delete |
-| `device_type` | string(32) | `garmin`, `strava`, `polar`, `apple`, `coros`, `suunto`, `wahoo`, `whoop`, `other` |
+| `device_type` | string(50) | free-form, e.g. `garmin`, `apple_watch`, `polar` |
 | `activity_type` | string(16) | `run` · `ride` · `walk` · `hike` |
 | `distance_km` | decimal(8,3) | |
 | `duration_min` | decimal(8,2) | |
-| `avg_heart_rate` | smallint, nullable | bpm, device-reported |
-| `weight_kg` | decimal(5,2), nullable | body mass when recorded; the profile's is used when null |
-| `measured_calories` | uint | what the device reported |
+| `avg_heart_rate` | smallint, nullable | bpm |
+| `max_heart_rate` | smallint, nullable | bpm |
+| `weight_kg` | decimal(5,2) | required; the estimate for this row uses it |
+| `height_cm` | decimal(5,1), nullable | |
+| `age` | smallint, nullable | |
+| `sex` | string(16), nullable | |
+| `measured_calories` | decimal(8,2) | what the device reported |
+| `trana_estimated_calories` | uint, nullable | TRANA's MET estimate, stored at import time |
 | `recorded_at` | timestamptz | when the session happened (not when it was imported) |
 
-Indexes: unique `(user_id, device_type, recorded_at)` — re-importing the same
-device session updates the row instead of duplicating it — and
-`(user_id, activity_type)`.
+Indexes: `(user_id, recorded_at)`, `user_id`.
 
-The calibration factor is `sum(measured_calories) / sum(MET estimate)` over
-the athlete's rows, clamped to 0.5–2.0 and only applied from 3 samples on.
-`ActivityService::store()` scales the calories of every new activity by it, so
-the stats screen shows calibrated values.
+The calibration factor is the mean of `measured_calories /
+trana_estimated_calories` over the athlete's rows, clamped to 0.5–2.0 and only
+applied from 3 samples on. `ActivityService::store()` scales the calories of
+every new activity by it, so the stats screen shows calibrated values.
 
 ### `predictions`
 Saved plans produced by the ML pipeline (see [ml-methodology.md](ml-methodology.md)).

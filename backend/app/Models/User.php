@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use App\Models\DailySession;
+use App\Models\EnergyExpenditure;
 use App\Models\PlannedRoute;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -36,11 +38,6 @@ class User extends Authenticatable
         return $this->hasMany(Activity::class);
     }
 
-    public function energyExpenditure(): HasMany
-    {
-        return $this->hasMany(EnergyExpenditure::class);
-    }
-
     public function plannedRoutes(): HasMany
     {
         return $this->hasMany(PlannedRoute::class);
@@ -54,6 +51,16 @@ class User extends Authenticatable
     public function goal(): HasOne
     {
         return $this->hasOne(Goal::class);
+    }
+
+    public function energyExpenditure(): HasMany
+    {
+        return $this->hasMany(EnergyExpenditure::class);
+    }
+
+    public function dailySessions(): HasMany
+    {
+        return $this->hasMany(DailySession::class)->orderByDesc('session_date');
     }
 
     /** Create the paired rows every athlete needs, with sensible defaults. */

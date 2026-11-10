@@ -8,18 +8,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * One wearable-reported session.
- *
- * Devices measure energy expenditure directly; TRANA estimates it from MET.
- * These samples are the ground truth the calibration factor is derived from —
- * see EnergyExpenditureService.
+ * Wearable-measured energy expenditure (e.g. WEEE dataset).
+ * Used to calibrate TRANA's calorie estimates against real sensor data.
  */
 class EnergyExpenditure extends Model
 {
     use HasFactory;
-
-    /** Wearables whose exports TRANA accepts. */
-    public const DEVICE_TYPES = ['garmin', 'strava', 'polar', 'apple', 'coros', 'suunto', 'wahoo', 'whoop', 'other'];
 
     protected $fillable = [
         'user_id',
@@ -28,8 +22,13 @@ class EnergyExpenditure extends Model
         'distance_km',
         'duration_min',
         'avg_heart_rate',
+        'max_heart_rate',
         'weight_kg',
+        'height_cm',
+        'age',
+        'sex',
         'measured_calories',
+        'trana_estimated_calories',
         'recorded_at',
     ];
 
@@ -37,12 +36,18 @@ class EnergyExpenditure extends Model
     {
         return [
             'user_id' => 'integer',
-            'distance_km' => 'float',
-            'duration_min' => 'float',
+            'distance_km' => 'decimal:3',
+            'duration_min' => 'decimal:2',
             'avg_heart_rate' => 'integer',
-            'weight_kg' => 'float',
-            'measured_calories' => 'integer',
+            'max_heart_rate' => 'integer',
+            'weight_kg' => 'decimal:2',
+            'height_cm' => 'decimal:1',
+            'age' => 'integer',
+            'measured_calories' => 'decimal:2',
+            'trana_estimated_calories' => 'integer',
             'recorded_at' => 'datetime',
+            'created_at' => 'datetime',
+            'updated_at' => 'datetime',
         ];
     }
 
@@ -51,8 +56,13 @@ class EnergyExpenditure extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function scopeForDevice(Builder $query, ?string $device): Builder
+    public function scopeForUser(Builder $query, int $userId): Builder
     {
-        return $device ? $query->where('device_type', $device) : $query;
+        return $query->where('user_id', $userId);
+    }
+
+    public function scopeWithMeasured(Builder $query): Builder
+    {
+        return $query->whereNotNull('measured_calories');
     }
 }

@@ -168,82 +168,90 @@ scaled by their calibration factor — see
 
 ## Energy expenditure
 
-Wearable energy-expenditure samples and the calibration factor they produce.
-A watch measures what a session really cost; TRANA estimates calories from
-MET. Importing device samples lets the server measure the gap between the two
-and scale new estimates by it.
+Wearable energy-expenditure samples (e.g. the WEEE dataset) and the
+calibration factor they produce. A watch measures what a session really cost;
+TRANA estimates calories from MET. Importing device samples lets the server
+measure the gap between the two and scale new estimates by it.
 
 ### `GET /energy-expenditure/calibration`
 ```json
 {
   "data": {
-    "factor": 1.0782,
-    "raw_factor": 1.0782,
-    "applied": true,
-    "samples": 3,
-    "min_samples": 3,
-    "min_factor": 0.5,
-    "max_factor": 2.0,
-    "measured_calories": 2400,
-    "estimated_calories": 2226
+    "calibration_factor": 1.0782,
+    "sample_count": 3,
+    "min_samples": 3
   }
 }
 ```
-`applied` is `false` until the athlete has at least `min_samples` (3) imported
-measurements; the factor is then `1.0` and estimates are untouched. Once
-applied, the factor is `sum(measured) / sum(estimated)` across the athlete's
-samples, clamped to `0.5`–`2.0` (`raw_factor` shows the unclamped value).
+`calibration_factor` is `1.0` until the athlete has at least `min_samples`
+(3) imported samples. Once applied it is the mean of the per-session
+`measured / estimated` ratios, clamped to `0.5`–`2.0`.
 
-### `POST /energy-expenditure` — import a batch
+### `POST /energy-expenditure` — record one sample
 ```json
 {
-  "entries": [
-    {
-      "device_type": "garmin",
-      "activity_type": "run",
-      "distance_km": 5.2,
-      "duration_min": 32.5,
-      "avg_heart_rate": 158,
-      "weight_kg": 68,
-      "measured_calories": 420,
-      "recorded_at": "2026-11-09T08:00:00+08:00"
-    }
-  ]
+  "device_type": "garmin",
+  "activity_type": "run",
+  "distance_km": 5.2,
+  "duration_min": 32.5,
+  "avg_heart_rate": 158,
+  "max_heart_rate": 174,
+  "weight_kg": 68,
+  "height_cm": 175,
+  "age": 30,
+  "sex": "male",
+  "measured_calories": 420,
+  "recorded_at": "2026-11-09T08:00:00+08:00"
 }
 ```
-`device_type` is one of `garmin, strava, polar, apple, coros, suunto, wahoo,
-whoop, other`; `activity_type` uses the activity types (`run, ride, walk,
-hike`). `avg_heart_rate` and `weight_kg` are optional (the profile's body mass
-is used for the estimate when a sample has none). At most 500 entries per
-request; `422` lists the offending `entries.N.field` keys.
+Only `device_type, activity_type, distance_km, duration_min, weight_kg,
+measured_calories, recorded_at` are required; the physiological fields are
+optional context. The server stores TRANA's own MET estimate for the session
+(`trana_estimated_calories`) next to the device value — that pair is what the
+calibration ratio is computed from.
 
 `201`
 ```json
 {
   "data": {
-    "imported": 1,
-    "updated": 0,
-    "calibration": { "factor": 1.0, "applied": false, "samples": 1 }
+    "id": 7,
+    "measured_calories": 420,
+    "trana_estimated_calories": 331,
+    "calibration_factor": 1.0
   }
 }
 ```
-Re-importing the same `device_type` + `recorded_at` updates that row instead
-of duplicating it (`updated` counts those), so repeated imports stay
-idempotent and cannot skew the calibration.
 
-### `GET /energy-expenditure?device=garmin&limit=200`
+### `GET /energy-expenditure?limit=30&page=1`
 ```json
 {
   "data": [
     { "id": 7, "device_type": "garmin", "activity_type": "run", "distance_km": 5.2,
-      "duration_min": 32.5, "avg_heart_rate": 158, "weight_kg": 68,
-      "measured_calories": 420, "recorded_at": "2026-11-09T08:00:00+08:00" }
+      "duration_min": 32.5, "avg_heart_rate": 158, "max_heart_rate": 174,
+      "weight_kg": 68, "height_cm": 175, "age": 30, "sex": "male",
+      "measured_calories": 420, "trana_estimated_calories": 331,
+      "calibration_factor": 1.0782, "recorded_at": "2026-11-09T00:00:00+00:00" }
   ],
-  "calibration": { "factor": 1.0782, "applied": true, "samples": 3 }
+  "meta": { "current_page": 1, "last_page": 1, "per_page": 30, "total": 1 }
 }
 ```
-Newest session first; only the authenticated athlete's samples. `calibration`
-is included so the client can render the factor next to the list.
+Newest sample first; only the authenticated athlete's rows. Page size defaults
+to 30 (maximum 100). `calibration_factor` is the athlete's current factor, not
+a per-row value.
+
+**Importing a dataset:** the API records one sample per request. The Svelte
+service wraps this in `importBatch(entries)` (`services/energyService.js`),
+which posts each entry in turn and returns per-entry results — the Settings
+screen's paste-a-CSV importer uses it, as does:
+
+```js
+import { importBatch } from './services/energyService.js';
+
+const results = await importBatch([
+  { device_type: 'garmin', activity_type: 'run', distance_km: 5.2, /* … */ },
+]);
+// [{ success: true, data: { … } }, { success: false, entry, error: '…' }]
+```
 
 **What calibration changes:** `POST /activities` multiplies the calories it
 stores by the factor (the MET estimate when `calories` is omitted, otherwise
