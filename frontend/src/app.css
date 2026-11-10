@@ -125,14 +125,49 @@
   background: #eaf3ee;
 }
 
-.leaflet-control-attribution {
-  font-size: 9px !important;
-  background: rgba(255, 255, 255, 0.7) !important;
+/* Zoom control — TRANA's rounded, soft-shadow brand look (was default white box) */
+.leaflet-bar {
+  border: none !important;
+  border-radius: 14px !important;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.92) !important;
+  box-shadow: 0 4px 14px rgba(219, 39, 119, 0.2) !important;
+  backdrop-filter: blur(6px);
 }
 
-.leaflet-control-zoom a {
+.leaflet-bar a,
+.leaflet-bar a:hover,
+.leaflet-bar a:focus {
+  border: none !important;
+  border-bottom: 1px solid #ffe0ec !important;
+  border-radius: 0 !important;
+  background: transparent !important;
   color: #db2777 !important;
-  border-color: #ffe0ec !important;
+  width: 36px !important;
+  height: 36px !important;
+  line-height: 36px !important;
+  font-weight: 700;
+}
+
+.leaflet-bar a:hover,
+.leaflet-bar a:focus {
+  background: #fdf2f8 !important;
+}
+
+.leaflet-bar a:last-child {
+  border-bottom: none !important;
+}
+
+.leaflet-bar a.leaflet-disabled {
+  color: #f9a8d4 !important;
+}
+
+.leaflet-control-attribution {
+  font-size: 9px !important;
+  background: rgba(255, 255, 255, 0.75) !important;
+  border-radius: 999px;
+  padding: 1px 8px;
+  box-shadow: 0 1px 4px rgba(219, 39, 119, 0.12);
 }
 
 .route-marker {

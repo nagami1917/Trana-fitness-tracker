@@ -222,7 +222,7 @@
             <input type="number" bind:value={form.quantity} class="w-full px-3 py-2 rounded-lg border border-brand-200 text-sm focus:border-brand-500 focus:outline-none" placeholder="1" />
           </div>
         </div>
-        <div class="grid grid-cols-4 gap-3 mb-3">
+        <div class="grid grid-cols-2 gap-3 mb-3 sm:grid-cols-4">
           <div>
             <label class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Carbs (g)</label>
             <input type="number" bind:value={form.carbs_g} class="w-full px-3 py-2 rounded-lg border border-brand-200 text-sm focus:border-brand-500 focus:outline-none" placeholder="0" />
