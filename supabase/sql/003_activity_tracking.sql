@@ -81,6 +81,7 @@ create index if not exists predictions_activity_id_index
 do $$
 declare
     relation_name text;
+    role_name text;
 begin
     foreach relation_name in array array[
         'activity_points', 'planned_routes', 'route_points'
@@ -89,6 +90,23 @@ begin
         execute format('revoke all privileges on table public.%I from public', relation_name);
         for role_name in select rolname from pg_roles where rolname in ('anon', 'authenticated') loop
             execute format('revoke all privileges on table public.%I from %I', relation_name, role_name);
+        end loop;
+    end loop;
+end $$;
+
+-- Supabase grants the Data API roles USAGE on new sequences by default; take
+-- it back so the browser roles cannot even touch the id generators.
+do $$
+declare
+    sequence_name text;
+    role_name text;
+begin
+    foreach sequence_name in array array[
+        'activity_points_id_seq', 'planned_routes_id_seq', 'route_points_id_seq'
+    ] loop
+        execute format('revoke all privileges on sequence public.%I from public', sequence_name);
+        for role_name in select rolname from pg_roles where rolname in ('anon', 'authenticated') loop
+            execute format('revoke all privileges on sequence public.%I from %I', sequence_name, role_name);
         end loop;
     end loop;
 end $$;

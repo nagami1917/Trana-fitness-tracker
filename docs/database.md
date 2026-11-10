@@ -46,6 +46,34 @@ The athlete's training log — the *only* source of truth for pace history.
 
 Indexes: `(user_id, started_at)`, `(user_id, activity_type)`.
 
+### `energy_expenditure`
+One row per device-reported session — the ground truth used to calibrate the
+MET calorie estimate (see [api.md](api.md#energy-expenditure)).
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `user_id` | FK → users | cascade on delete |
+| `device_type` | string(50) | free-form, e.g. `garmin`, `apple_watch`, `polar` |
+| `activity_type` | string(16) | `run` · `ride` · `walk` · `hike` |
+| `distance_km` | decimal(8,3) | |
+| `duration_min` | decimal(8,2) | |
+| `avg_heart_rate` | smallint, nullable | bpm |
+| `max_heart_rate` | smallint, nullable | bpm |
+| `weight_kg` | decimal(5,2) | required; the estimate for this row uses it |
+| `height_cm` | decimal(5,1), nullable | |
+| `age` | smallint, nullable | |
+| `sex` | string(16), nullable | |
+| `measured_calories` | decimal(8,2) | what the device reported |
+| `trana_estimated_calories` | uint, nullable | TRANA's MET estimate, stored at import time |
+| `recorded_at` | timestamptz | when the session happened (not when it was imported) |
+
+Indexes: `(user_id, recorded_at)`, `user_id`.
+
+The calibration factor is the mean of `measured_calories /
+trana_estimated_calories` over the athlete's rows, clamped to 0.5–2.0 and only
+applied from 3 samples on. `ActivityService::store()` scales the calories of
+every new activity by it, so the stats screen shows calibrated values.
+
 ### `predictions`
 Saved plans produced by the ML pipeline (see [ml-methodology.md](ml-methodology.md)).
 
