@@ -90,9 +90,9 @@ export const ACTUAL_ROUTE_WIDTH = 5;
 export const ACTUAL_ROUTE_OPACITY = 0.95;
 export const ACTIVITY_LINE_WIDTH = ACTUAL_ROUTE_WIDTH;
 export const ACTIVITY_LINE_OPACITY = ACTUAL_ROUTE_OPACITY;
-export const PLANNED_ROUTE_COLOR = '#64748b';
+export const PLANNED_ROUTE_COLOR = '#db2777';
 export const PLANNED_ROUTE_WIDTH = 5;
-export const PLANNED_ROUTE_OPACITY = 0.7;
+export const PLANNED_ROUTE_OPACITY = 0.88;
 export const PLANNED_ROUTE_DASH = [3, 2];
 
 // Speed colour bands (km/h). Segments are coloured by the speed of that segment.

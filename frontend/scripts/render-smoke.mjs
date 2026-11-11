@@ -37,13 +37,34 @@ const fixtureActivities = [
   { id: 3, activity_type: 'walk', distance_km: 3, duration_min: 40, calories: 120, elevation_gain_m: 10, started_at: new Date(Date.now() - 172800000).toISOString(), route: null, notes: null },
 ];
 const fixtureGoals = { daily_calories: 2400, daily_distance_km: 10, daily_active_min: 60, weekly_calories: 12000, weekly_distance_km: 40, carb_target_g: 360 };
+const fixturePlans = [
+  {
+    id: 11,
+    activity_type: 'run',
+    distance_km: 1.89,
+    elevation_gain_m: 45,
+    route: [[14.67634, 121.035], [14.67086, 121.05165]],
+    planned_for: null,
+    status: 'planned',
+    duration: { minutes: 34, hours: 0.57, low: 30, high: 38, confidence: 0.8 },
+    fueling: {
+      intensity: 'moderate',
+      met: 8.5,
+      calories: { total: 260 },
+      carbs: { perHourG: 0, totalG: 0 },
+      sodium: { perHourMg: 500 },
+      fluid: { perHourMl: 600 },
+    },
+    created_at: new Date().toISOString(),
+  },
+];
 const page = (data) => ({ data, meta: { current_page: 1, last_page: 1 } });
 globalThis.fetch = async (url) => {
   let body;
   if (url === '/api/auth/login') body = { token: 'test-token', user: fixtureUser };
   else if (url === '/api/profile') body = { data: fixtureProfile };
   else if (url.startsWith('/api/activities?')) body = page(fixtureActivities);
-  else if (url.startsWith('/api/predictions?')) body = page([]);
+  else if (url.startsWith('/api/predictions?')) body = page(fixturePlans);
   else if (url === '/api/goals') body = { data: fixtureGoals };
   else if (url.startsWith('/api/admin/dashboard')) {
     body = { data: {
@@ -139,6 +160,9 @@ try {
       }
       if (name === 'Track') {
         assert.match(html, /Track Activity/);
+        assert.match(html, /Free GPS/);
+        assert.match(html, /Create path/);
+        assert.match(html, /From Plan Activity/);
         assert.match(html, /Start activity/);
         assert.match(html, /View History/);
       }

@@ -8,13 +8,14 @@
 
   let markers = [];
 
-  function makeCircle({ color, size = 14, pulse = false, ring = '#ffffff', title = '' }) {
+  function makeCircle({ color, size = 14, pulse = false, ring = '#ffffff', title = '', zIndex = '10' }) {
     const el = document.createElement('div');
     el.style.width = `${size}px`;
     el.style.height = `${size}px`;
     el.style.borderRadius = '9999px';
     el.style.background = color;
     el.style.border = `2.5px solid ${ring}`;
+    el.style.zIndex = zIndex;
     el.style.boxShadow = pulse
       ? '0 0 0 6px rgba(13, 148, 136, 0.25), 0 2px 6px rgba(0, 0, 0, 0.3)'
       : '0 2px 6px rgba(0, 0, 0, 0.35)';
@@ -70,6 +71,7 @@
             size: 16,
             pulse: true,
             title: 'Current position',
+            zIndex: '20',
           }),
           anchor: 'center',
         })
