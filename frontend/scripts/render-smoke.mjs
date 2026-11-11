@@ -89,6 +89,7 @@ try {
   const routes = [
     ['/', 'Dashboard'],
     ['/plan', 'PlanActivity'],
+    ['/calendar', 'Calendar'],
     ['/activities', 'Activities'],
     ['/analytics', 'Analytics'],
     ['/fueling', 'Fueling'],
