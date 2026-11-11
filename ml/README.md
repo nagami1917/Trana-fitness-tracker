@@ -108,16 +108,24 @@ Metrics and the training source live in `duration_model/model_card.json` and
 are surfaced in the UI. The bundled model was trained and evaluated on synthetic
 activities; those metrics do not validate real-world accuracy.
 
-## Retrain on real data
+## Retrain & calibrate on real data (ML phase 2)
 
 ```bash
 pip install 'psycopg[binary]'
-DATABASE_URL="postgresql://postgres.<ref>:<pw>@aws-0-….pooler.supabase.com:5432/postgres" \
-  python -m duration_model.train --source supabase
-curl -X POST $ML_API_URL/model/reload -H "X-Admin-Token: $ADMIN_TOKEN"
+export DATABASE_URL="postgresql://postgres.<ref>:<pw>@aws-0-….pooler.supabase.com:5432/postgres?sslmode=require"
+
+# Stage 1 (≥ 30 activities): recalibrate interval widths onto existing trees
+python -m duration_model.calibrate --source supabase --write
+
+# Stage 2 (≥ 200 activities): full retrain + 20 % holdout calibration
+python -m duration_model.train --source supabase
+
+curl -X POST "$ML_API_URL/model/reload" -H "X-Admin-Token: $ADMIN_TOKEN"
 ```
 
 Copy both `duration_model/duration_model.json` and `model_card.json` to
 `frontend/public/models/` and redeploy so browser previews use the same version.
-Train on user data only with appropriate consent and validate on representative
-real-world data before relying on the estimates.
+Train on user data only with appropriate consent, keep exported database rows out
+of Git, and validate on representative real-world data before relying on the
+estimates. See `docs/ml-methodology.md` for phase-2 dry-run results and
+thresholds.

@@ -39,8 +39,9 @@ number; `duration.confidence` derives from the interval width.
 
 - default: (re)generates the physics-informed synthetic bootstrap corpus
   (`data/generate_dataset.py`, ~8k activities from synthetic athletes) and trains on it;
-- `--source supabase` trains on the real activity log (`DATABASE_URL`, optional dep `psycopg[binary]`);
-- `--source csv --csv file.csv` trains on a Postgres export.
+- `--source supabase` trains on the real activity log (`DATABASE_URL`, optional dep `psycopg[binary]`) and calibrates interval width on the 20 % holdout split by default (`--no-calibrate` to skip);
+- `--source csv --csv file.csv` trains on a Postgres or external activity CSV (`--calibrate` fits interval width on the 20 % holdout split; `--calibrate-csv real.csv` fits on a separate file);
+- standalone recalibration (`python -m duration_model.calibrate --source csv|supabase --write`) fits only the interval width factor `k` onto an existing artifact once ≥ 30 real activities are available.
 
 Current committed artifact (`ml/duration_model/duration_model.joblib`):
 
@@ -142,7 +143,8 @@ Beijing is flat); `bike`→`ride` mapping; `run` has n = 2; weight and
 experience assumed, not measured; elapsed times include stops.
 
 → Findings motivate **ML phase 2**: retrain and recalibrate on accumulated
-real user activities (`python -m duration_model.train --source supabase`).
+real user activities (`python -m duration_model.train --source supabase`),
+implemented in *ML phase 2 (interval calibration & real-data retraining)* below.
 
 ## External validation (FitRec sample — Endomondo)
 
@@ -175,14 +177,128 @@ holds the converter, the evaluator, and the aggregate report.
   the FitRec run is manual because the data is not in the repository.
 - **Provenance & terms:** `ml/data/external/README.md`.
 
+## ML phase 2 (interval calibration & real-data retraining)
+
+To close the 24.1 % real-world interval coverage gap and prepare the
+production training pipeline for real Trana logs, phase 2 adds conformal
+interval calibration and hardens the `--source supabase` training path.
+
+### Calibration method (`ml/duration_model/calibrate.py`)
+
+Given predicted quantile bands `(q10, q50, q90)` clamped identically to inference
+(`[0.7, 3.0]` pace-factor bounds around the athlete's Riegel anchor), each
+non-degenerate calibration activity yields a normalized residual score:
+
+```
+halfwidth = (q90 − q10) / 2
+score     = |actual − q50| / halfwidth
+k         = clip(quantile(scores, ⌈(n + 1)·target⌉ / n), 1.0, 6.0)
+```
+
+- `target` defaults to `0.80` (80 % coverage). `k` is floored at `1.0` (never
+  narrows trained bands) and capped at `6.0` (prevents extreme outliers from
+  producing absurd ranges).
+- Both the server (`ml/duration_model/model_store.py`) and the browser offline
+  evaluator (`frontend/src/lib/ml/duration.js`) apply `k` identically around the
+  median before clamping to `≥ 1.0 min` and computing `confidence`:
+  `q10' = max(1, q50 − k·(q50 − q10))`, `q90' = q50 + k·(q90 − q50)`.
+  Point predictions (`minutes`) do not change; wider bands lower `confidence`
+  proportionally.
+- The fitted block `calibration` (`factor`, `target_coverage`,
+  `achieved_coverage`, `n`, `skipped`, `calibrated_at`) is stored in
+  `duration_model.joblib`, `duration_model.json`, and `model_card.json`.
+
+### Two-stage production workflow (`--source supabase`)
+
+1. **Stage 1 — Recalibrate existing synthetic trees (≥ 30 real activities):**
+   fits only the single scalar `k` without overfitting 320 gradient-boosted
+   trees to a small corpus (`MIN_CALIBRATE_ROWS = 30`).
+2. **Stage 2 — Full retrain + holdout calibration (≥ 200 real activities):**
+   retrains `q10/q50/q90` on 80 % of real activities (`MIN_TRAIN_ROWS = 200`) and
+   automatically calibrates `k` on the held-out 20 % test split (`--no-calibrate`
+   to disable). Below either threshold, the CLI exits cleanly without overwriting
+   the existing artifacts.
+3. **Database compatibility:** `train.py` joins `activities` with
+   `fitness_profiles` (`duration_min IS NOT NULL AND distance_km > 0`, ordered
+   by `started_at, id`), defaults null `elevation_gain_m` / `weight_kg` /
+   `experience_level`, and coerces PostgreSQL `numeric` (`Decimal`) values to
+   float before feature extraction.
+
+### Dry-run benchmark on GeoLife
+
+Because production currently holds **1 trainable activity** (see status below),
+the phase-2 pipeline was verified against `geolife_activities.csv` (n = 4,362,
+51 users) in two modes: (a) recalibrating the shipped synthetic model `20261108.0445`
+only, and (b) full retraining + 20 % holdout calibration. Both full-dataset runs
+and strict unseen-user splits (fit on the first 25 users, n = 2,128; evaluate
+chronologically on the held-out 26 users, n = 2,234 via
+`evaluation.geolife_validation`) were measured:
+
+| Run | Mode / split | Factor `k` | MAE (min) | R² | Chronological coverage |
+| --- | --- | --- | --- | --- | --- |
+| Baseline (`20261108.0445`) | Full GeoLife (n = 4,362) | — | 5.65 | 0.461 | 24.1 % |
+| Baseline (`20261108.0445`) | Held-out 26 users (n = 2,234) | — | 5.72 | 0.420 | 23.8 % |
+| **Dry run A — Recalibrate only** | Fit on all 51 users → full GeoLife | 5.266 | 5.65 | 0.461 | **78.8 %** (pers. 79.6 %, cold 42.5 %) |
+| **Dry run A — Recalibrate only** | Fit on 25 users → **unseen 26 users** | 5.332 | 5.72 | 0.420 | **78.2 %** (pers. 78.9 %, cold 44.2 %) |
+| **Dry run B — Retrain + holdout cal.** | 80/20 split on 51 users → full GeoLife* | 1.075 | **5.48** | **0.479** | **72.7 %** (pers. 73.2 %, cold 53.8 %) |
+| **Dry run B — Retrain + holdout cal.** | Train+cal on 25 users → **unseen 26 users** | 1.113 | 5.95 | 0.394 | **67.9 %** (pers. 68.0 %, cold 53.5 %) |
+
+\*In the full-GeoLife retrain dry run, calibration/validation share the 51 GeoLife
+users; the 25→26-user row keeps evaluation strictly out-of-sample. Notice also
+why chronological coverage (67.9–72.7 %) trails the random leave-one-out holdout
+target (80.2–80.3 %): `training_frame` computes each row's anchor curve with
+leave-one-out across all sessions, whereas real inference only sees prior
+activities (cold start and 1-activity histories have wider errors).
+
+**Shipped artifact status:** the committed artifact stays the synthetic
+bootstrap (`20261108.0445`, `calibration: null`). Replacing it with GeoLife-fitted
+weights would leak the external validation benchmark and drop elevation/hike/weight
+signal; production Supabase currently contains **1 trainable activity** (5 users,
+5 fitness profiles), so real-data retraining is blocked until sufficient user
+logs accumulate.
+
+### Production runbook & privacy
+
+Once production accumulates ≥ 30 (calibration) or ≥ 200 (retrain) consented
+activities:
+
+```bash
+cd ml
+pip install -r requirements.txt 'psycopg[binary]'
+
+# Pull the read-only/pooler connection string from Vercel trana-api or Supabase
+export DATABASE_URL="postgresql://postgres.<ref>:<password>@<pooler-host>:5432/postgres?sslmode=require"
+
+# Option A (30–199 real activities): recalibrate intervals on shipped synthetic trees
+python -m duration_model.calibrate --source supabase --write
+
+# Option B (≥ 200 real activities): full retrain + 20 % holdout calibration
+python -m duration_model.train --source supabase
+
+# Verify guards and copy browser JSON + card to the SPA
+python -m evaluation.sanity_check
+python -m evaluation.geolife_validation --no-write
+pytest -q
+cp duration_model/duration_model.json duration_model/model_card.json ../frontend/public/models/
+
+# Hot-reload the deployed FastAPI service (when ADMIN_TOKEN is configured)
+curl -X POST "$ML_API_URL/model/reload" -H "X-Admin-Token: $ADMIN_TOKEN"
+```
+
+**Privacy:** never commit exported database CSVs, `DATABASE_URL` strings, or
+per-user rows to Git. Only the trained weights, aggregate `model_card.json`
+metrics, and `calibration` summary are committed/deployed.
+
 ## Known limitations
 
-- The committed artifact is trained on **synthetic** data — correct shape, wrong
-  absolute accuracy for individual athletes until per-user personalization accrues.
+- The committed artifact (`20261108.0445`) is trained on **synthetic** data —
+  correct shape, wrong absolute accuracy for individual athletes until per-user
+  personalization accrues.
 - Age is not yet a feature (birth_year is stored, unused by the model).
 - Wearable HR stream is stored (`avg_heart_rate`) but unused by the model.
-- Interval coverage 76.8 % vs 80 % target — acceptable for a range display, not for pacing a race.
-- External GeoLife validation (`evaluation/geolife_validation.py`): coverage
-  drops to **24 %** on real door-to-door durations and long in-domain
-  activities are weakest — see *External validation (GeoLife)* above;
-  motivates retraining on real logs.
+- Synthetic holdout coverage is 76.8 % vs 80 % target, dropping to **24.1 %**
+  on real GeoLife door-to-door durations (long in-domain activities are
+  weakest). **ML phase 2** adds conformal interval calibration and the
+  `--source supabase` retrain/recalibrate pipeline (verified in dry runs up to
+  78.2 % unseen-user coverage), awaiting ≥ 30 / ≥ 200 live Supabase activities
+  (1 trainable activity present today).

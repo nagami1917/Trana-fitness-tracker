@@ -92,4 +92,12 @@ const flat = await predictPlan({ activity: { activity_type: 'run', distance_km: 
 const hilly = await predictPlan({ activity: { activity_type: 'run', distance_km: 10, elevation_gain_m: 600 }, profile, activities });
 if (!(hilly.duration.minutes > flat.duration.minutes)) throw new Error('hills did not slow the athlete down');
 
+// Calibration factor (ML phase 2) must widen low..high without moving the median.
+const { predictDuration } = await import('../src/lib/ml/duration.js');
+const uncal = predictDuration({ model: { ...model, calibration: null }, activityType: 'run', distanceKm: 10, elevationGainM: 60, weightKg: 60, history: activities });
+const cal = predictDuration({ model: { ...model, calibration: { factor: 3 } }, activityType: 'run', distanceKm: 10, elevationGainM: 60, weightKg: 60, history: activities });
+if (cal.minutes !== uncal.minutes) throw new Error('calibration moved the median prediction');
+if (!((cal.high - cal.low) > (uncal.high - uncal.low) * 2.5)) throw new Error('calibration failed to widen the interval');
+if (!(cal.confidence < uncal.confidence)) throw new Error('wider interval should reduce confidence');
+
 console.log('sanity guards passed ✔');

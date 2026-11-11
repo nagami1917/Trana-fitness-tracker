@@ -18,10 +18,10 @@
 | Backend (HTTP smoke) | `scripts/test_stateless_api_http.py` + live-server boot checks | 2 suites | CI `API (Laravel)` |
 | Frontend | 10 Node smoke scripts (`happy-dom` + Vite lib build) | **10 scripts** | CI `Frontend (Svelte + Tailwind)` |
 | Frontend static | `svelte-check` (types, runes, accessibility) + `vite build` | 0 errors required | CI `Frontend (Svelte + Tailwind)` |
-| ML (FastAPI) | `pytest -q tests` | **31 tests / 3 files** | CI `ML (FastAPI + scikit-learn)` |
+| ML (FastAPI) | `pytest -q tests` | **48 tests / 4 files** | CI `ML (FastAPI + scikit-learn)` |
 | ML (regression gate) | `evaluation.sanity_check` + `evaluation.geolife_validation` | metric thresholds vs GeoLife | CI `ML` — failure fails the build |
 
-Total automated checks: **82 backend + 31 ML + 10 frontend smoke suites**
+Total automated checks: **82 backend + 48 ML + 10 frontend smoke suites**
 (plus lint, baseline and migration scripts, and the scheduled production
 [health workflow](../.github/workflows/health.yml)).
 
@@ -71,13 +71,14 @@ warnings** (see §7); `vite build` must succeed.
 
 ---
 
-## 4. ML inventory (31 tests + 2 gates)
+## 4. ML inventory (48 tests + 2 gates)
 
 | File | What it verifies |
 | --- | --- |
-| `tests/test_api.py` | FastAPI endpoints: prediction schemas, validation, error paths |
-| `tests/test_error_monitor.py` | ML-side fault reporting: summary-first stacks, payload shape |
-| `tests/test_geolife_validation.py` | Validation harness behaviour (metric computation, grouping) |
+| `tests/test_api.py` | FastAPI endpoints: prediction schemas, validation, error paths (21 cases) |
+| `tests/test_error_monitor.py` | ML-side fault reporting: summary-first stacks, payload shape (8 cases) |
+| `tests/test_geolife_validation.py` | Validation harness behaviour: metric computation, chronological grouping (5 cases) |
+| `tests/test_phase2.py` | Conformal interval calibration, server-side factor application, mocked-psycopg `--source supabase` loader & min-row guards (14 cases) |
 
 **Regression gates (every CI run):**
 
@@ -96,7 +97,7 @@ Three parallel jobs on every push/PR (`.github/workflows/ci.yml`):
 
 | Job | Steps (abridged) |
 | --- | --- |
-| **Frontend (Svelte + Tailwind)** | `npm ci` → `svelte-check` → `vite build` → `npm run smoke` (all 9) |
+| **Frontend (Svelte + Tailwind)** | `npm ci` → `svelte-check` → `vite build` → `npm run smoke` (all 10) |
 | **ML (FastAPI + scikit-learn)** | deps → retrain → sanity check → **GeoLife validation gate** → `pytest` (failures surfaced as `::error::` annotations: assertion lines first, then FAILED summary, then resolved versions) |
 | **API (Laravel)** | PHP lint → Supabase baseline/security-migration checks → config checks → `composer validate` + resolve → live-server boot (`/up`, `/api/docs`) → bearer-auth HTTP suite → `php artisan test` (failures → annotations **and** full log posted to the PR as `<!-- trana-test-log -->`) |
 
@@ -174,6 +175,7 @@ These require hardware, a deployed environment or user-held data — they are
 | **Draw-test** (route drawing pipeline) | ✅ automated | `draw-smoke` (10th suite): profiles, waypoint thinning, fallback contracts, mocked Overpass snapping — wired into `npm run smoke` + CI. Live ORS key behaviour = device rows D2/D5 |
 | **Phone tests** (PWA, nav, GPS, resilience) | ⏳ pending | Execute [`device-testing.md`](device-testing.md) checklist on a physical device (~40 rows, A–G) |
 | **FitRec/Endomondo validation report** | ⏳ pending user CSV | Tooling merged (#41); awaiting the derived `endomondo_activities.csv` upload, then `python -m evaluation.endomondo_validation` commits the report JSON |
+| **ML phase 2 (live Supabase retrain/calibrate)** | ⏳ tooling shipped, awaiting ≥ 30 / ≥ 200 live rows | Calibration & `--source supabase` hardening shipped and dry-run verified on GeoLife (see [`ml-methodology.md`](ml-methodology.md)); live Supabase currently has 1 trainable activity |
 | Screen-reader (AT) pass | ⏳ optional | Automated + keyboard audit done (§7) |
 
 ---
@@ -212,7 +214,7 @@ pip install -r requirements-dev.txt
 python -m duration_model.train
 python -m evaluation.sanity_check
 python -m evaluation.geolife_validation   # published metrics gate
-python -m pytest -q tests                 # 31 tests
+python -m pytest -q tests                 # 48 tests
 ```
 
 ---
