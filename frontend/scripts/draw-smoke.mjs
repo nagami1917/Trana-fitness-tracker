@@ -17,6 +17,7 @@ import {
   profileFor,
   waypointsFromPath,
   routeThroughRoads,
+  buildOrsPayload,
   decodePolyline6,
   isClosedLoop,
   outAndBackWaypoints,
@@ -175,6 +176,16 @@ const OVERPASS_URL = ROAD_SNAPPING.overpassUrl;
 // ------------------------------------------------ auto road/path routing
 
 assert.equal(autoRoutingAvailable(), true, 'keyless OpenStreetMap road/path routing is available');
+
+// ORS v2 payload schema check: continue_straight & radiuses MUST be top-level
+// (never nested inside `options`, which causes ORS HTTP 400).
+{
+  const orsBody = buildOrsPayload([[14.6665, 121.0555], [14.6666, 121.062]]);
+  assert.deepEqual(orsBody.coordinates, [[121.0555, 14.6665], [121.062, 14.6666]], 'flips [lat, lng] to ORS [lng, lat]');
+  assert.equal(orsBody.continue_straight, false, 'continue_straight must be top-level false');
+  assert.equal(orsBody.options, undefined, 'must not place continue_straight inside options');
+  assert.deepEqual(orsBody.radiuses, [ROUTING.orsSnapRadiusM, ROUTING.orsSnapRadiusM], 'provides snap radius per waypoint');
+}
 
 // Helper: encode [[lat, lng], ...] with Valhalla precision-6 (1e6) so tests
 // verify real polyline6 decoding without hand-copied magic strings.

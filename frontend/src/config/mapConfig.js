@@ -172,7 +172,9 @@ export const ROUTING = {
   },
   valhallaUrl: 'https://valhalla1.openstreetmap.de/route',
   nominatimUrl: 'https://nominatim.openstreetmap.org/search',
-  timeoutMs: 10000, // give up and keep straight lines after 10s
+  timeoutMs: 8000, // give up on ORS after 8s so fallbacks can respond quickly
+  fallbackTimeoutMs: 5000, // snappy per-provider timeout for OSRM / Valhalla
+  orsSnapRadiusM: 1000, // generous road/trail snap tolerance per waypoint
   // activity type → ORS routing profile
   profiles: {
     run: 'foot-walking',
