@@ -4,7 +4,7 @@
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { LoaderCircle } from 'lucide-svelte';
 
-  import { createMap, applyTranaTheme, fitToPoints, panTo, toLatLng } from '../../services/mapService.js';
+  import { createMap, applyTranaTheme, fitToPoints, panTo, toLatLng, isStyleInitialized } from '../../services/mapService.js';
   import PlannedRoute from './PlannedRoute.svelte';
   import ActivityRoute from './ActivityRoute.svelte';
   import ActivityMarker from './ActivityMarker.svelte';
@@ -113,12 +113,15 @@
     });
     map = instance;
 
-    if (instance.isStyleLoaded?.()) {
+    if (isStyleInitialized(instance)) {
       markReady();
     } else {
-      instance.once('load', () => {
-        markReady();
-      });
+      const onReady = () => {
+        if (!map || styleReady) return;
+        if (isStyleInitialized(instance)) markReady();
+      };
+      instance.once('style.load', onReady);
+      instance.once('load', onReady);
     }
 
     try {
@@ -166,6 +169,7 @@
   // ── center on initial/cached place when not actively tracking ───────────
   $effect(() => {
     if (!map || !styleReady || currentPosition || fitRoute || interactiveRoute || !following || !center) return;
+    if (plannedRoute || plannedWaypoints.length > 0) return;
     panTo(map, center, { zoom: 14 });
   });
 

@@ -1,6 +1,6 @@
 <script>
   import { onDestroy } from 'svelte';
-  import { segmentsToGeoJSON } from '../../services/mapService.js';
+  import { segmentsToGeoJSON, isStyleInitialized } from '../../services/mapService.js';
   import {
     ACTIVITY_LINE_WIDTH,
     ACTIVITY_LINE_OPACITY,
@@ -11,9 +11,34 @@
 
   const sourceId = 'trana-activity-route';
   const layerId = 'trana-activity-route-line';
+  let styleReady = $state(false);
 
   $effect(() => {
-    if (!map || !map.isStyleLoaded?.()) return;
+    const target = map;
+    if (!target) {
+      styleReady = false;
+      return;
+    }
+    if (isStyleInitialized(target)) {
+      styleReady = true;
+      return;
+    }
+    styleReady = false;
+    const onReady = () => {
+      if (isStyleInitialized(target)) styleReady = true;
+    };
+    target.on?.('style.load', onReady);
+    target.on?.('load', onReady);
+    target.on?.('styledata', onReady);
+    return () => {
+      target.off?.('style.load', onReady);
+      target.off?.('load', onReady);
+      target.off?.('styledata', onReady);
+    };
+  });
+
+  $effect(() => {
+    if (!map || !styleReady || !isStyleInitialized(map)) return;
 
     const data = segmentsToGeoJSON(points);
     const existing = map.getSource(sourceId);
@@ -46,8 +71,12 @@
 
   onDestroy(() => {
     if (!map) return;
-    if (map.getLayer(layerId)) map.removeLayer(layerId);
-    if (map.getSource(sourceId)) map.removeSource(sourceId);
+    try {
+      if (map.getLayer(layerId)) map.removeLayer(layerId);
+      if (map.getSource(sourceId)) map.removeSource(sourceId);
+    } catch {
+      // Map or style was already torn down by parent cleanup.
+    }
   });
 </script>
 

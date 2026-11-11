@@ -17,6 +17,29 @@ if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
       window.location.reload();
     }
   });
+
+  let lastCheckMs = 0;
+  const checkForSwUpdate = () => {
+    const now = Date.now();
+    if (now - lastCheckMs < 30_000) return;
+    lastCheckMs = now;
+    navigator.serviceWorker
+      .getRegistration()
+      .then((reg) => {
+        if (!reg) return;
+        if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        return reg.update().catch(() => {});
+      })
+      .catch(() => {});
+  };
+
+  checkForSwUpdate();
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') checkForSwUpdate();
+    });
+  }
+  setInterval(checkForSwUpdate, 5 * 60 * 1000);
 }
 
 const app = mount(App, { target: document.getElementById('app') });

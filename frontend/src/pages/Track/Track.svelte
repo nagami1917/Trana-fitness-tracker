@@ -276,6 +276,10 @@
       draftPlan = readDraftPlan();
       placeResults = [];
       searchError = '';
+      if (!activePlan) {
+        const firstWithRoute = (draftPlan?.route?.length >= 2 ? draftPlan : null) ?? plansWithRoutes[0] ?? null;
+        if (firstWithRoute) selectPlanRoute(firstWithRoute);
+      }
     }
   }
 
@@ -351,8 +355,11 @@
       customProvider = 'saved';
       customProviderLabel = 'From Plan Activity';
       customRouting = false;
+      void tick().then(() => tranaMap?.fitRouteBounds?.());
     } else if (customRouteMode === 'roads') {
       scheduleCustomSnap({ immediate: true, fitAfter: true });
+    } else {
+      void tick().then(() => tranaMap?.fitRouteBounds?.());
     }
   }
 

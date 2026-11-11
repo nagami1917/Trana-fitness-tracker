@@ -30,10 +30,22 @@ export default defineConfig(({ mode }) => {
           cleanupOutdatedCaches: true,
           skipWaiting: true,
           clientsClaim: true,
-          globPatterns: ['**/*.{js,css,html,png,svg,woff2,json}'],
+          // Keep index.html and registerSW.js out of the Cache-First precache so
+          // normal page loads and refreshes always hit Vercel first for the latest bundle.
+          globPatterns: ['**/*.{js,css,png,svg,woff2,json}'],
+          globIgnores: ['**/registerSW.js'],
           maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
-          navigateFallback: '/index.html',
+          navigateFallback: null,
           runtimeCaching: [
+            {
+              urlPattern: ({ request }) => request.mode === 'navigate',
+              handler: 'NetworkFirst',
+              options: {
+                cacheName: 'html-pages',
+                networkTimeoutSeconds: 3,
+                expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 },
+              },
+            },
             {
               urlPattern: /^https:\/\/[abc]?\.?tile\.openstreetmap\.org\/.*/i,
               handler: 'CacheFirst',

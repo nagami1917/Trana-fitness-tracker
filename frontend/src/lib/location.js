@@ -30,6 +30,11 @@ export class LocationError extends Error {
   }
 }
 
+function toLocationError(error) {
+  const code = error?.code === 1 ? 'denied' : error?.code === 3 ? 'timeout' : 'unavailable';
+  return new LocationError(code);
+}
+
 function abortedError() {
   const error = new Error('Location detection was cancelled.');
   error.name = 'AbortError';
@@ -59,10 +64,7 @@ function currentPosition(geolocation, signal) {
     try {
       geolocation.getCurrentPosition(
         (position) => done(resolve, position?.coords),
-        (error) => {
-          const code = error?.code === 1 ? 'denied' : error?.code === 3 ? 'timeout' : 'unavailable';
-          done(reject, new LocationError(code));
-        },
+        (error) => done(reject, toLocationError(error)),
         POSITION_OPTIONS,
       );
     } catch {
@@ -174,7 +176,7 @@ export function watchPosition({
   geolocation = globalThis?.navigator?.geolocation,
 } = {}) {
   if (!geolocation || typeof geolocation.watchPosition !== 'function') {
-    onError?.(new LocationError('unavailable', MESSAGES.unavailable));
+    onError?.(new LocationError('unavailable'));
     return () => {};
   }
   const opts = {
@@ -187,14 +189,14 @@ export function watchPosition({
     id = geolocation.watchPosition(
       (pos) => {
         const { latitude, longitude, accuracy } = pos?.coords ?? {};
-        if (!latitude || !longitude) return;
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
         onUpdate?.({ latitude, longitude, accuracy });
       },
       (err) => onError?.(toLocationError(err)),
       opts,
     );
   } catch {
-    onError?.(new LocationError('unavailable', MESSAGES.unavailable));
+    onError?.(new LocationError('unavailable'));
     return () => {};
   }
   return () => {

@@ -1,6 +1,6 @@
 <script>
   import { onDestroy } from 'svelte';
-  import { toLatLng } from '../../services/mapService.js';
+  import { toLatLng, isStyleInitialized } from '../../services/mapService.js';
 
   let { map, center = [14.676, 121.0437], radiusM = 1200 } = $props();
 
@@ -8,9 +8,34 @@
   const LAYER_ID = 'trana-road-layer';
   let queryTimer = null;
   let lastFetchKey = '';
+  let styleReady = $state(false);
+
+  $effect(() => {
+    const target = map;
+    if (!target) {
+      styleReady = false;
+      return;
+    }
+    if (isStyleInitialized(target)) {
+      styleReady = true;
+      return;
+    }
+    styleReady = false;
+    const onReady = () => {
+      if (isStyleInitialized(target)) styleReady = true;
+    };
+    target.on?.('style.load', onReady);
+    target.on?.('load', onReady);
+    target.on?.('styledata', onReady);
+    return () => {
+      target.off?.('style.load', onReady);
+      target.off?.('load', onReady);
+      target.off?.('styledata', onReady);
+    };
+  });
 
   async function fetchRoads(lat, lng, radius) {
-    if (!map || !map.isStyleLoaded?.()) return;
+    if (!map || !isStyleInitialized(map)) return;
 
     const query = `
       [out:json][timeout:15];
@@ -53,7 +78,7 @@
   }
 
   $effect(() => {
-    if (!map || !map.isStyleLoaded?.()) return;
+    if (!map || !styleReady || !isStyleInitialized(map)) return;
 
     if (!map.getSource(SOURCE_ID)) {
       map.addSource(SOURCE_ID, {
@@ -91,7 +116,11 @@
   onDestroy(() => {
     clearTimeout(queryTimer);
     if (!map) return;
-    if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
-    if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
+    try {
+      if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
+      if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
+    } catch {
+      // Map or style was already torn down by parent cleanup.
+    }
   });
 </script>

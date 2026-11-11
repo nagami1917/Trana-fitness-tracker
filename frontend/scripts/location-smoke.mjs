@@ -134,6 +134,24 @@ await assert.rejects(inFlight, { name: 'AbortError' });
   const stopUnsupported = watchPosition({ geolocation: null, onError: (e) => { watchError = e; } });
   assert.equal(watchError?.code, 'unavailable');
   stopUnsupported(); // no-op cancel must not throw
+
+  // Regression guard: watchPosition error callback must translate GeolocationPositionError codes cleanly.
+  for (const [number, code] of [[1, 'denied'], [2, 'unavailable'], [3, 'timeout']]) {
+    let seenErr = null;
+    const stopErr = watchPosition({
+      geolocation: {
+        watchPosition(_success, error) {
+          queueMicrotask(() => error({ code: number }));
+          return 77;
+        },
+        clearWatch() {},
+      },
+      onError: (e) => { seenErr = e; },
+    });
+    await new Promise((resolve) => queueMicrotask(resolve));
+    assert.equal(seenErr?.code, code);
+    stopErr();
+  }
 }
 
 console.log('Location detection, privacy, cancellation and error checks passed');

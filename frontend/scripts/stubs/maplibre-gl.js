@@ -2,6 +2,7 @@ export class Map {
   constructor() {}
   on() {}
   once() {}
+  off() {}
   remove() {}
   resize() {}
   addControl() {}

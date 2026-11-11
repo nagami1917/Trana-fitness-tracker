@@ -74,6 +74,7 @@
 
   export function fitRouteBounds() {
     if (!map) return;
+    map.invalidateSize?.(false);
     const target = Array.isArray(path) && path.length > 1 ? path : points;
     if (!Array.isArray(target) || target.length === 0) return;
     if (target.length === 1) {
@@ -85,6 +86,7 @@
 
   export function focusPoint(latlng, targetZoom = 16) {
     if (!map || !Array.isArray(latlng) || latlng.length < 2) return;
+    map.invalidateSize?.(false);
     const currentZoom = typeof map.getZoom === 'function' ? map.getZoom() : zoom;
     map.setView(latlng, Math.max(currentZoom, targetZoom), { animate: true });
   }

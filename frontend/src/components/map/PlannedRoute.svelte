@@ -7,6 +7,7 @@
     PLANNED_ROUTE_OPACITY,
     PLANNED_ROUTE_DASH,
   } from '../../config/mapConfig.js';
+  import { isStyleInitialized } from '../../services/mapService.js';
   import { isClosedLoop } from '../../services/roadRoutingService.js';
 
   let {
@@ -22,6 +23,31 @@
   const layerId = 'trana-planned-route-line';
 
   let markers = [];
+  let styleReady = $state(false);
+
+  $effect(() => {
+    const target = map;
+    if (!target) {
+      styleReady = false;
+      return;
+    }
+    if (isStyleInitialized(target)) {
+      styleReady = true;
+      return;
+    }
+    styleReady = false;
+    const onReady = () => {
+      if (isStyleInitialized(target)) styleReady = true;
+    };
+    target.on?.('style.load', onReady);
+    target.on?.('load', onReady);
+    target.on?.('styledata', onReady);
+    return () => {
+      target.off?.('style.load', onReady);
+      target.off?.('load', onReady);
+      target.off?.('styledata', onReady);
+    };
+  });
 
   function clearMarkers() {
     for (const marker of markers) {
@@ -104,7 +130,7 @@
   }
 
   $effect(() => {
-    if (!map || !map.isStyleLoaded?.()) return;
+    if (!map || !styleReady || !isStyleInitialized(map)) return;
 
     const data = plannedRoute ?? { type: 'FeatureCollection', features: [] };
     const existing = map.getSource(sourceId);
@@ -214,8 +240,12 @@
   onDestroy(() => {
     clearMarkers();
     if (!map) return;
-    if (map.getLayer(layerId)) map.removeLayer(layerId);
-    if (map.getLayer(casingLayerId)) map.removeLayer(casingLayerId);
-    if (map.getSource(sourceId)) map.removeSource(sourceId);
+    try {
+      if (map.getLayer(layerId)) map.removeLayer(layerId);
+      if (map.getLayer(casingLayerId)) map.removeLayer(casingLayerId);
+      if (map.getSource(sourceId)) map.removeSource(sourceId);
+    } catch {
+      // Map or style was already torn down by parent cleanup.
+    }
   });
 </script>
