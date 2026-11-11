@@ -332,10 +332,19 @@
     if (!lastActivityWithRoute) return;
     form.activity_type = lastActivityWithRoute.activity_type || form.activity_type;
     form.route = waypointsFromPath(lastActivityWithRoute.route);
-    routePath = lastActivityWithRoute.route.length > 2 ? [...lastActivityWithRoute.route] : [];
-    routeProvider = routePath.length > 1 ? 'saved' : null;
-    routeProviderLabel = routePath.length > 1 ? 'Saved activity' : '';
-    queueMicrotask(() => routeMap?.fitRouteBounds?.());
+    if (lastActivityWithRoute.route.length > 2) {
+      routePath = [...lastActivityWithRoute.route];
+      routeProvider = 'saved';
+      routeProviderLabel = 'Saved activity';
+      queueMicrotask(() => routeMap?.fitRouteBounds?.());
+    } else if (routeMode === 'roads') {
+      scheduleSnap({ immediate: true, fitAfter: true });
+    } else {
+      routePath = [];
+      routeProvider = null;
+      routeProviderLabel = '';
+      queueMicrotask(() => routeMap?.fitRouteBounds?.());
+    }
   }
 
   function loadSavedPlan(plan) {
@@ -351,10 +360,19 @@
     form.sweat_profile = plan.sweat_profile || $profile?.sweat_profile || 'normal';
     if (Array.isArray(plan.route) && plan.route.length >= 2) {
       form.route = waypointsFromPath(plan.route);
-      routePath = plan.route.length > 2 ? [...plan.route] : [];
-      routeProvider = 'saved';
-      routeProviderLabel = 'Saved plan';
-      queueMicrotask(() => routeMap?.fitRouteBounds?.());
+      if (plan.route.length > 2) {
+        routePath = [...plan.route];
+        routeProvider = 'saved';
+        routeProviderLabel = 'Saved plan';
+        queueMicrotask(() => routeMap?.fitRouteBounds?.());
+      } else if (routeMode === 'roads') {
+        scheduleSnap({ immediate: true, fitAfter: true });
+      } else {
+        routePath = [];
+        routeProvider = null;
+        routeProviderLabel = '';
+        queueMicrotask(() => routeMap?.fitRouteBounds?.());
+      }
     } else {
       form.route = [];
       resetSnap();
@@ -730,6 +748,13 @@
             <span class="pill !bg-amber-50 !text-amber-700">
               Straight fallback — no road found near a stop
             </span>
+            <button
+              type="button"
+              class="btn-chip"
+              onclick={() => scheduleSnap({ immediate: true })}
+            >
+              Retry road snap
+            </button>
           {/if}
         </div>
 

@@ -229,9 +229,21 @@ export function pathToGeoJson(path, activityType = 'run') {
   };
 }
 
-async function fetchWithTimeout(url, init, externalSignal) {
+export function buildOrsPayload(waypoints) {
+  const snapRadius = ROUTING.orsSnapRadiusM ?? 1000;
+  return {
+    // ORS wants [lng, lat]; TRANA stores [lat, lng].
+    coordinates: waypoints.map(([lat, lng]) => [lng, lat]),
+    // Top-level ORS v2 parameters — nesting continue_straight under `options`
+    // triggers HTTP 400 ("Unrecognized field") on OpenRouteService.
+    continue_straight: false,
+    radiuses: waypoints.map(() => snapRadius),
+  };
+}
+
+async function fetchWithTimeout(url, init, externalSignal, timeoutMs = ROUTING.timeoutMs) {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), ROUTING.timeoutMs);
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   const onExternalAbort = () => controller.abort();
   externalSignal?.addEventListener('abort', onExternalAbort, { once: true });
 
@@ -254,15 +266,10 @@ async function routeViaOrs(waypoints, activityType, externalSignal) {
           Accept: 'application/json, application/geo+json',
           Authorization: API_KEY,
         },
-        body: JSON.stringify({
-          // ORS wants [lng, lat]; TRANA stores [lat, lng].
-          coordinates: waypoints.map(([lat, lng]) => [lng, lat]),
-          // Let the route double back at waypoints instead of demanding a
-          // straight exit — required for drawn / out-and-back routes.
-          options: { continue_straight: false },
-        }),
+        body: JSON.stringify(buildOrsPayload(waypoints)),
       },
       externalSignal,
+      ROUTING.timeoutMs,
     );
 
     if (!response.ok) return null;
@@ -286,8 +293,9 @@ async function routeViaOsrm(waypoints, activityType, externalSignal) {
     const url = `${base}/${coordStr}?overview=full&geometries=geojson&steps=false&continue_straight=false`;
     const response = await fetchWithTimeout(
       url,
-      { method: 'GET', headers: { Accept: 'application/json' } },
+      { method: 'GET' },
       externalSignal,
+      ROUTING.fallbackTimeoutMs ?? ROUTING.timeoutMs,
     );
 
     if (!response.ok) return null;
@@ -321,6 +329,7 @@ async function routeViaValhalla(waypoints, activityType, externalSignal) {
         }),
       },
       externalSignal,
+      ROUTING.fallbackTimeoutMs ?? ROUTING.timeoutMs,
     );
 
     if (!response.ok) return null;
