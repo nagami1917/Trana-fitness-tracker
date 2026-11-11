@@ -19,6 +19,7 @@
   import { profile, session, logout, plans, todayStats } from '../../stores/index.js';
   import { nf } from '../../lib/format.js';
   import Logo from './Logo.svelte';
+  import Footer from './Footer.svelte';
 
   let { children } = $props();
 
@@ -241,9 +242,12 @@
         {/if}
       </header>
 
-      <main class="px-4 pb-28 pt-5 sm:px-6 lg:pb-10">
+      <main class="px-4 pb-4 pt-5 sm:px-6">
         {@render children?.()}
       </main>
+      <div class="px-4 pb-24 sm:px-6 lg:pb-6">
+        <Footer />
+      </div>
     </div>
   </div>
 

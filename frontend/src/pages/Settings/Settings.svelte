@@ -1,5 +1,5 @@
 <script>
-  import { Settings as SettingsIcon, Save, LoaderCircle, LogOut, Info, Brain, Smartphone, ShieldCheck, User, HeartPulse, Flame, Upload } from 'lucide-svelte';
+  import { Settings as SettingsIcon, Save, LoaderCircle, LogOut, Info, Brain, Smartphone, ShieldCheck, User, HeartPulse, Flame, Upload, Trash2, TriangleAlert, Download } from 'lucide-svelte';
   import Card from '../../components/common/Card.svelte';
   import Segmented from '../../components/common/Segmented.svelte';
   import CityRegionInput from '../../components/common/CityRegionInput.svelte';
@@ -124,6 +124,43 @@
   async function signOut() {
     await logout();
     navigate('/login', { replace: true });
+  }
+
+  // --- data rights: CSV export + account erasure --------------------------
+  let exporting = $state(false);
+  let deleteOpen = $state(false);
+  let deleting = $state(false);
+  let deletePassword = $state('');
+  let deleteConfirm = $state('');
+
+  async function exportActivities() {
+    exporting = true;
+    try {
+      await api.activities.exportCsv();
+      notify('Downloading your activity history…');
+    } catch (error) {
+      notify(error.message, 'error');
+    } finally {
+      exporting = false;
+    }
+  }
+
+  async function deleteAccount() {
+    if (deleteConfirm.trim().toUpperCase() !== 'DELETE') {
+      notify('Type DELETE to confirm.', 'error');
+      return;
+    }
+    deleting = true;
+    try {
+      await api.account.delete(deletePassword);
+      notify('Account and all data deleted.');
+      await logout();
+      navigate('/login', { replace: true });
+    } catch (error) {
+      notify(error.message, 'error');
+    } finally {
+      deleting = false;
+    }
   }
 </script>
 
@@ -270,7 +307,52 @@
             Signed in as <span class="font-extrabold text-ink-700">{$session?.email ?? ''}</span>
           </p>
           <button class="btn-ghost w-full justify-start !text-rose-500" onclick={signOut}><LogOut size={15} /> Sign out</button>
+          <button class="btn-ghost w-full justify-start" onclick={exportActivities} disabled={exporting}>
+            {#if exporting}<LoaderCircle size={15} class="animate-spin" /> Preparing…{:else}<Download size={15} /> Export activities (CSV){/if}
+          </button>
         </div>
+      </Card>
+
+      <Card>
+        <div class="flex items-center gap-2">
+          <TriangleAlert size={17} class="text-rose-500" />
+          <h2 class="text-lg">Danger zone</h2>
+        </div>
+        <p class="mt-2 text-[12px] font-semibold leading-relaxed text-ink-500">
+          Permanently delete your account and every row tied to it — activities, goals, achievements,
+          plans, and sessions. This cannot be undone.
+          <a href="/privacy" class="font-bold text-brand-600 hover:underline">Privacy policy</a>
+        </p>
+
+        {#if !deleteOpen}
+          <button class="btn-ghost mt-3 w-full justify-center !border-rose-200 !text-rose-600" onclick={() => (deleteOpen = true)}>
+            <Trash2 size={15} /> Delete account…
+          </button>
+        {:else}
+          <div class="mt-3 space-y-2 rounded-2xl border border-rose-100 bg-rose-50/60 p-3">
+            <div>
+              <label class="label" for="delete-password">Confirm your password</label>
+              <input
+                id="delete-password"
+                type="password"
+                class="input"
+                autocomplete="current-password"
+                bind:value={deletePassword}
+                placeholder="Password"
+              />
+            </div>
+            <div>
+              <label class="label" for="delete-confirm">Type DELETE to confirm</label>
+              <input id="delete-confirm" class="input" bind:value={deleteConfirm} placeholder="DELETE" />
+            </div>
+            <div class="flex gap-2">
+              <button class="btn-ghost flex-1" onclick={() => { deleteOpen = false; deletePassword = ''; deleteConfirm = ''; }} disabled={deleting}>Cancel</button>
+              <button class="btn-primary flex-1 !bg-rose-500" onclick={deleteAccount} disabled={deleting || !deletePassword || !deleteConfirm}>
+                {#if deleting}<LoaderCircle size={15} class="animate-spin" /> Deleting…{:else}Delete forever{/if}
+              </button>
+            </div>
+          </div>
+        {/if}
       </Card>
 
       <Card>

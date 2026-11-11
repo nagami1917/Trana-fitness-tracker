@@ -25,5 +25,11 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('auth', function (Request $request) {
             return Limit::perMinute(10)->by($request->ip());
         });
+
+        // Mutating endpoints (log/delete activities, update goals, account
+        // deletion, CSV export…) — generous for humans, bounded for abuse.
+        RateLimiter::for('writes', function (Request $request) {
+            return Limit::perMinute(120)->by($request->user()?->id ?: $request->ip());
+        });
     }
 }

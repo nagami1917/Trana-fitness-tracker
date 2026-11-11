@@ -148,6 +148,12 @@ scaled by their calibration factor — see
 
 ### `GET /activities/{id}` · `DELETE /activities/{id}` → `{ deleted: true }`
 
+### `GET /activities/export`
+Downloads the full history as `text/csv` (`Content-Disposition: attachment`).
+Columns: `id, activity_type, started_at, distance_km, duration_min, calories,
+elevation_gain_m, avg_heart_rate, source, notes` — newest first. Route
+geometry is excluded; every training metric is included.
+
 ### `GET /activities/summary`
 ```json
 {
@@ -349,6 +355,21 @@ activity's calendar `date` so the UI can group them per day.
 { "data": [ { "date": "2026-11-11", "goal_key": "daily_calories", "target": 2700,
               "achieved_value": 2810.5, "created_at": "2026-11-11T12:10:11+00:00" } ] }
 ```
+
+---
+
+## Account & data rights
+
+### `DELETE /account`
+Irreversibly deletes the account and every associated row (activities, goals,
+achievements, plans, sessions, profile… — all `ON DELETE CASCADE`), plus auth
+tokens and server sessions. Requires the password:
+```json
+{ "password": "••••••••" }
+```
+`200` → `{ "message": "Account and all associated data have been deleted." }` ·
+`422` on a wrong password. Use together with [`GET /activities/export`](#get-activities-export)
+so the athlete can keep a copy of their data first.
 
 ---
 

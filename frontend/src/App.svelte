@@ -3,6 +3,7 @@
   import { route, navigate } from './lib/router.js';
   import { bootstrap, session, booting, bootError, ready, profile } from './stores/index.js';
   import AppShell from './components/common/AppShell.svelte';
+  import PublicLayout from './components/common/PublicLayout.svelte';
   import Toaster from './components/common/Toaster.svelte';
   import Login from './pages/Login/Login.svelte';
   import Register from './pages/Register/Register.svelte';
@@ -14,7 +15,12 @@
 
   const isLoginRoute = $derived($route === '/login');
   const isRegisterRoute = $derived($route === '/register');
-  const isPublicRoute = $derived(isLoginRoute || isRegisterRoute);
+  // Sign-in pages: only meaningful while signed out.
+  const isAuthRoute = $derived(isLoginRoute || isRegisterRoute);
+  // Legal pages: viewable signed-in or signed-out, rendered outside the shell.
+  const GUEST_PAGES = ['/privacy', '/terms'];
+  const isGuestPage = $derived(GUEST_PAGES.includes($route));
+  const isPublicRoute = $derived(isAuthRoute || isGuestPage);
   const isOnboardingRoute = $derived($route === '/onboarding');
   const needsOnboarding = $derived(Boolean($session && $profile && $profile.onboarded === false));
   const Page = $derived(ROUTES[$route] ?? NotFound);
@@ -25,11 +31,11 @@
       navigate('/login', { replace: true });
       return;
     }
-    if ($session && isPublicRoute) {
+    if ($session && isAuthRoute) {
       navigate(needsOnboarding ? '/onboarding' : '/', { replace: true });
       return;
     }
-    if (needsOnboarding && !isOnboardingRoute) navigate('/onboarding', { replace: true });
+    if (needsOnboarding && !isOnboardingRoute && !isGuestPage) navigate('/onboarding', { replace: true });
   });
 </script>
 
@@ -59,11 +65,19 @@
 {:else if !$session}
   {#if isRegisterRoute}
     <Register />
+  {:else if isGuestPage}
+    <PublicLayout>
+      <Page />
+    </PublicLayout>
   {:else}
     <Login />
   {/if}
 {:else if isOnboardingRoute}
   <Onboarding />
+{:else if isGuestPage}
+  <PublicLayout>
+    <Page />
+  </PublicLayout>
 {:else}
   <AppShell>
     <Page />
