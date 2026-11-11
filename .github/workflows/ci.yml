@@ -106,5 +106,12 @@ jobs:
             fi
             printf '%s\n' "$details" | cut -c1-450 | head -10 \
               | while IFS= read -r line; do [ -n "$line" ] && echo "::error::$line"; done
+            # Also surface the failure header / exception class / test summary
+            # lines wherever they appear — a crash mid-run never prints the
+            # usual FAILURES! block, so grep them out explicitly.
+            printf '%s\n' "$plain" \
+              | grep -E 'There (was|were) [0-9]+ (failure|error)|Failed asserting|[A-Za-z]*Exception: |^Tests: [0-9]+|ERRORS?!$' \
+              | cut -c1-450 | head -30 \
+              | while IFS= read -r line; do [ -n "$line" ] && echo "::error::$line"; done
             exit "$code"
           fi
