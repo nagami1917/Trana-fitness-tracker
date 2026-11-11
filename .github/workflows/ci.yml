@@ -5,6 +5,11 @@ on:
     branches: [main, "arena/**"]
   pull_request:
 
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
 jobs:
   frontend:
     name: Frontend (Svelte + Tailwind)
@@ -129,9 +134,21 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          # Annotations cap at 10/step and CI job logs are unreachable from
-          # outside (blob EOF) — post the full plain-text test log to the PR
-          # so failures are always readable end-to-end.
+          # Annotations cap at 10/step (this step gets its own budget) and CI
+          # job logs are unreachable from outside (blob EOF) — emit the
+          # numbered failure entry here AND post the full log to the PR.
+          if [ -f /tmp/trana-tests.log ]; then
+            plain=$(sed -E 's/\x1b\[[0-9;]*m//g' /tmp/trana-tests.log)
+            block=$(printf '%s\n' "$plain" \
+              | grep -E -A6 '^[[:space:]]*[0-9]+\) |Failed asserting|FAILURES!|ERRORS!' \
+              | head -9 || true)
+            if [ -z "$block" ]; then
+              block=$(printf '%s\n' "$plain" | tail -9)
+            fi
+            printf '%s\n' "$block" | cut -c1-450 | while IFS= read -r line; do
+              if [ -n "$line" ]; then echo "::error::$line"; fi
+            done
+          fi
           if [ -f /tmp/trana-tests.log ] && [ -n "$PR_NUMBER" ]; then
             {
               echo "<!-- trana-test-log -->"
@@ -140,14 +157,22 @@ jobs:
               sed -E 's/\x1b\[[0-9;]*m//g' /tmp/trana-tests.log | tail -250
               echo '```'
             } > /tmp/comment.md
-            EXIST=$(gh api "repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
-              --jq '[.[] | select(.body != null and (.body | startswith("<!-- trana-test-log -->")))][0].id // empty')
-            if [ -n "$EXIST" ]; then
-              gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$EXIST" \
-                -F body=@/tmp/comment.md > /dev/null
+            if gh api "repos/${{ github.repository }}/issues/$PR_NUMBER/comments" --paginate \
+                --jq '(.[] | select((.body? // "") | startswith("<!-- trana-test-log -->")) | .id)' \
+                > /tmp/old-ids.txt; then
+              while IFS= read -r cid; do
+                if [ -n "$cid" ]; then
+                  gh api -X DELETE "repos/${{ github.repository }}/issues/comments/$cid" >/dev/null \
+                    || echo "::warning::Could not delete stale test-log comment $cid"
+                fi
+              done < /tmp/old-ids.txt
             else
-              gh api -X POST "repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
-                -F body=@/tmp/comment.md > /dev/null
+              echo "::warning::Could not list PR comments"
             fi
-            echo "Published test log to PR #$PR_NUMBER"
+            if gh api -X POST "repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
+                -F body=@/tmp/comment.md > /dev/null; then
+              echo "Published test log to PR #$PR_NUMBER"
+            else
+              echo "::error::Failed to post test-log comment to PR #$PR_NUMBER (token permissions?)"
+            fi
           fi
