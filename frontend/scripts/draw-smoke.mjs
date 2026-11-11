@@ -11,7 +11,20 @@
  * onto the segment the mock road describes.
  */
 import assert from 'node:assert/strict';
-import { routingEnabled, profileFor, waypointsFromPath, routeThroughRoads } from '../src/services/roadRoutingService.js';
+import {
+  routingEnabled,
+  autoRoutingAvailable,
+  profileFor,
+  waypointsFromPath,
+  routeThroughRoads,
+  decodePolyline6,
+  isClosedLoop,
+  outAndBackWaypoints,
+  closeLoopWaypoints,
+  reverseWaypoints,
+  pathToGeoJson,
+  searchPlaces,
+} from '../src/services/roadRoutingService.js';
 import { snapToRoad, snapPointsToRoads } from '../src/services/roadSnappingService.js';
 import { ROAD_SNAPPING, ROUTING } from '../src/config/mapConfig.js';
 
@@ -159,5 +172,150 @@ const OVERPASS_URL = ROAD_SNAPPING.overpassUrl;
 
 // The leaking-abort-timer in the failure path above is harmless; exit now so
 // it never delays the suite.
-console.log('draw smoke: ok (profiles, waypoints, fallbacks, snapping)');
+// ------------------------------------------------ auto road/path routing
+
+assert.equal(autoRoutingAvailable(), true, 'keyless OpenStreetMap road/path routing is available');
+
+// Helper: encode [[lat, lng], ...] with Valhalla precision-6 (1e6) so tests
+// verify real polyline6 decoding without hand-copied magic strings.
+function encodePolyline6(pts) {
+  let lastLat = 0;
+  let lastLng = 0;
+  let out = '';
+  const enc = (delta) => {
+    let v = delta < 0 ? ~(delta << 1) : delta << 1;
+    let s = '';
+    while (v >= 0x20) {
+      s += String.fromCharCode((0x20 | (v & 0x1f)) + 63);
+      v >>= 5;
+    }
+    return s + String.fromCharCode(v + 63);
+  };
+  for (const [lat, lng] of pts) {
+    const iLat = Math.round(lat * 1e6);
+    const iLng = Math.round(lng * 1e6);
+    out += enc(iLat - lastLat) + enc(iLng - lastLng);
+    lastLat = iLat;
+    lastLng = iLng;
+  }
+  return out;
+}
+
+assert.deepEqual(decodePolyline6(''), []);
+assert.deepEqual(decodePolyline6(null), []);
+{
+  const expected = [[14.651234, 121.064321], [14.654321, 121.068888], [14.658, 121.071]];
+  const decoded = decodePolyline6(encodePolyline6(expected));
+  assert.equal(decoded.length, 3);
+  for (let i = 0; i < expected.length; i += 1) {
+    assert.ok(Math.abs(decoded[i][0] - expected[i][0]) < 1e-6);
+    assert.ok(Math.abs(decoded[i][1] - expected[i][1]) < 1e-6);
+  }
+}
+
+// Route builders (Out & Back, Close Loop, Reverse, GeoJSON export)
+{
+  const a = [14.65, 121.06];
+  const b = [14.66, 121.07];
+  const c = [14.655, 121.08];
+  const oab = outAndBackWaypoints([a, b, c]);
+  assert.deepEqual(oab, [a, b, c, b, a], 'out & back mirrors back to start');
+  oab[0][0] = 0;
+  assert.equal(a[0], 14.65, 'out & back returns fresh copies');
+
+  const loop = closeLoopWaypoints([a, b, c]);
+  assert.deepEqual(loop, [a, b, c, a], 'close loop returns to start');
+  assert.equal(isClosedLoop(loop), true, 'detects closed loop');
+  assert.deepEqual(closeLoopWaypoints(loop), loop, 'already-closed loop is idempotent');
+
+  const rev = reverseWaypoints([a, b, c]);
+  assert.deepEqual(rev, [c, b, a], 'reverse flips start and destination');
+
+  const gj = pathToGeoJson([a, b], 'ride');
+  assert.equal(gj.type, 'FeatureCollection');
+  assert.equal(gj.features[0].properties.activity_type, 'ride');
+  assert.deepEqual(gj.features[0].geometry.coordinates, [[121.06, 14.65], [121.07, 14.66]]);
+  assert.equal(pathToGeoJson([a]), null);
+}
+
+// Keyless road/path routing: OSRM foot/bike → Valhalla fallback → null
+{
+  const seen = [];
+  const res = await withFetch(async (url) => {
+    seen.push(url);
+    return json({
+      code: 'Ok',
+      routes: [{ geometry: { coordinates: [[121.06, 14.65], [121.063, 14.652], [121.07, 14.66]] } }],
+    });
+  }, () => routeThroughRoads([[14.65, 121.06], [14.66, 121.07]], 'run', { allowKeyless: true }));
+
+  assert.ok(seen.some((u) => u.startsWith(ROUTING.osrmUrls.run)), 'uses OSRM foot router for runs');
+  assert.equal(res.provider, 'osrm');
+  assert.deepEqual(res.path, [[14.65, 121.06], [14.652, 121.063], [14.66, 121.07]]);
+}
+
+{
+  let usedBikeUrl = false;
+  await withFetch(async (url) => {
+    if (url.startsWith(ROUTING.osrmUrls.ride)) usedBikeUrl = true;
+    return json({
+      code: 'Ok',
+      routes: [{ geometry: { coordinates: [[121.06, 14.65], [121.07, 14.66]] } }],
+    });
+  }, () => routeThroughRoads([[14.65, 121.06], [14.66, 121.07]], 'ride', { allowKeyless: true }));
+  assert.equal(usedBikeUrl, true, 'uses OSRM bike router for rides');
+}
+
+// Valhalla fallback when OSRM fails (multi-leg seam deduplication + pedestrian costing)
+{
+  const leg1 = encodePolyline6([[14.65, 121.06], [14.655, 121.065]]);
+  const leg2 = encodePolyline6([[14.655, 121.065], [14.66, 121.07]]);
+  let valhallaBody = null;
+  const res = await withFetch(async (url, opts) => {
+    if (url.includes('routing.openstreetmap.de')) return json({ error: 'busy' }, 503);
+    if (url === ROUTING.valhallaUrl) {
+      valhallaBody = JSON.parse(opts.body);
+      return json({ trip: { legs: [{ shape: leg1 }, { shape: leg2 }] } });
+    }
+    return json({}, 500);
+  }, () => routeThroughRoads([[14.65, 121.06], [14.655, 121.065], [14.66, 121.07]], 'hike', { allowKeyless: true }));
+
+  assert.equal(valhallaBody.costing, 'pedestrian', 'hike uses Valhalla pedestrian trail costing');
+  assert.equal(res.provider, 'valhalla');
+  assert.deepEqual(res.path, [[14.65, 121.06], [14.655, 121.065], [14.66, 121.07]], 'deduplicates shared seam vertex between legs');
+}
+
+// Total outage falls back cleanly to null
+{
+  const res = await withFetch(
+    async () => { throw new TypeError('offline'); },
+    () => routeThroughRoads([[14.65, 121.06], [14.66, 121.07]], 'run', { allowKeyless: true }),
+  );
+  assert.equal(res, null, 'total provider failure → null → straight-line fallback');
+}
+
+// Place search (Nominatim)
+{
+  let calls = 0;
+  let requestedUrl = '';
+  const results = await withFetch(async (url) => {
+    calls += 1;
+    requestedUrl = url;
+    return json([
+      { name: 'Academic Oval', display_name: 'Academic Oval, Diliman, Quezon City', lat: '14.6549', lon: '121.0685' },
+    ]);
+  }, async () => {
+    assert.deepEqual(await searchPlaces('a'), [], '1-char search skips network');
+    assert.equal(calls, 0);
+    return searchPlaces('Academic Oval', { near: [14.65, 121.06] });
+  });
+
+  assert.equal(calls, 1);
+  assert.ok(requestedUrl.includes('viewbox='), 'biases place search near current location');
+  assert.deepEqual(results, [
+    { label: 'Academic Oval, Diliman, Quezon City', shortName: 'Academic Oval', latitude: 14.6549, longitude: 121.0685 },
+  ]);
+}
+
+console.log('draw smoke: ok (profiles, waypoints, auto-routing, builders, search, snapping)');
 process.exit(0);

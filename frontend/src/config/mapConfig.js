@@ -158,11 +158,20 @@ export const ROAD_SNAPPING = {
 };
 
 /* ---------------------------------------------------------- road routing */
-// OpenRouteService directions used to snap routes drawn on the map onto the
-// real road network. Requires the VITE_ORS_API_KEY build-time env var
-// (Vercel → trana-web); without a key the app falls back to straight lines.
+// Road & path routing follows streets, footpaths, trails, and bikeways.
+// OpenRouteService (VITE_ORS_API_KEY) is tried first when configured, with
+// public OpenStreetMap OSRM (routed-foot / routed-bike) and Valhalla FOSSGIS
+// fallbacks so auto-road-following works out of the box even without a key.
 export const ROUTING = {
   baseUrl: 'https://api.openrouteservice.org/v2/directions',
+  osrmUrls: {
+    run: 'https://routing.openstreetmap.de/routed-foot/route/v1/driving',
+    walk: 'https://routing.openstreetmap.de/routed-foot/route/v1/driving',
+    hike: 'https://routing.openstreetmap.de/routed-foot/route/v1/driving',
+    ride: 'https://routing.openstreetmap.de/routed-bike/route/v1/driving',
+  },
+  valhallaUrl: 'https://valhalla1.openstreetmap.de/route',
+  nominatimUrl: 'https://nominatim.openstreetmap.org/search',
   timeoutMs: 10000, // give up and keep straight lines after 10s
   // activity type → ORS routing profile
   profiles: {
