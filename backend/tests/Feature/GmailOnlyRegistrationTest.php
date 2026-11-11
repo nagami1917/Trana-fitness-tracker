@@ -30,6 +30,6 @@ class GmailOnlyRegistrationTest extends TestCase
             'name' => 'Gmail Athlete',
             'email' => 'Person@GMAIL.COM',
             'password' => self::PASSWORD,
-        ])->assertCreated()->assertJsonPath('data.email', 'person@gmail.com');
+        ])->assertCreated()->assertJsonPath('user.email', 'person@gmail.com');
     }
 }
