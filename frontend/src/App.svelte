@@ -8,6 +8,7 @@
   import Login from './pages/Login/Login.svelte';
   import Register from './pages/Register/Register.svelte';
   import Onboarding from './pages/Onboarding/Onboarding.svelte';
+  import VerifyEmail from './pages/Auth/VerifyEmail.svelte';
   import NotFound from './pages/NotFound/NotFound.svelte';
   import { ROUTES } from './routes/index.js';
 
@@ -17,12 +18,15 @@
   const isRegisterRoute = $derived($route === '/register');
   // Sign-in pages: only meaningful while signed out.
   const isAuthRoute = $derived(isLoginRoute || isRegisterRoute);
-  // Legal pages: viewable signed-in or signed-out, rendered outside the shell.
-  const GUEST_PAGES = ['/privacy', '/terms'];
+  // Legal + recovery pages: viewable signed-in or signed-out, outside the shell.
+  const GUEST_PAGES = ['/privacy', '/terms', '/forgot-password', '/reset-password', '/verify-email'];
   const isGuestPage = $derived(GUEST_PAGES.includes($route));
   const isPublicRoute = $derived(isAuthRoute || isGuestPage);
   const isOnboardingRoute = $derived($route === '/onboarding');
   const needsOnboarding = $derived(Boolean($session && $profile && $profile.onboarded === false));
+  // Email-verification gate — mirrors the onboarding pattern. Pre-existing
+  // accounts are grandfathered as verified server-side.
+  const needsVerify = $derived(Boolean($session && !$session.email_verified_at));
   const Page = $derived(ROUTES[$route] ?? NotFound);
 
   $effect(() => {
@@ -32,7 +36,12 @@
       return;
     }
     if ($session && isAuthRoute) {
-      navigate(needsOnboarding ? '/onboarding' : '/', { replace: true });
+      navigate(needsVerify ? '/verify-email' : needsOnboarding ? '/onboarding' : '/', { replace: true });
+      return;
+    }
+    // Verification before onboarding; privacy/terms stay readable meanwhile.
+    if (needsVerify && !isGuestPage) {
+      navigate('/verify-email', { replace: true });
       return;
     }
     if (needsOnboarding && !isOnboardingRoute && !isGuestPage) navigate('/onboarding', { replace: true });
@@ -72,12 +81,16 @@
   {:else}
     <Login />
   {/if}
-{:else if isOnboardingRoute}
-  <Onboarding />
 {:else if isGuestPage}
   <PublicLayout>
     <Page />
   </PublicLayout>
+{:else if needsVerify}
+  <PublicLayout>
+    <VerifyEmail />
+  </PublicLayout>
+{:else if isOnboardingRoute}
+  <Onboarding />
 {:else}
   <AppShell>
     <Page />

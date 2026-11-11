@@ -157,6 +157,13 @@ export const api = {
         setToken(null);
       }
     },
+
+    // Password recovery — always server-answered with a generic message.
+    forgotPassword: (email) => request('/password/forgot', { method: 'POST', body: { email }, auth: false }),
+    resetPassword: (payload) => request('/password/reset', { method: 'POST', body: payload, auth: false }),
+
+    // Email verification (resend uses the signed-in athlete's address).
+    resendVerification: () => request('/email/verify/resend', { method: 'POST' }),
   },
 
   profile: {

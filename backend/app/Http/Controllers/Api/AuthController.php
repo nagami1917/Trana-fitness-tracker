@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\RegisterRequest;
 use App\Models\User;
+use App\Notifications\VerifyEmailNotification;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +23,17 @@ class AuthController extends Controller
             $user = User::create($data);
             $user->ensureProfile();
             $user->ensureGoals();
+
+            // Verification email is best-effort: a mail outage must never fail
+            // registration (the user can hit "Resend" from the verify screen).
+            try {
+                $user->notify(new VerifyEmailNotification());
+            } catch (\Throwable $exception) {
+                Log::warning('verification email failed on register', [
+                    'user_id' => $user->id,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
 
             return response()->json([
                 'token' => $user->createToken('pwa')->plainTextToken,
@@ -74,6 +87,7 @@ class AuthController extends Controller
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
+            'email_verified_at' => $user->email_verified_at?->toIso8601String(),
             'profile' => $profile,
             'created_at' => $user->created_at?->toIso8601String(),
         ];
