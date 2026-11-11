@@ -7,6 +7,7 @@ export class Map {
   addControl() {}
   isStyleLoaded() { return false; }
   getZoom() { return 14; }
+  getCanvas() { return { style: {} }; }
   easeTo() {}
   fitBounds() {}
   zoomIn() {}
@@ -22,6 +23,8 @@ export class Map {
 
 export class Marker {
   setLngLat() { return this; }
+  getLngLat() { return { lat: 0, lng: 0 }; }
+  on() { return this; }
   addTo() { return this; }
   remove() {}
 }

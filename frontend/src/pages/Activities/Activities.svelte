@@ -1,25 +1,26 @@
 <script>
-  import { onMount } from 'svelte';
-  import { Plus, Search, LoaderCircle, Trash2, MapPin, Flame, Timer, Gauge, Route as RouteIcon, Sparkles, TrendingUp, X, Undo2, Download, ArrowLeftRight, Repeat } from 'lucide-svelte';
+  import { onMount, tick } from 'svelte';
+  import { Plus, Search, LoaderCircle, Trash2, MapPin, Flame, Timer, Gauge, Route as RouteIcon, Sparkles, TrendingUp, X, Undo2, Download, ArrowLeftRight, Repeat, Pencil } from 'lucide-svelte';
   import Card from '../../components/common/Card.svelte';
   import ActivityIcon from '../../components/activities/ActivityIcon.svelte';
   import RouteMap from '../../components/route/RouteMap.svelte';
   import Modal from '../../components/common/Modal.svelte';
   import BusyOverlay from '../../components/common/BusyOverlay.svelte';
   import EmptyState from '../../components/common/EmptyState.svelte';
-  import { activities, profile, notify, refresh } from '../../stores/index.js';
+  import { activities, profile, plans, notify, refresh } from '../../stores/index.js';
   import { api } from '../../services/client.js';
   import { query } from '../../lib/router.js';
   import { loadModel, predictDuration, routeLengthKm } from '../../lib/ml/index.js';
   import { estimateMet } from '../../lib/ml/fueling.js';
   import {
     routeThroughRoads,
+    waypointsFromPath,
     outAndBackWaypoints,
     closeLoopWaypoints,
     isClosedLoop,
   } from '../../services/roadRoutingService.js';
   import { acquireLivePosition, releaseLivePosition, livePosition } from '../../lib/liveLocation.svelte.js';
-  import { duration as fmtDuration, pace, kcal, km, nf, fullDate, timeLabel, dayLabel, activityLabel } from '../../lib/format.js';
+  import { duration as fmtDuration, pace, kcal, km, nf, fullDate, timeLabel, dayLabel, activityLabel, shortDate } from '../../lib/format.js';
 
   const TYPES = [
     { id: 'all', label: 'All' },
@@ -50,6 +51,10 @@
   let model = $state(null);
   let draft = $state(blankDraft());
   let draftRouteOpen = $state(false);
+  let routeSource = $state('none'); // 'none' | 'create' | 'plan'
+  let selectedPlanId = $state(null);
+  let draftPlan = $state(null);
+  let routeMap = $state(null);
   let routeMode = $state('roads');
   let confirmingDelete = $state(null);
   // Road-snapped geometry for the draft's waypoints (null/[] → straight lines).
@@ -58,6 +63,28 @@
   let snapTimer;
   let snapSeq = 0;
   let snapAbort = null;
+
+  const availablePlans = $derived.by(() => {
+    const list = [];
+    if (draftPlan?.route?.length >= 2) {
+      list.push(draftPlan);
+    }
+    const withRoutes = $plans.filter((p) => Array.isArray(p.route) && p.route.length >= 2);
+    const withoutRoutes = $plans.filter((p) => !Array.isArray(p.route) || p.route.length < 2);
+    return [...list, ...withRoutes, ...withoutRoutes];
+  });
+
+  function readDraftPlan() {
+    if (typeof sessionStorage === 'undefined') return null;
+    try {
+      const raw = sessionStorage.getItem('trana:draft_planned_route');
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (parsed?.route?.length >= 2) return { ...parsed, id: 'draft', isDraft: true };
+    } catch {
+      // ignore invalid draft storage
+    }
+    return null;
+  }
 
   // Blue dot: join the shared follow-me watch; the returned cleanup releases
   // it (sync onMount → client-only; top-level onDestroy breaks this SSR
@@ -172,9 +199,60 @@
     draft = blankDraft();
     draft.activity_type = filter === 'all' ? 'run' : filter;
     draftRouteOpen = false;
+    routeSource = 'none';
+    selectedPlanId = null;
+    draftPlan = readDraftPlan();
     routeMode = 'roads';
     resetSnap();
     addOpen = true;
+  }
+
+  function selectRouteSource(mode) {
+    routeSource = mode;
+    if (mode === 'none') {
+      draftRouteOpen = false;
+      selectedPlanId = null;
+      clearRoute();
+      return;
+    }
+    if (mode === 'create') {
+      selectedPlanId = null;
+      draftRouteOpen = true;
+      return;
+    }
+    if (mode === 'plan') {
+      draftPlan = readDraftPlan();
+    }
+  }
+
+  async function applyPlanRoute(plan) {
+    if (!plan) return;
+    selectedPlanId = plan.isDraft ? 'draft' : plan.id;
+    routeSource = 'plan';
+    draft.activity_type = plan.activity_type || draft.activity_type;
+    if (plan.elevation_gain_m != null) draft.elevation_gain_m = Number(plan.elevation_gain_m) || 0;
+    if (plan.distance_km) draft.distance_km = Number(plan.distance_km);
+
+    if (Array.isArray(plan.route) && plan.route.length >= 2) {
+      draft.route = waypointsFromPath(plan.route);
+      draftRouteOpen = true;
+      if (plan.route.length > 2) {
+        resetSnap();
+        routePath = [...plan.route];
+        await tick();
+        routeMap?.fitRouteBounds?.();
+      } else {
+        routeMode = 'roads';
+        scheduleSnap({ immediate: true, fitAfter: true });
+        await tick();
+        routeMap?.fitRouteBounds?.();
+      }
+    } else {
+      draft.route = [];
+      resetSnap();
+      draftRouteOpen = true;
+      notify('Loaded plan distance — tap Start & End on the map if you want to draw its path.', 'info');
+    }
   }
 
   function resetSnap() {
@@ -187,7 +265,7 @@
   }
 
   /** Re-route the draft's stops along roads & paths (debounced, stale-safe). */
-  function scheduleSnap({ immediate = false } = {}) {
+  function scheduleSnap({ immediate = false, fitAfter = false } = {}) {
     clearTimeout(snapTimer);
     snapAbort?.abort();
     snapAbort = null;
@@ -199,10 +277,10 @@
       return;
     }
     routing = true;
-    snapTimer = setTimeout(runSnap, immediate ? 0 : 220);
+    snapTimer = setTimeout(() => runSnap({ fitAfter }), immediate ? 0 : 220);
   }
 
-  async function runSnap() {
+  async function runSnap({ fitAfter = false } = {}) {
     const seq = ++snapSeq;
     const controller = new AbortController();
     snapAbort = controller;
@@ -216,6 +294,10 @@
     if (seq !== snapSeq) return; // a newer edit superseded this request
     routePath = result?.path ?? [];
     routing = false;
+    if (fitAfter && routePath.length >= 2) {
+      await tick();
+      routeMap?.fitRouteBounds?.();
+    }
   }
 
   function setRouteMode(mode) {
@@ -461,10 +543,39 @@
       <input class="input" placeholder="Optional — how did it feel?" bind:value={draft.notes} />
     </div>
 
-    <div class="sm:col-span-2">
+    <div class="sm:col-span-2 space-y-2.5">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <span class="label !mb-0">Route (optional)</span>
-        <div class="flex items-center gap-1.5">
+        <div class="flex flex-wrap items-center gap-1.5">
+          <div class="inline-flex rounded-2xl border border-brand-100 bg-brand-50/70 p-0.5" role="group" aria-label="Activity route source">
+            <button
+              type="button"
+              class="rounded-xl px-2.5 py-1 text-[11px] font-extrabold transition {routeSource === 'none'
+                ? 'bg-white text-brand-600 shadow-soft'
+                : 'text-ink-500 hover:text-ink-900'}"
+              onclick={() => selectRouteSource('none')}
+            >
+              No route
+            </button>
+            <button
+              type="button"
+              class="inline-flex items-center gap-1 rounded-xl px-2.5 py-1 text-[11px] font-extrabold transition {routeSource === 'create'
+                ? 'bg-white text-brand-600 shadow-soft'
+                : 'text-ink-500 hover:text-ink-900'}"
+              onclick={() => selectRouteSource('create')}
+            >
+              <Pencil size={11} /> Create path
+            </button>
+            <button
+              type="button"
+              class="inline-flex items-center gap-1 rounded-xl px-2.5 py-1 text-[11px] font-extrabold transition {routeSource === 'plan'
+                ? 'bg-white text-brand-600 shadow-soft'
+                : 'text-ink-500 hover:text-ink-900'}"
+              onclick={() => selectRouteSource('plan')}
+            >
+              <Sparkles size={11} /> From Plan Activity
+            </button>
+          </div>
           {#if draftRouteOpen}
             <button
               type="button"
@@ -475,14 +586,50 @@
               <RouteIcon size={12} /> {routeMode === 'roads' ? 'Follow roads: ON' : 'Straight lines'}
             </button>
           {/if}
-          <button type="button" class="btn-chip" onclick={() => (draftRouteOpen = !draftRouteOpen)}>
-            {draftRouteOpen ? 'Hide map' : 'Draw route'}
-          </button>
         </div>
       </div>
+
+      {#if routeSource === 'plan'}
+        {#if availablePlans.length}
+          <div class="grid gap-1.5 sm:grid-cols-2">
+            {#each availablePlans as plan (plan.isDraft ? 'draft' : plan.id)}
+              {@const hasRoute = Array.isArray(plan.route) && plan.route.length >= 2}
+              {@const planKey = plan.isDraft ? 'draft' : plan.id}
+              <button
+                type="button"
+                class="flex items-center gap-2 rounded-2xl border p-2 text-left transition {String(selectedPlanId) === String(planKey)
+                  ? 'border-brand-400 bg-brand-50/70 ring-2 ring-brand-200'
+                  : 'border-brand-100 bg-white hover:border-brand-300'}"
+                onclick={() => applyPlanRoute(plan)}
+              >
+                <ActivityIcon type={plan.activity_type || 'run'} size="sm" />
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-xs font-extrabold capitalize text-ink-900">
+                    {plan.distance_km} km {plan.activity_type}
+                    {#if plan.isDraft}<span class="ml-1 text-[10px] text-brand-600">(Draft)</span>{/if}
+                  </p>
+                  <p class="truncate text-[10px] font-semibold text-ink-400">
+                    {#if plan.created_at}{shortDate(plan.created_at)} · {/if}
+                    {hasRoute ? 'Start → End path' : 'Distance only'}
+                  </p>
+                </div>
+                <span class="shrink-0 rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-extrabold text-brand-600">
+                  {String(selectedPlanId) === String(planKey) ? 'Loaded' : 'Use'}
+                </span>
+              </button>
+            {/each}
+          </div>
+        {:else}
+          <p class="rounded-2xl border border-dashed border-brand-200 bg-brand-50/40 px-3 py-2 text-[11px] font-semibold text-ink-500">
+            No saved plans from Plan Activity yet — switch to Create path to draw Start & End directly.
+          </p>
+        {/if}
+      {/if}
+
       {#if draftRouteOpen}
         <div class="mt-2">
           <RouteMap
+            bind:this={routeMap}
             points={draft.route}
             path={routePath}
             height={230}
