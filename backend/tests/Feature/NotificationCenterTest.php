@@ -105,6 +105,9 @@ class NotificationCenterTest extends TestCase
         $notification = InAppNotification::where('user_id', $userA->id)->firstOrFail();
 
         $headersB = $this->registerAthlete('b@example.com');
+        // Guards are reused across requests inside one test process — drop
+        // athlete A's resolution before athlete B authenticates.
+        app('auth')->forgetGuards();
         $this->postJson('/api/notifications/'.$notification->id.'/read', [], $headersB)
             ->assertNotFound();
 

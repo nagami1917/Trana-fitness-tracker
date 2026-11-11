@@ -108,7 +108,7 @@ jobs:
             # informative lines (error header, exception, summary) and only
             # then pad with the raw tail.
             priority=$(printf '%s\n' "$plain" \
-              | grep -iE 'fatal error|uncaught|there (was|were) [0-9]+ (failure|error)|failed asserting|[a-z]*exception:|assertionerror|traceback|^[[:space:]]*tests: [0-9]+|^[[:space:]]*(failures|errors)!' \
+              | grep -iE -A1 'fatal error|uncaught|there (was|were) [0-9]+ (failure|error)|failed asserting|[a-z]*exception:|assertionerror|file_get_contents|failed to open stream|traceback|^[[:space:]]*tests: [0-9]+|^[[:space:]]*(failures|errors)!' \
               | head -8)
             fallback=$(printf '%s\n' "$details" | head -10)
             {
