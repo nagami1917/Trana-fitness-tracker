@@ -159,6 +159,13 @@ export function predictDuration({
     low = base * f10;
     median = Math.max(base * f50, low);
     high = Math.max(base * f90, median);
+    // ML phase 2: calibrated band-width factor — must match model_store.py so
+    // the offline preview shows the same range as the API (1.0 = uncalibrated).
+    const k = Number(model?.calibration?.factor) || 1;
+    if (k > 1) {
+      low = median - k * (median - low);
+      high = median + k * (high - median);
+    }
     basis = 'gradient_boosted_pace_factor';
   } else {
     const climb = 1 / (1 + (1.4 * (elevationGainM / Math.max(distanceKm, 0.1))) / 100);
@@ -170,11 +177,16 @@ export function predictDuration({
     basis = 'physics_fallback';
   }
 
+  // Never let the interval invert or go non-physical (mirrors model_store.py).
+  low = Math.max(1, Math.min(low, median));
+  high = Math.max(high, median);
+  median = Math.max(1, median);
+
   const speedKmh = distanceKm / (median / 60);
   return {
     minutes: Math.round(median * 10) / 10,
     hours: Math.round((median / 60) * 100) / 100,
-    low: Math.round(Math.max(1, low) * 10) / 10,
+    low: Math.round(low * 10) / 10,
     high: Math.round(high * 10) / 10,
     paceMinPerKm: ['run', 'walk', 'hike'].includes(activityType) ? median / distanceKm : null,
     speedKmh: Math.round(speedKmh * 100) / 100,

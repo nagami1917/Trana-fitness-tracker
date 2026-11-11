@@ -75,6 +75,12 @@ class DurationModel:
             # Guard against pathological multiplicative blow-ups on out-of-range input.
             factor = {q: min(3.0, max(0.7, v)) for q, v in factor.items()}
             q10, q50, q90 = base * factor["q10"], max(base * factor["q50"], base * factor["q10"]), base * factor["q90"]
+            # ML phase 2: widen the band to the calibrated coverage factor
+            # (fitted on real activities; 1.0 = uncalibrated).
+            k = float((self.bundle.get("calibration") or {}).get("factor", 1.0) or 1.0)
+            if k > 1.0:
+                q10 = q50 - k * (q50 - q10)
+                q90 = q50 + k * (q90 - q50)
             basis = "gradient_boosted_pace_factor"
         else:  # graceful degradation when artifacts are missing
             climb = 1.0 / (1.0 + 1.4 * row["elevation_per_km"] / 100.0)
