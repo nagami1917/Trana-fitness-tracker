@@ -109,8 +109,8 @@ jobs:
               # code frame, FAILURES! header and the Tests: summary — the full
               # verdict in one block (fall back to the header range if there is
               # no numbered entry, e.g. boot/migration errors).
-              if printf '%s\n' "$plain" | grep -qE '^[0-9]+\) '; then
-                printf '%s\n' "$plain" | sed -n '/^[0-9]*[0-9]) /,$p' | cut -c1-450 | head -10
+              if printf '%s\n' "$plain" | grep -qE '^[[:space:]]*[0-9]+\) '; then
+                printf '%s\n' "$plain" | sed -n '/^[[:space:]]*[0-9][0-9]*) /,$p' | cut -c1-450 | head -10
               else
                 printf '%s\n' "$plain" | sed -n '/\(FAILURES\|ERRORS\)!/,$p' | cut -c1-450 | head -10
               fi
@@ -121,4 +121,33 @@ jobs:
               } | cut -c1-450 | head -10
             fi | while IFS= read -r line; do [ -n "$line" ] && echo "::error::$line"; done
             exit "$code"
+          fi
+
+      - name: Publish failure log to the PR
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # Annotations cap at 10/step and CI job logs are unreachable from
+          # outside (blob EOF) — post the full plain-text test log to the PR
+          # so failures are always readable end-to-end.
+          if [ -f /tmp/trana-tests.log ] && [ -n "$PR_NUMBER" ]; then
+            {
+              echo "<!-- trana-test-log -->"
+              echo "### Backend test log (run ${{ github.run_id }})"
+              echo '```'
+              sed -E 's/\x1b\[[0-9;]*m//g' /tmp/trana-tests.log | tail -250
+              echo '```'
+            } > /tmp/comment.md
+            EXIST=$(gh api "repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
+              --jq '[.[] | select(.body != null and (.body | startswith("<!-- trana-test-log -->")))][0].id // empty')
+            if [ -n "$EXIST" ]; then
+              gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$EXIST" \
+                -F body=@/tmp/comment.md > /dev/null
+            else
+              gh api -X POST "repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
+                -F body=@/tmp/comment.md > /dev/null
+            fi
+            echo "Published test log to PR #$PR_NUMBER"
           fi
