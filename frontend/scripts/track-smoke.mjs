@@ -70,9 +70,29 @@ try {
   assert.ok(MAP_STYLE.sources?.osm?.tiles?.[0]?.includes('openstreetmap.org'));
   assert.ok(Array.isArray(PLANNED_ROUTE_DASH), 'PLANNED_ROUTE_DASH must be a MapLibre array');
 
-  const { toLatLng, segmentsToGeoJSON, haversineKm, elevationGainM } = await vite.ssrLoadModule('/src/services/mapService.js');
+  const { toLatLng, segmentsToGeoJSON, haversineKm, elevationGainM, panTo, isStyleInitialized } = await vite.ssrLoadModule('/src/services/mapService.js');
   assert.deepEqual(toLatLng({ latitude: 14.676, longitude: 121.0437 }), [14.676, 121.0437]);
   assert.deepEqual(toLatLng([14.68, 121.05]), [14.68, 121.05]);
+
+  // Regression guard: MapLibre easeTo runs Object.assign({ offset: [0, 0] }, options)
+  // and calls Point.convert(options.offset), which throws if `offset: undefined` is present.
+  let seenEaseOptions = null;
+  const fakeMap = {
+    style: { _loaded: true },
+    getZoom: () => 14,
+    isStyleLoaded: () => false, // e.g., background OSM tile streaming while style is already loaded
+    easeTo(opts) {
+      const merged = Object.assign({ offset: [0, 0], duration: 500 }, opts);
+      assert.ok(Array.isArray(merged.offset) || (merged.offset && merged.offset.x !== undefined), 'offset must never be overwritten with undefined');
+      seenEaseOptions = merged;
+    },
+  };
+  assert.equal(isStyleInitialized(fakeMap), true, 'style._loaded takes precedence over tile-loading state');
+  assert.equal(isStyleInitialized({ style: { _loaded: false }, isStyleLoaded: () => true }), false, 'unfinished style is never considered initialized');
+  panTo(fakeMap, [14.676, 121.0437], { zoom: 15 });
+  assert.equal('offset' in seenEaseOptions, true);
+  assert.deepEqual(seenEaseOptions.offset, [0, 0]);
+  assert.equal(seenEaseOptions.zoom, 15);
 
   const geo = segmentsToGeoJSON([
     { latitude: 14.676, longitude: 121.0437, speedKmh: 9.5 },

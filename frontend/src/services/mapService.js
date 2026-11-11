@@ -69,9 +69,22 @@ export function applyTranaTheme(map) {
   map._tranaThemeApplied = true;
 }
 
+/**
+ * True once MapLibre's base style has loaded so addSource/addLayer will not
+ * throw "Style is not done loading." — unlike `map.isStyleLoaded()`, this
+ * stays true while background OSM raster tiles are streaming in.
+ */
+export function isStyleInitialized(map) {
+  if (!map) return false;
+  if (map.style && typeof map.style === 'object' && '_loaded' in map.style) {
+    return Boolean(map.style._loaded);
+  }
+  return Boolean(map.isStyleLoaded?.());
+}
+
 /** Fit the map to an array of [lat, lng] or { latitude, longitude } points. */
 export function fitToPoints(map, points, { padding = 60, maxZoom = 15 } = {}) {
-  if (!points || points.length === 0) return;
+  if (!map || typeof map.fitBounds !== 'function' || !points || points.length === 0) return;
   const bounds = new maplibregl.LngLatBounds();
   for (const point of points) {
     const coords = toLatLng(point);
@@ -83,15 +96,21 @@ export function fitToPoints(map, points, { padding = 60, maxZoom = 15 } = {}) {
 
 /** Smoothly pan to a [lat, lng] or { latitude, longitude } position. */
 export function panTo(map, position, { zoom, offset } = {}) {
+  if (!map || typeof map.easeTo !== 'function') return;
   const coords = toLatLng(position);
   if (!coords) return;
-  map.easeTo({
+  // Never pass `offset: undefined` into MapLibre's easeTo(): MapLibre's
+  // extend({ offset: [0, 0] }, options) overwrites the default with undefined
+  // and crashes inside Point.convert(options.offset).
+  const easeOptions = {
     center: [coords[1], coords[0]],
-    zoom: zoom ?? map.getZoom(),
-    offset,
     animate: true,
     duration: 500,
-  });
+  };
+  const resolvedZoom = zoom ?? (typeof map.getZoom === 'function' ? map.getZoom() : undefined);
+  if (Number.isFinite(resolvedZoom)) easeOptions.zoom = resolvedZoom;
+  if (offset !== undefined) easeOptions.offset = offset;
+  map.easeTo(easeOptions);
 }
 
 /** Convert track points ([lat, lng] or { latitude, longitude, speedKmh }) to GeoJSON LineString segments. */
