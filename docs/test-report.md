@@ -16,13 +16,14 @@
 | --- | --- | --- | --- |
 | Backend (Laravel) | PHPUnit via `php artisan test` (SQLite `:memory:`) | **82 tests / 13 feature files** | CI `API (Laravel)` on every push & PR |
 | Backend (HTTP smoke) | `scripts/test_stateless_api_http.py` + live-server boot checks | 2 suites | CI `API (Laravel)` |
-| Frontend | 9 Node smoke scripts (`happy-dom` + Vite lib build) | **9 scripts** | CI `Frontend (Svelte + Tailwind)` |
+| Frontend | 10 Node smoke scripts (`happy-dom` + Vite lib build) | **10 scripts** | CI `Frontend (Svelte + Tailwind)` |
 | Frontend static | `svelte-check` (types, runes, accessibility) + `vite build` | 0 errors required | CI `Frontend (Svelte + Tailwind)` |
 | ML (FastAPI) | `pytest -q tests` | **31 tests / 3 files** | CI `ML (FastAPI + scikit-learn)` |
 | ML (regression gate) | `evaluation.sanity_check` + `evaluation.geolife_validation` | metric thresholds vs GeoLife | CI `ML` — failure fails the build |
 
-Total automated checks: **82 backend + 31 ML + 9 frontend smoke suites**
-(plus lint, baseline and migration scripts).
+Total automated checks: **82 backend + 31 ML + 10 frontend smoke suites**
+(plus lint, baseline and migration scripts, and the scheduled production
+[health workflow](../.github/workflows/health.yml)).
 
 ---
 
@@ -50,7 +51,7 @@ requires network access.
 
 ---
 
-## 3. Frontend smoke inventory (9 scripts)
+## 3. Frontend smoke inventory (10 scripts)
 
 | Script | What it verifies |
 | --- | --- |
@@ -58,6 +59,7 @@ requires network access.
 | `live-api-smoke` | Live API contract: pagination, retry, session handling (mocked) |
 | `proxy-smoke` | Vite same-origin `/api` proxy wiring |
 | `smoke` | Core fueling math & sanity guards (duration/energy/carb/sodium/fluid tables, cold-start anchors) |
+| `draw-smoke` | **The draw-test**: road-routing profiles & waypoint thinning, straight-line fallback contract (zero network calls without an ORS key), and road-snapping success/failure paths against a mocked Overpass API |
 | `location-smoke` | Location detection, privacy rules, cancellation, error paths |
 | `location-ui-smoke` | Location input & onboarding/profile/settings save flows (UI) |
 | `login-ui-smoke` | Login password visibility, accessibility attributes, mocked sign-in |
@@ -101,6 +103,13 @@ Three parallel jobs on every push/PR (`.github/workflows/ci.yml`):
 Failure diagnostics are designed for readability: annotation budget (~10/step)
 is spent on the decisive block first, and the backend job additionally posts
 the complete log to the PR.
+
+**Production health workflow** (`.github/workflows/health.yml`) — runs on every
+merge to main, on demand, and every 6 hours (the schedule doubles as the
+ML warm-up ping from `DEPLOYMENT.md`): web SPA reachable, API
+`/api/health` returns `status: ok` (app + database), `/api/docs` descriptor
+intact, and — once the repository variable `ML_HEALTH_URL` is set — ML
+`/health` returns `model_ready: true`.
 
 ---
 
@@ -161,9 +170,9 @@ These require hardware, a deployed environment or user-held data — they are
 
 | Item | State | Notes |
 | --- | --- | --- |
-| Production **health curl** against deployed API/ML | ⏳ pending | Part of production hardening queue |
-| **Draw-test** (map drawing/routing UX) | ⏳ pending | Interactive browser test |
-| **Phone tests** (PWA install, mobile nav, GPS track on device) | ⏳ pending | Physical device pass |
+| Production **health curl** (web + API + ML) | ✅ automated | `.github/workflows/health.yml` — runs on merge/manual/6 h schedule; ML step activates when repo var `ML_HEALTH_URL` is set |
+| **Draw-test** (route drawing pipeline) | ✅ automated | `draw-smoke` (10th suite): profiles, waypoint thinning, fallback contracts, mocked Overpass snapping — wired into `npm run smoke` + CI. Live ORS key behaviour = device rows D2/D5 |
+| **Phone tests** (PWA, nav, GPS, resilience) | ⏳ pending | Execute [`device-testing.md`](device-testing.md) checklist on a physical device (~40 rows, A–G) |
 | **FitRec/Endomondo validation report** | ⏳ pending user CSV | Tooling merged (#41); awaiting the derived `endomondo_activities.csv` upload, then `python -m evaluation.endomondo_validation` commits the report JSON |
 | Screen-reader (AT) pass | ⏳ optional | Automated + keyboard audit done (§7) |
 
@@ -191,7 +200,7 @@ cd frontend
 npm ci
 npx svelte-check --output human   # 0 errors, 0 a11y warnings
 npm run build
-npm run smoke                     # all 9 scripts
+npm run smoke                     # all 10 scripts
 
 # Backend (PHP 8.3+ / composer)
 cd backend

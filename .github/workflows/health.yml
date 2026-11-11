@@ -1,0 +1,96 @@
+name: Health checks
+
+# Production endpoint verification (professor queue: "health curl").
+#
+# Runs after every merge to main, on demand, and on a 6-hour schedule — the
+# scheduled run doubles as the warm-up ping recommended in docs/DEPLOYMENT.md
+# for the ML service's free-tier sleep.
+#
+# The ML check activates once the repository variable ML_HEALTH_URL is set to
+# the deployed FastAPI base URL (e.g. https://trana-ml.onrender.com). It stays
+# skipped — with a visible notice — until then.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */6 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  production:
+    name: Production endpoints
+    runs-on: ubuntu-latest
+    env:
+      WEB_URL: https://trana-web.vercel.app
+      API_URL: https://trana-api.vercel.app
+    steps:
+      - name: Web app serves the SPA
+        run: |
+          echo "GET $WEB_URL"
+          curl --fail --silent --show-error --location --max-time 30 \
+            --retry 3 --retry-delay 5 --retry-all-errors \
+            -o /dev/null -w 'HTTP %{http_code}\n' "$WEB_URL"
+
+      - name: API health (app + database)
+        run: |
+          echo "GET $API_URL/api/health"
+          body=$(curl --fail --silent --show-error --max-time 30 \
+            --retry 3 --retry-delay 5 --retry-all-errors \
+            "$API_URL/api/health")
+          echo "$body"
+          echo "$body" | python3 -c '
+          import json, sys
+          data = json.load(sys.stdin)
+          assert data.get("status") == "ok", f"API unhealthy: {data}"
+          print("API status: ok (database reachable)")
+          '
+
+      - name: API docs descriptor
+        run: |
+          echo "GET $API_URL/api/docs"
+          body=$(curl --fail --silent --show-error --max-time 30 \
+            --retry 3 --retry-delay 5 --retry-all-errors \
+            "$API_URL/api/docs")
+          echo "$body" | python3 -c '
+          import json, sys
+          data = json.load(sys.stdin)
+          assert data.get("name") == "TRANA API", f"Unexpected descriptor: {data}"
+          print("API docs: TRANA API")
+          '
+
+      - name: ML service health (model readiness)
+        if: ${{ vars.ML_HEALTH_URL != '' }}
+        run: |
+          echo "GET ${{ vars.ML_HEALTH_URL }}/health"
+          # Generous retries: free-tier hosts sleep and wake on first contact.
+          body=$(curl --fail --silent --show-error --max-time 90 \
+            --retry 4 --retry-delay 15 --retry-all-errors \
+            "${{ vars.ML_HEALTH_URL }}/health")
+          echo "$body"
+          echo "$body" | python3 -c '
+          import json, sys
+          data = json.load(sys.stdin)
+          assert data.get("status") == "ok", f"ML unhealthy: {data}"
+          assert data.get("model_ready") is True, f"ML model not ready: {data}"
+          version = data.get("model_version")
+          print(f"ML status: ok, model {version} ready")
+          '
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Production health"
+            echo "| Check | Result |"
+            echo "| --- | --- |"
+            echo "| Web (\`$WEB_URL\`) | ${{ job.status == 'success' && '✅ checked' || '❌ see job log' }} |"
+            if [ "${{ vars.ML_HEALTH_URL }}" = "" ]; then
+              echo "| ML service | ⚠️ skipped — set repository variable \`ML_HEALTH_URL\` to enable |"
+            else
+              echo "| ML service | ${{ job.status == 'success' && '✅ checked' || '❌ see job log' }} |"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
