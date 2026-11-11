@@ -341,6 +341,15 @@ Model card proxied from the ML service: algorithm, version, metrics, feature imp
 ```
 `PUT /goals` accepts any subset of the same keys.
 
+`GET /goals/history`
+Newest-first list of every goal reached (max 100 rows), written the moment a
+daily or weekly target is crossed by a saved activity. Rows carry the
+activity's calendar `date` so the UI can group them per day.
+```json
+{ "data": [ { "date": "2026-11-11", "goal_key": "daily_calories", "target": 2700,
+              "achieved_value": 2810.5, "created_at": "2026-11-11T12:10:11+00:00" } ] }
+```
+
 ---
 
 ## Errors

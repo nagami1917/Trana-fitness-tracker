@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\GoalResource;
+use App\Models\GoalEvent;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -31,6 +32,28 @@ class GoalController extends Controller
         $goal->update($validated);
 
         return response()->json(['data' => (new GoalResource($goal->fresh()))->toArray($request)]);
+    }
+
+    /**
+     * Achievement history: newest date first, capped at 100 rows.
+     * The frontend groups rows by `date` and shows a per-date count.
+     */
+    public function history(Request $request): JsonResponse
+    {
+        $events = GoalEvent::where('user_id', $request->user()->id)
+            ->orderByDesc('date')
+            ->orderByDesc('id')
+            ->limit(100)
+            ->get()
+            ->map(fn (GoalEvent $event) => [
+                'date' => $event->date?->toDateString(),
+                'goal_key' => $event->goal_key,
+                'target' => (float) $event->target,
+                'achieved_value' => (float) $event->achieved_value,
+                'created_at' => $event->created_at?->toIso8601String(),
+            ]);
+
+        return response()->json(['data' => $events]);
     }
 
 }

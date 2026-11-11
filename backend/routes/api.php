@@ -58,6 +58,7 @@ Route::get('/docs', fn () => response()->json([
         'GET  /api/activities/summary',
         'GET  /api/goals',
         'PUT  /api/goals',
+        'GET  /api/goals/history',
         'GET  /api/predictions',
         'POST /api/predictions',
         'POST /api/predictions/preview',
@@ -96,6 +97,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/goals', [GoalController::class, 'show']);
     Route::put('/goals', [GoalController::class, 'update']);
+    Route::get('/goals/history', [GoalController::class, 'history']);
 
     // Daily sessions — daily progress tracking that resets at midnight
     Route::get('/daily-sessions/today', [DailySessionController::class, 'today']);

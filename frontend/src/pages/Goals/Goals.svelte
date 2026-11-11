@@ -1,4 +1,5 @@
 <script>
+  import { onMount } from 'svelte';
   import { Target, Flame, MapPin, Timer, Save, LoaderCircle, Trophy, Check, CalendarDays } from 'lucide-svelte';
   import Card from '../../components/common/Card.svelte';
   import DonutRing from '../../components/common/DonutRing.svelte';
@@ -16,6 +17,55 @@
   });
   let saving = $state(false);
   let dirty = $state(false);
+  let history = $state([]);
+  let historyLoading = $state(true);
+
+  onMount(async () => {
+    try {
+      history = await api.goals.history();
+    } catch {
+      history = []; // history is non-blocking — the page works without it
+    } finally {
+      historyLoading = false;
+    }
+  });
+
+  const GOAL_META = {
+    daily_calories: { label: 'Calories burned', Icon: Flame, dec: 0, unit: 'kcal' },
+    daily_distance_km: { label: 'Distance', Icon: MapPin, dec: 1, unit: 'km' },
+    daily_active_min: { label: 'Active time', Icon: Timer, dec: 0, unit: 'min' },
+    weekly_calories: { label: 'Weekly energy', Icon: Flame, dec: 0, unit: 'kcal' },
+    weekly_distance_km: { label: 'Weekly distance', Icon: MapPin, dec: 1, unit: 'km' },
+  };
+
+  /** Rows from the API are newest-first; group consecutive rows per date. */
+  const historyGroups = $derived.by(() => {
+    const groups = [];
+    for (const event of history) {
+      let group = groups[groups.length - 1];
+      if (!group || group.date !== event.date) {
+        group = { date: event.date, events: [] };
+        groups.push(group);
+      }
+      group.events.push(event);
+    }
+    return groups;
+  });
+
+  function prettyDate(dateStr) {
+    const [y, m, d] = String(dateStr).split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  }
+
+  function formatGoalValue(goalKey, value) {
+    const meta = GOAL_META[goalKey];
+    if (!meta) return nf(Math.round(value));
+    return meta.dec ? nf(value, meta.dec) : nf(Math.round(value));
+  }
 
   $effect(() => {
     if ($goals && !dirty) {
@@ -234,4 +284,62 @@
       </Card>
     </div>
   </div>
+
+  <!-- Achievement log: one row per goal reached, grouped by day (newest first). -->
+  <Card>
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <Trophy size={17} class="text-brand-500" />
+        <h2 class="text-lg">Goal history</h2>
+      </div>
+      <span class="pill">
+        {history.length} {history.length === 1 ? 'achievement' : 'achievements'}
+      </span>
+    </div>
+
+    {#if historyLoading}
+      <div class="mt-4 flex items-center gap-2 text-sm font-semibold text-ink-400">
+        <LoaderCircle size={15} class="animate-spin" /> Loading history…
+      </div>
+    {:else if !historyGroups.length}
+      <p class="mt-4 rounded-2xl bg-brand-50/60 p-4 text-sm font-semibold text-ink-400">
+        No achievements yet — finish an activity that pushes a daily or weekly target over the line
+        and it'll appear here, grouped by day.
+      </p>
+    {:else}
+      <div class="mt-4 space-y-3">
+        {#each historyGroups as group (group.date)}
+          <div class="rounded-2xl bg-brand-50/60 p-3">
+            <div class="flex items-center justify-between">
+              <span class="flex items-center gap-1.5 text-xs font-extrabold text-ink-900">
+                <CalendarDays size={13} class="text-brand-500" />
+                {prettyDate(group.date)}
+              </span>
+              <span class="pill !py-0.5">
+                {group.events.length} {group.events.length === 1 ? 'achievement' : 'achievements'}
+              </span>
+            </div>
+            <div class="mt-2 space-y-1.5">
+              {#each group.events as event (event.goal_key + event.created_at)}
+                {@const meta = GOAL_META[event.goal_key]}
+                <div class="flex items-center gap-2 rounded-xl bg-white px-2.5 py-1.5">
+                  {#if meta}
+                    <meta.Icon size={13} class="text-brand-500" />
+                    <span class="text-[11px] font-bold text-ink-700">{meta.label}</span>
+                    <span class="ml-auto text-[11px] font-extrabold text-ink-900">
+                      {formatGoalValue(event.goal_key, event.achieved_value)} /
+                      {formatGoalValue(event.goal_key, event.target)} {meta.unit}
+                    </span>
+                  {:else}
+                    <span class="text-[11px] font-bold text-ink-700">{event.goal_key}</span>
+                  {/if}
+                  <Check size={13} class="text-emerald-500" />
+                </div>
+              {/each}
+            </div>
+          </div>
+        {/each}
+      </div>
+    {/if}
+  </Card>
 </div>
