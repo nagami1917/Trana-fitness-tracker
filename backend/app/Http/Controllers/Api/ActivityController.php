@@ -8,8 +8,10 @@ use App\Http\Resources\ActivityResource;
 use App\Models\Activity;
 use App\Services\ActivityService;
 use App\Services\AnalyticsService;
+use App\Services\GoalEventRecorder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class ActivityController extends Controller
 {
@@ -60,6 +62,13 @@ class ActivityController extends Controller
     {
         $validated = $request->validated();
         $activity = $this->activities->store($request->user(), $validated);
+
+        // Best-effort: recording a goal achievement must never fail the save.
+        try {
+            app(GoalEventRecorder::class)->recordForActivity($request->user(), $activity);
+        } catch (\Throwable $exception) {
+            Log::warning('Goal event recording failed: '.$exception->getMessage());
+        }
 
         return response()->json(['data' => (new ActivityResource($activity->fresh()))->toArray($request)], 201);
     }

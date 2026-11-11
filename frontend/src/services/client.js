@@ -155,5 +155,6 @@ export const api = {
   goals: {
     get: () => request('/goals').then((d) => d.data),
     update: (patch) => request('/goals', { method: 'PUT', body: patch }).then((d) => d.data),
+    history: () => request('/goals/history').then((d) => d.data),
   },
 };
