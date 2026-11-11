@@ -163,6 +163,7 @@ try {
         assert.match(html, /Free GPS/);
         assert.match(html, /Create path/);
         assert.match(html, /From Plan Activity/);
+        assert.match(html, /From Activities/);
         assert.match(html, /Start activity/);
         assert.match(html, /View History/);
       }

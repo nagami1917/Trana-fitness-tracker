@@ -16,6 +16,7 @@
     Maximize2,
     MapPin,
     Ruler,
+    History,
   } from 'lucide-svelte';
   import TranaMap from '../../components/map/TranaMap.svelte';
   import GPSStatus from '../../components/activity/GPSStatus.svelte';
@@ -25,7 +26,7 @@
   import FoodLogger from '../../components/activity/FoodLogger.svelte';
   import ActivityIcon from '../../components/activities/ActivityIcon.svelte';
   import { link, navigate, query } from '../../lib/router.js';
-  import { profile, plans, refresh, notify } from '../../stores/index.js';
+  import { profile, plans, activities, refresh, notify } from '../../stores/index.js';
   import { activityApi, validateTrackPoint } from '../../services/activityService.js';
   import { dailySessionApi } from '../../services/dailySessionService.js';
   import { estimateMet } from '../../lib/ml/fueling.js';
@@ -97,7 +98,7 @@
   let roadSnapping = $state(true);
   let showRoads = $state(true);
 
-  // ── path selection: 'none' | 'create' | 'plan' ───────────────────────
+  // ── path selection: 'none' | 'create' | 'plan' | 'activity' ──────────
   let tranaMap = $state(null);
   let pathSource = $state('none');
 
@@ -109,6 +110,13 @@
   let planSnapAbort = null;
   let draftPlan = $state(null);
   let hydratedQueryPlan = false;
+
+  // Logged Activity route selection state
+  let activeActivity = $state(null);
+  let activityPath = $state([]);
+  let activitySnapping = $state(false);
+  let activitySnapSeq = 0;
+  let activitySnapAbort = null;
 
   // Custom path creation state
   let customWaypoints = $state([]);
@@ -140,6 +148,13 @@
     return [...list, ...withRoutes, ...withoutRoutes];
   });
 
+  const activitiesWithRoutes = $derived($activities.filter((a) => Array.isArray(a.route) && a.route.length >= 2));
+  const availableActivities = $derived.by(() => {
+    const withRoutes = $activities.filter((a) => Array.isArray(a.route) && a.route.length >= 2);
+    const withoutRoutes = $activities.filter((a) => !Array.isArray(a.route) || a.route.length < 2);
+    return [...withRoutes, ...withoutRoutes];
+  });
+
   const customClosed = $derived(isClosedLoop(customWaypoints));
   const activeCustomPath = $derived(
     customSnappedPath.length > 1
@@ -163,10 +178,28 @@
       : Number(activePlan?.distance_km ?? 0) || 0,
   );
 
+  const activeActivityPath = $derived(
+    activityPath.length >= 2
+      ? activityPath
+      : activeActivity?.route?.length >= 2
+        ? activeActivity.route
+        : [],
+  );
+  const activeActivityKm = $derived(
+    activeActivityPath.length >= 2
+      ? polylineLengthKm(activeActivityPath)
+      : Number(activeActivity?.distance_km ?? 0) || 0,
+  );
+
   const plannedRoute = $derived.by(() => {
     if (pathSource === 'plan') {
       return activePlanPath.length >= 2
         ? pathToGeoJson(activePlanPath, activePlan?.activity_type || activityType)
+        : null;
+    }
+    if (pathSource === 'activity') {
+      return activeActivityPath.length >= 2
+        ? pathToGeoJson(activeActivityPath, activeActivity?.activity_type || activityType)
         : null;
     }
     if (pathSource === 'create') {
@@ -178,9 +211,11 @@
   });
 
   const mapPlannedWaypoints = $derived(pathSource === 'create' ? customWaypoints : []);
-  const interactiveRoute = $derived(pathSource === 'create' && customDrawing && !tracking);
+  const interactiveRoute = $derived(pathSource === 'create' && customDrawing);
   const mapRouting = $derived(
-    (pathSource === 'create' && customRouting) || (pathSource === 'plan' && planSnapping),
+    (pathSource === 'create' && customRouting) ||
+    (pathSource === 'plan' && planSnapping) ||
+    (pathSource === 'activity' && activitySnapping),
   );
 
   // Today's daily session (shared between DailyProgress and FoodLogger)
@@ -242,6 +277,13 @@
     planSnapping = false;
   }
 
+  function resetActivitySnap() {
+    activitySnapAbort?.abort();
+    activitySnapAbort = null;
+    activitySnapSeq += 1;
+    activitySnapping = false;
+  }
+
   function resetCustomSnap() {
     clearTimeout(customSnapTimer);
     customSnapAbort?.abort();
@@ -259,6 +301,9 @@
       resetPlanSnap();
       activePlan = null;
       planPath = [];
+      resetActivitySnap();
+      activeActivity = null;
+      activityPath = [];
       resetCustomSnap();
       customWaypoints = [];
       placeResults = [];
@@ -269,16 +314,34 @@
       resetPlanSnap();
       activePlan = null;
       planPath = [];
-      customDrawing = !tracking;
+      resetActivitySnap();
+      activeActivity = null;
+      activityPath = [];
+      customDrawing = true;
       return;
     }
     if (mode === 'plan') {
+      resetActivitySnap();
+      activeActivity = null;
+      activityPath = [];
       draftPlan = readDraftPlan();
       placeResults = [];
       searchError = '';
       if (!activePlan) {
         const firstWithRoute = (draftPlan?.route?.length >= 2 ? draftPlan : null) ?? plansWithRoutes[0] ?? null;
         if (firstWithRoute) selectPlanRoute(firstWithRoute);
+      }
+      return;
+    }
+    if (mode === 'activity') {
+      resetPlanSnap();
+      activePlan = null;
+      planPath = [];
+      placeResults = [];
+      searchError = '';
+      if (!activeActivity) {
+        const firstWithRoute = activitiesWithRoutes[0] ?? null;
+        if (firstWithRoute) selectActivityRoute(firstWithRoute);
       }
     }
   }
@@ -297,7 +360,7 @@
       planPath = [];
       notify('This saved plan only has a target distance. Switching to Create path so you can plot Start & End on the map.', 'info');
       pathSource = 'create';
-      customDrawing = !tracking;
+      customDrawing = true;
       return;
     }
 
@@ -349,11 +412,85 @@
     planPath = [];
     pathSource = 'create';
     customWaypoints = rawStops;
-    customDrawing = !tracking;
+    customDrawing = true;
     if (sourcePath.length > 2) {
       customSnappedPath = [...sourcePath];
       customProvider = 'saved';
       customProviderLabel = 'From Plan Activity';
+      customRouting = false;
+      void tick().then(() => tranaMap?.fitRouteBounds?.());
+    } else if (customRouteMode === 'roads') {
+      scheduleCustomSnap({ immediate: true, fitAfter: true });
+    } else {
+      void tick().then(() => tranaMap?.fitRouteBounds?.());
+    }
+  }
+
+  function selectActivityRoute(act) {
+    if (!act) return;
+    resetActivitySnap();
+
+    if (!Array.isArray(act.route) || act.route.length < 2) {
+      if (!tracking && act.activity_type) activityType = act.activity_type;
+      activeActivity = act;
+      activityPath = [];
+      notify('This logged activity has no saved map path. Switching to Create path so you can plot Start & End.', 'info');
+      pathSource = 'create';
+      customDrawing = true;
+      return;
+    }
+
+    pathSource = 'activity';
+    activeActivity = act;
+    activityPath = [...act.route];
+    if (!tracking && act.activity_type) {
+      activityType = act.activity_type;
+    }
+    following = false;
+    void tick().then(() => tranaMap?.fitRouteBounds?.());
+
+    if (act.route.length === 2) {
+      const seq = ++activitySnapSeq;
+      const controller = new AbortController();
+      activitySnapAbort = controller;
+      activitySnapping = true;
+      void (async () => {
+        const result = await routeThroughRoads(
+          act.route,
+          act.activity_type || activityType,
+          { allowKeyless: true, signal: controller.signal },
+        );
+        if (seq !== activitySnapSeq) return;
+        if (result?.path?.length >= 2) {
+          activityPath = result.path;
+          void tick().then(() => tranaMap?.fitRouteBounds?.());
+        }
+        activitySnapping = false;
+      })();
+    }
+  }
+
+  function customizeLoadedActivity() {
+    if (!activeActivity) return;
+    const sourcePath = activeActivityPath;
+    if (sourcePath.length < 2) {
+      selectPathSource('create');
+      return;
+    }
+    const rawStops = Array.isArray(activeActivity.route) && activeActivity.route.length <= 12
+      ? activeActivity.route.map((p) => [...p])
+      : waypointsFromPath(sourcePath);
+
+    resetActivitySnap();
+    activeActivity = null;
+    activityPath = [];
+    pathSource = 'create';
+    customWaypoints = rawStops;
+    customDrawing = true;
+    if (sourcePath.length > 2) {
+      customSnappedPath = [...sourcePath];
+      customProvider = 'saved';
+      customProviderLabel = 'From Activities';
       customRouting = false;
       void tick().then(() => tranaMap?.fitRouteBounds?.());
     } else if (customRouteMode === 'roads') {
@@ -521,7 +658,7 @@
     placeQuery = '';
     placeResults = [];
     searchError = '';
-    customDrawing = !tracking;
+    customDrawing = true;
     following = false;
 
     if (customWaypoints.length === 1) {
@@ -820,6 +957,7 @@
       clearTimeout(customSnapTimer);
       customSnapAbort?.abort();
       planSnapAbort?.abort();
+      activitySnapAbort?.abort();
       searchAbort?.abort();
       releaseLivePosition();
     };
@@ -887,7 +1025,7 @@
       </div>
     </div>
 
-    <!-- Path selection: Free GPS vs Create path vs From Plan Activity -->
+    <!-- Path selection: Free GPS vs Create path vs From Plan Activity vs From Activities -->
     <div class="rounded-2xl border border-brand-100 bg-brand-50/50 p-3 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div class="flex flex-wrap items-center gap-2">
@@ -926,6 +1064,20 @@
               {#if plansWithRoutes.length}
                 <span class="rounded-full px-1.5 py-0.5 text-[10px] leading-none {pathSource === 'plan' ? 'bg-white/25 text-white' : 'bg-brand-100 text-brand-700'}">
                   {plansWithRoutes.length}
+                </span>
+              {/if}
+            </button>
+            <button
+              type="button"
+              class="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-extrabold transition cursor-pointer {pathSource === 'activity'
+                ? 'bg-brand-gradient text-white shadow-glow'
+                : 'text-ink-600 hover:bg-brand-50'}"
+              onclick={() => selectPathSource('activity')}
+            >
+              <History size={13} /> From Activities
+              {#if activitiesWithRoutes.length}
+                <span class="rounded-full px-1.5 py-0.5 text-[10px] leading-none {pathSource === 'activity' ? 'bg-white/25 text-white' : 'bg-brand-100 text-brand-700'}">
+                  {activitiesWithRoutes.length}
                 </span>
               {/if}
             </button>
@@ -970,13 +1122,12 @@
 
               <button
                 type="button"
-                disabled={tracking}
-                class="btn-chip disabled:opacity-50"
-                class:btn-chip-active={customDrawing && !tracking}
+                class="btn-chip"
+                class:btn-chip-active={customDrawing}
                 onclick={() => (customDrawing = !customDrawing)}
                 title={customDrawing ? 'Lock map to pan without adding stops' : 'Tap map to plot Start & End'}
               >
-                {#if customDrawing && !tracking}
+                {#if customDrawing}
                   <Pencil size={12} /> Tap to add: ON
                 {:else}
                   <Lock size={12} /> Pan only
@@ -1175,11 +1326,98 @@
             </div>
           {/if}
         </div>
+      {:else if pathSource === 'activity'}
+        <div class="space-y-2.5 border-t border-brand-100/80 pt-2.5">
+          {#if activeActivity}
+            <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-brand-200 bg-white px-3 py-2 text-xs">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
+                <span class="font-extrabold capitalize text-ink-900">
+                  Activity loaded: {nf(activeActivityKm, 2)} km {activeActivity.activity_type}
+                </span>
+                {#if activeActivity.duration_min}
+                  <span class="text-ink-500 font-semibold">· {Math.round(activeActivity.duration_min)} min</span>
+                {/if}
+                {#if activitySnapping}
+                  <span class="inline-flex items-center gap-1 text-brand-600 font-bold">
+                    <LoaderCircle size={12} class="animate-spin" /> Routing Start → End along roads…
+                  </span>
+                {:else if activeActivityPath.length >= 2}
+                  <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-extrabold text-emerald-700">
+                    Start & End displayed
+                  </span>
+                {/if}
+              </div>
+              <div class="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  class="btn-chip !py-1"
+                  onclick={() => { following = false; tranaMap?.fitRouteBounds?.(); }}
+                >
+                  <Maximize2 size={11} /> Fit view
+                </button>
+                <button type="button" class="btn-chip !py-1" onclick={customizeLoadedActivity}>
+                  <Pencil size={11} /> Edit stops
+                </button>
+              </div>
+            </div>
+          {/if}
+
+          {#if availableActivities.length}
+            <div>
+              <p class="mb-1.5 text-[11px] font-bold text-ink-500">
+                Click a past activity to load its Start → End route onto the tracking map:
+              </p>
+              <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {#each availableActivities as act (act.id)}
+                  {@const hasRoute = Array.isArray(act.route) && act.route.length >= 2}
+                  {@const isSelected = activeActivity && String(activeActivity.id) === String(act.id)}
+                  <button
+                    type="button"
+                    class="flex items-center gap-2.5 rounded-2xl border p-2.5 text-left transition cursor-pointer {isSelected
+                      ? 'border-brand-400 bg-white shadow-soft ring-2 ring-brand-200'
+                      : 'border-brand-100 bg-white/85 hover:border-brand-300 hover:bg-white'}"
+                    onclick={() => selectActivityRoute(act)}
+                  >
+                    <ActivityIcon type={act.activity_type || 'run'} size="sm" />
+                    <div class="min-w-0 flex-1">
+                      <p class="truncate text-xs font-extrabold capitalize text-ink-900">
+                        {act.distance_km} km {act.activity_type}
+                      </p>
+                      <p class="truncate text-[10px] font-semibold text-ink-400">
+                        {#if act.duration_min}{Math.round(act.duration_min)} min · {/if}
+                        {#if act.started_at}{shortDate(act.started_at)} · {/if}
+                        {hasRoute ? 'Start → End path' : 'Distance only'}
+                      </p>
+                    </div>
+                    <span class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-extrabold {hasRoute ? 'bg-brand-50 text-brand-600' : 'bg-ink-100 text-ink-500'}">
+                      {isSelected ? 'Shown' : hasRoute ? 'Load' : 'Set path'}
+                    </span>
+                  </button>
+                {/each}
+              </div>
+            </div>
+          {:else}
+            <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-dashed border-brand-200 bg-white/80 px-3 py-2.5 text-xs">
+              <span class="font-semibold text-ink-500">
+                No logged activities yet — create a path right here or log one under Activities.
+              </span>
+              <div class="flex items-center gap-1.5">
+                <button type="button" class="btn-chip" onclick={() => selectPathSource('create')}>
+                  <Pencil size={12} /> Create path here
+                </button>
+                <button type="button" class="btn-chip btn-chip-active" onclick={() => navigate('/activities')}>
+                  Open Activities →
+                </button>
+              </div>
+            </div>
+          {/if}
+        </div>
       {/if}
     </div>
 
     <!-- Live Map (explicit height so MapLibre never collapses to 0px) -->
-    <div class="relative h-[340px] sm:h-[420px] lg:h-[460px] w-full">
+    <div class="relative h-[320px] sm:h-[380px] lg:h-[410px] w-full">
       <TranaMap
         bind:this={tranaMap}
         {points}
@@ -1189,7 +1427,7 @@
         routeMode={customRouteMode}
         routing={mapRouting}
         onRoutePick={onCustomRoutePick}
-        fitRoute={!tracking && pathSource === 'plan' && Boolean(plannedRoute)}
+        fitRoute={!tracking && (pathSource === 'plan' || pathSource === 'activity') && Boolean(plannedRoute)}
         center={mapCenter}
         {currentPosition}
         {startPosition}
