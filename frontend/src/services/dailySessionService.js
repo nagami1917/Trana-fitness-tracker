@@ -12,80 +12,102 @@
 
 import { api } from './client.js';
 
+function toQuery(params = {}) {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '') search.set(key, String(value));
+  }
+  const out = search.toString();
+  return out ? `?${out}` : '';
+}
+
 export const dailySessionApi = {
-  /** List all daily sessions for the authenticated user. Supports ?from=&to= date range. */
+  /** List all daily sessions for the authenticated user. Supports ?from=&to=&limit=&page=. */
   list(params = {}) {
-    return api.request('/api/daily-sessions', { method: 'GET', auth: true }).then((d) => d.data);
+    return api.request(`/daily-sessions${toQuery(params)}`, { method: 'GET', auth: true });
   },
 
-  /** Get or create today's session. POST to create/update. */
+  /** Get today's session (`{ data: session | null }`). */
   today() {
-    return api.request('/api/daily-sessions/today', { method: 'GET', auth: true }).then((d) => d.data);
+    return api.request('/daily-sessions/today', { method: 'GET', auth: true });
   },
 
-  /** Save/update today's session (calories burned/eaten, water, notes). */
-  saveToday(payload) {
-    return api.request('/api/daily-sessions/today', {
+  /** Create or update today's session (`{ data: session }`). */
+  saveToday(payload = {}) {
+    return api.request('/daily-sessions/today', {
       method: 'POST',
       body: payload,
       auth: true,
-    }).then((d) => d.data);
+    });
   },
 
-  /** Get one session with all its foods. */
+  /** Get one session with all its foods (`{ data: session }`). */
   get(id) {
-    return api.request(`/api/daily-sessions/${id}`, { method: 'GET', auth: true }).then((d) => d.data);
+    return api.request(`/daily-sessions/${id}`, { method: 'GET', auth: true });
   },
 
-  /** Update a session. */
+  /** Update a session (`{ data: session }`). */
   update(id, payload) {
-    return api.request(`/api/daily-sessions/${id}`, {
+    return api.request(`/daily-sessions/${id}`, {
       method: 'PUT',
       body: payload,
       auth: true,
-    }).then((d) => d.data);
+    });
   },
 
   /** Delete a session and all its foods. */
   remove(id) {
-    return api.request(`/api/daily-sessions/${id}`, {
+    return api.request(`/daily-sessions/${id}`, {
       method: 'DELETE',
       auth: true,
-    }).then((d) => d.data);
+    });
   },
 
-  /** Add a food item to a session. */
+  /** Add a food item to a session (`{ data: food, session }`). */
   addFood(sessionId, payload) {
-    return api.request(`/api/daily-sessions/${sessionId}/foods`, {
+    return api.request(`/daily-sessions/${sessionId}/foods`, {
       method: 'POST',
       body: payload,
       auth: true,
-    }).then((d) => d.data);
+    });
   },
 
-  /** Update a food item. */
+  /** Update a food item (`{ data: food, session }`). */
   updateFood(sessionId, foodId, payload) {
-    return api.request(`/api/daily-sessions/${sessionId}/foods/${foodId}`, {
+    return api.request(`/daily-sessions/${sessionId}/foods/${foodId}`, {
       method: 'PUT',
       body: payload,
       auth: true,
-    }).then((d) => d.data);
+    });
   },
 
-  /** Delete a food item. */
+  /** Delete a food item (`{ deleted: true, session }`). */
   removeFood(sessionId, foodId) {
-    return api.request(`/api/daily-sessions/${sessionId}/foods/${foodId}`, {
+    return api.request(`/daily-sessions/${sessionId}/foods/${foodId}`, {
       method: 'DELETE',
       auth: true,
-    }).then((d) => d.data);
+    });
   },
 };
 
 /**
- * Helper: compute today's date string in YYYY-MM-DD format.
+ * Helper: compute today's local date string in YYYY-MM-DD format.
  */
 export function todayDate() {
-  return new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const offset = now.getTimezoneOffset() * 60000;
+  return new Date(now.getTime() - offset).toISOString().split('T')[0];
+}
+
+/**
+ * Helper: format a YYYY-MM-DD or ISO session date safely without UTC day shifts.
+ */
+export function formatSessionDate(value, options = { weekday: 'short', month: 'short', day: 'numeric' }) {
+  if (!value) return '';
+  const text = String(value);
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(text) ? new Date(`${text}T12:00:00`) : new Date(text);
+  if (Number.isNaN(date.getTime())) return text;
+  return date.toLocaleDateString(undefined, options);
 }
 
 /**

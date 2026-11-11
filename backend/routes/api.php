@@ -172,6 +172,7 @@ Route::middleware(['auth:sanctum', 'ensure.active'])->group(function () {
 
     // Daily sessions — daily progress tracking that resets at midnight
     Route::get('/daily-sessions/today', [DailySessionController::class, 'today']);
+    Route::post('/daily-sessions/today', [DailySessionController::class, 'today'])->middleware('throttle:writes');
     Route::apiResource('daily-sessions', DailySessionController::class)->only(['index', 'show']);
     Route::match(['put', 'patch'], '/daily-sessions/{dailySession}', [DailySessionController::class, 'update'])->middleware('throttle:writes');
     Route::delete('/daily-sessions/{dailySession}', [DailySessionController::class, 'destroy'])->middleware('throttle:writes');

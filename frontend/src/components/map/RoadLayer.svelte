@@ -1,47 +1,21 @@
 <script>
   import { onDestroy } from 'svelte';
-  import maplibregl from 'maplibre-gl';
+  import { toLatLng } from '../../services/mapService.js';
 
-  let { map, center = [14.676, 121.0437], radiusM = 2000 } = $props();
+  let { map, center = [14.676, 121.0437], radiusM = 1200 } = $props();
 
-  const SOURCE_ID = 'trana-road-layer';
+  const SOURCE_ID = 'trana-road-source';
   const LAYER_ID = 'trana-road-layer';
   let queryTimer = null;
+  let lastFetchKey = '';
 
-  $effect(() => {
-    if (!map) return;
-
-    if (!map.getSource(SOURCE_ID)) {
-      map.addSource(SOURCE_ID, {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-      });
-    }
-
-    if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
-
-    map.addLayer({
-      id: LAYER_ID,
-      type: 'line',
-      source: SOURCE_ID,
-      layout: { 'line-join': 'round', 'line-cap': 'round' },
-      paint: {
-        'line-color': '#475569',
-        'line-width': 3,
-        'line-opacity': 0.6,
-      },
-    });
-
-    fetchRoads(center[0], center[1], radiusM);
-  });
-
-  async function fetchRoads(lat, lng, radiusM) {
-    if (!map) return;
+  async function fetchRoads(lat, lng, radius) {
+    if (!map || !map.isStyleLoaded?.()) return;
 
     const query = `
-      [out:json][timeout:25];
+      [out:json][timeout:15];
       (
-        way["highway"~"^(motorway|trunk|primary|secondary|tertiary|residential|unclassified|road|living_street|service|track|path|cycleway|footway)$"](around:${radiusM},${lat},${lng});
+        way["highway"~"^(motorway|trunk|primary|secondary|tertiary|residential|unclassified|road|living_street|service|track|path|cycleway|footway)$"](around:${radius},${lat},${lng});
       );
       out geom;
     `;
@@ -50,10 +24,10 @@
       const response = await fetch('https://overpass-api.de/api/interpreter', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
           Accept: 'application/json',
         },
-        body: JSON.stringify({ query }),
+        body: new URLSearchParams({ data: query }),
       });
 
       if (!response.ok) return;
@@ -70,21 +44,48 @@
           },
         }));
 
-      if (map.getSource(SOURCE_ID)) {
+      if (map?.getSource?.(SOURCE_ID)) {
         map.getSource(SOURCE_ID).setData({ type: 'FeatureCollection', features });
       }
     } catch {
-      // Silently fail — roads are a nice-to-have visual aid
+      // Silently fail — roads are an optional visual aid.
     }
   }
 
-  // Re-fetch roads when centre moves significantly
   $effect(() => {
-    if (!map) return;
+    if (!map || !map.isStyleLoaded?.()) return;
+
+    if (!map.getSource(SOURCE_ID)) {
+      map.addSource(SOURCE_ID, {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+    }
+
+    if (!map.getLayer(LAYER_ID)) {
+      map.addLayer({
+        id: LAYER_ID,
+        type: 'line',
+        source: SOURCE_ID,
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: {
+          'line-color': '#475569',
+          'line-width': 2.5,
+          'line-opacity': 0.5,
+        },
+      });
+    }
+
+    const coords = toLatLng(center);
+    if (!coords) return;
+    const key = `${coords[0].toFixed(3)},${coords[1].toFixed(3)},${radiusM}`;
+    if (key === lastFetchKey) return;
+
     clearTimeout(queryTimer);
     queryTimer = setTimeout(() => {
-      fetchRoads(center[0], center[1], radiusM);
-    }, 2000);
+      lastFetchKey = key;
+      fetchRoads(coords[0], coords[1], radiusM);
+    }, 600);
   });
 
   onDestroy(() => {
@@ -94,5 +95,3 @@
     if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
   });
 </script>
-
-<slot />

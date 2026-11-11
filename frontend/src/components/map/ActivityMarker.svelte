@@ -1,77 +1,85 @@
 <script>
   import { onDestroy } from 'svelte';
   import * as maplibregl from 'maplibre-gl';
-  import { MARKER_COLORS, MARKER_SIZE } from '../../config/mapConfig.js';
+  import { MARKER_COLORS } from '../../config/mapConfig.js';
+  import { toLatLng } from '../../services/mapService.js';
 
   let { map, currentPosition = null, startPosition = null, finishPosition = null } = $props();
 
-  const markers = $state([]);
+  let markers = [];
 
-  function iconHtml({ color, size = MARKER_SIZE, ring = '#ffffff', ringWidth = 2 }) {
-    const radius = size / 2;
-    return `
-      <div style="
-        display:grid;place-items:center;
-        width:${size}px;height:${size}px;
-        border-radius:50%;
-        background:${color};
-        border:${ringWidth}px solid ${ring};
-        box-shadow:0 2px 8px rgba(0,0,0,0.35);
-      ">
-        <div style="width:${size * 0.45}px;height:${size * 0.45}px;border-radius:50%;background:${ring}"></div>
-      </div>`;
+  function makeCircle({ color, size = 14, pulse = false, ring = '#ffffff', title = '' }) {
+    const el = document.createElement('div');
+    el.style.width = `${size}px`;
+    el.style.height = `${size}px`;
+    el.style.borderRadius = '9999px';
+    el.style.background = color;
+    el.style.border = `2.5px solid ${ring}`;
+    el.style.boxShadow = pulse
+      ? '0 0 0 6px rgba(13, 148, 136, 0.25), 0 2px 6px rgba(0, 0, 0, 0.3)'
+      : '0 2px 6px rgba(0, 0, 0, 0.35)';
+    if (title) el.title = title;
+    return el;
+  }
+
+  function clearMarkers() {
+    for (const m of markers) {
+      try {
+        m.remove();
+      } catch {
+        // Ignore already-removed markers.
+      }
+    }
+    markers = [];
   }
 
   $effect(() => {
+    clearMarkers();
     if (!map) return;
-    clear();
 
-    if (startPosition) {
+    const start = toLatLng(startPosition);
+    if (start) {
       markers.push(
         new maplibregl.Marker({
-          element: toElement(iconHtml({ color: MARKER_COLORS.start })),
-          anchor: 'bottom',
+          element: makeCircle({ color: MARKER_COLORS.start, size: 12, title: 'Start' }),
+          anchor: 'center',
         })
-          .setLngLat([startPosition[1], startPosition[0]])
+          .setLngLat([start[1], start[0]])
           .addTo(map),
       );
     }
 
-    if (currentPosition) {
+    const finish = toLatLng(finishPosition);
+    if (finish) {
       markers.push(
         new maplibregl.Marker({
-          element: toElement(iconHtml({ color: MARKER_COLORS.current })),
-          anchor: 'bottom',
+          element: makeCircle({ color: MARKER_COLORS.finish, size: 12, title: 'Finish' }),
+          anchor: 'center',
         })
-          .setLngLat([currentPosition[1], currentPosition[0]])
+          .setLngLat([finish[1], finish[0]])
           .addTo(map),
       );
     }
 
-    if (finishPosition) {
+    const current = toLatLng(currentPosition);
+    if (current) {
       markers.push(
         new maplibregl.Marker({
-          element: toElement(iconHtml({ color: MARKER_COLORS.finish, ring: '#cbd5e1' })),
-          anchor: 'bottom',
+          element: makeCircle({
+            color: MARKER_COLORS.current,
+            size: 16,
+            pulse: true,
+            title: 'Current position',
+          }),
+          anchor: 'center',
         })
-          .setLngLat([finishPosition[1], finishPosition[0]])
+          .setLngLat([current[1], current[0]])
           .addTo(map),
       );
     }
   });
 
-  function clear() {
-    markers.forEach((m) => m.remove());
-    markers.length = 0;
-  }
-
-  function toElement(html) {
-    const div = document.createElement('div');
-    div.innerHTML = html.trim();
-    return div.firstElementChild;
-  }
-
-  onDestroy(() => clear());
+  onDestroy(() => {
+    clearMarkers();
+  });
 </script>
-
-<slot />

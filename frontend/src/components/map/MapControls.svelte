@@ -1,49 +1,54 @@
 <script>
-  import { Target } from 'lucide-svelte';
+  import { Plus, Minus, Crosshair } from 'lucide-svelte';
 
-  let { map } = $props();
-
-  let following = $state(true);
+  let { map = null, following = true, onToggleFollow = () => {} } = $props();
 
   function zoomIn() {
     if (!map) return;
-    map.easeTo({ zoom: map.getZoom() + 1, duration: 250 });
+    map.zoomIn({ animate: true, duration: 250 });
   }
 
   function zoomOut() {
     if (!map) return;
-    map.easeTo({ zoom: map.getZoom() - 1, duration: 250 });
-  }
-
-  function toggleFollow() {
-    following = !following;
+    map.zoomOut({ animate: true, duration: 250 });
   }
 </script>
 
-<div class="flex flex-col gap-1.5">
+<div
+  class="flex flex-col gap-1 rounded-xl border border-slate-200/80 bg-white/95 backdrop-blur-md p-1.5 shadow-lg"
+  role="group"
+  aria-label="Map controls"
+>
   <button
-    class="rounded-xl p-3 border border-brand-100 bg-white shadow-soft text-ink-700 hover:bg-brand-50 hover:text-brand-700 transition"
-    aria-label="Zoom in"
+    type="button"
     onclick={zoomIn}
+    class="grid h-8 w-8 place-items-center rounded-lg text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition cursor-pointer"
+    aria-label="Zoom in"
+    title="Zoom in"
   >
-    <span class="text-sm font-bold">+</span>
+    <Plus size={15} />
   </button>
+
   <button
-    class="rounded-xl p-3 border border-brand-100 bg-white shadow-soft text-ink-700 hover:bg-brand-50 hover:text-brand-700 transition"
-    aria-label="Zoom out"
+    type="button"
     onclick={zoomOut}
+    class="grid h-8 w-8 place-items-center rounded-lg text-slate-700 hover:bg-brand-50 hover:text-brand-700 transition cursor-pointer"
+    aria-label="Zoom out"
+    title="Zoom out"
   >
-    <span class="text-sm font-bold">−</span>
+    <Minus size={15} />
   </button>
+
   <button
-    class={`
-      rounded-xl p-3 border shadow-soft text-ink-700 transition
-      ${following ? 'border-brand-100 bg-white' : 'border-brand-200 bg-brand-50 text-brand-700'}
-    `}
-    aria-label={following ? 'Following location' : 'Follow location off'}
+    type="button"
+    onclick={onToggleFollow}
+    class="grid h-8 w-8 place-items-center rounded-lg transition cursor-pointer {following
+      ? 'bg-brand-600 text-white hover:bg-brand-700'
+      : 'text-slate-700 hover:bg-brand-50 hover:text-brand-700'}"
+    aria-label={following ? 'Following your location' : 'Center on location'}
+    title={following ? 'Following your location' : 'Center on location'}
     aria-pressed={following}
-    onclick={toggleFollow}
   >
-    <Target size={18} strokeWidth={2} />
+    <Crosshair size={15} />
   </button>
 </div>

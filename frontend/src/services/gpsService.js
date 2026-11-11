@@ -40,6 +40,17 @@ export function trackPoint(coords, timestamp) {
     throw new GpsError('invalid');
   }
 
+  let isoTimestamp;
+  if (typeof timestamp === 'number' && Number.isFinite(timestamp)) {
+    isoTimestamp = new Date(timestamp).toISOString();
+  } else if (timestamp instanceof Date && Number.isFinite(timestamp.getTime())) {
+    isoTimestamp = timestamp.toISOString();
+  } else if (typeof timestamp === 'string' && !Number.isNaN(Date.parse(timestamp))) {
+    isoTimestamp = new Date(timestamp).toISOString();
+  } else {
+    isoTimestamp = new Date().toISOString();
+  }
+
   return {
     latitude,
     longitude,
@@ -48,7 +59,7 @@ export function trackPoint(coords, timestamp) {
       ? Math.round(coords.speed * 3.6 * 10) / 10 // m/s → km/h
       : null,
     accuracyM: Number.isFinite(coords.accuracy) ? coords.accuracy : null,
-    timestamp: timestamp ?? new Date().toISOString(),
+    timestamp: isoTimestamp,
   };
 }
 

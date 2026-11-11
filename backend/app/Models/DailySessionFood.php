@@ -16,6 +16,8 @@ class DailySessionFood extends Model
 {
     use HasFactory;
 
+    protected $table = 'daily_session_foods';
+
     protected $fillable = [
         'daily_session_id',
         'meal_type',

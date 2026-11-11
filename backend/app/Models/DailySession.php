@@ -56,12 +56,12 @@ class DailySession extends Model
 
     public function scopeForDate(Builder $query, string $date): Builder
     {
-        return $query->where('session_date', $date);
+        return $query->whereDate('session_date', $date);
     }
 
     public function scopeBetweenDates(Builder $query, string $from, string $to): Builder
     {
-        return $query->whereBetween('session_date', [$from, $to]);
+        return $query->whereDate('session_date', '>=', $from)->whereDate('session_date', '<=', $to);
     }
 
     public function getNetCaloriesAttribute(): int
