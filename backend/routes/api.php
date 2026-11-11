@@ -2,6 +2,10 @@
 
 use App\Http\Controllers\Api\AccountController;
 use App\Http\Controllers\Api\ActivityController;
+use App\Http\Controllers\Api\AdminDashboardController;
+use App\Http\Controllers\Api\AdminErrorLogController;
+use App\Http\Controllers\Api\AdminModelController;
+use App\Http\Controllers\Api\AdminUserController;
 use App\Http\Controllers\Api\ActivityPointController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DailySessionController;
@@ -84,6 +88,13 @@ Route::get('/docs', fn () => response()->json([
         'DEL  /api/predictions/{id}',
         'GET  /api/model',
         'POST /api/client-errors',
+        'GET  /api/admin/dashboard',
+        'GET  /api/admin/users?q=&status=',
+        'PAT  /api/admin/users/{id}/suspend',
+        'PAT  /api/admin/users/{id}/reactivate',
+        'GET  /api/admin/model',
+        'GET  /api/admin/errors?status=&kind=',
+        'PAT  /api/admin/errors/{id}',
     ],
 ]));
 
@@ -107,7 +118,9 @@ Route::get('/email/verify/{id}/{hash}', [EmailVerificationController::class, 've
     ->middleware('throttle:auth')
     ->name('verification.verify');
 
-Route::middleware('auth:sanctum')->group(function () {
+// Authenticated surface. `ensure.active` re-checks the suspension flag on
+// every request — a suspended token dies here even if login was bypassed.
+Route::middleware(['auth:sanctum', 'ensure.active'])->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
 
@@ -178,4 +191,19 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/model', [PredictionController::class, 'model']);
 
+    // ---------------------------------------------------------------- admin
+    // Tier-1 console. EVERY endpoint sits behind the `admin` middleware —
+    // role checks are server-side only; the SPA's nav gating is cosmetic.
+    Route::middleware('admin')->prefix('admin')->group(function () {
+        // Scalar ids, resolved inside the controllers: implicit model binding
+        // would run BEFORE this group's middleware and leak id existence
+        // (404 vs 403) to non-admins.
+        Route::get('/dashboard', [AdminDashboardController::class, 'show']);
+        Route::get('/users', [AdminUserController::class, 'index']);
+        Route::patch('/users/{userId}/suspend', [AdminUserController::class, 'suspend']);
+        Route::patch('/users/{userId}/reactivate', [AdminUserController::class, 'reactivate']);
+        Route::get('/model', [AdminModelController::class, 'show']);
+        Route::get('/errors', [AdminErrorLogController::class, 'index']);
+        Route::patch('/errors/{errorId}', [AdminErrorLogController::class, 'update']);
+    });
 });

@@ -22,6 +22,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'abilities' => \Laravel\Sanctum\Http\Middleware\CheckAbilities::class,
             'ability' => \Laravel\Sanctum\Http\Middleware\CheckForAnyAbility::class,
+            // Admin console: server-side role gate + suspension re-check.
+            'admin' => \App\Http\Middleware\EnsureAdmin::class,
+            'ensure.active' => \App\Http\Middleware\EnsureNotSuspended::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

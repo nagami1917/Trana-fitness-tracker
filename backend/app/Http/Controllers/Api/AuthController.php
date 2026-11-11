@@ -59,6 +59,12 @@ class AuthController extends Controller
             ]);
         }
 
+        // Suspended accounts cannot sign in at all — the flag is enforced
+        // again on every authenticated request (EnsureNotSuspended).
+        if ($user->isSuspended()) {
+            return response()->json(['message' => 'This account has been suspended.'], 403);
+        }
+
         $user->ensureProfile();
         $user->ensureGoals();
 
@@ -88,6 +94,7 @@ class AuthController extends Controller
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
+            'role' => $user->role,
             'email_verified_at' => $user->email_verified_at?->toIso8601String(),
             'profile' => $profile,
             'created_at' => $user->created_at?->toIso8601String(),
