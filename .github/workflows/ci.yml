@@ -51,16 +51,13 @@ jobs:
           code=${PIPESTATUS[0]}
           if [ "$code" -ne 0 ]; then
             # Surface the failure as annotations: job logs live on a host the
-            # PR-comment channel cannot reach, annotations are the readable path.
+            # PR-comment channel cannot reach, annotations are the readable
+            # path. Budget is ~10 per step — assertion (E) lines first, then
+            # the FAILED summary, then resolved versions on one line.
             {
-              pip list --format=freeze 2>/dev/null | grep -E '^(fastapi|starlette|httpx|pydantic|pytest|anyio)==' || true
-              plain=$(sed -E 's/\x1b\[[0-9;]*m//g' /tmp/ml-tests.log)
-              if printf '%s\n' "$plain" | grep -qE '^[[:space:]]*[0-9]+\) '; then
-                printf '%s\n' "$plain" | sed -n '/^[[:space:]]*[0-9][0-9]*) /,$p'
-              else
-                printf '%s\n' "$plain" | tail -40
-              fi
-            } | cut -c1-450 | head -14 | while IFS= read -r line; do
+              grep -E '^(E |FAILED )' /tmp/ml-tests.log | head -8
+              echo "versions: $(pip list --format=freeze 2>/dev/null | grep -E '^(fastapi|starlette|httpx|pydantic|pytest|anyio)=' | tr '\n' ' ')"
+            } | cut -c1-450 | while IFS= read -r line; do
               if [ -n "$line" ]; then echo "::error::$line"; fi
             done
             exit "$code"
