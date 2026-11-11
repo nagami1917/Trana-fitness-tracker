@@ -14,6 +14,8 @@ import Fueling from '../pages/Fueling/Fueling.svelte';
 import Goals from '../pages/Goals/Goals.svelte';
 import Profile from '../pages/Profile/Profile.svelte';
 import Settings from '../pages/Settings/Settings.svelte';
+import Privacy from '../pages/Legal/Privacy.svelte';
+import Terms from '../pages/Legal/Terms.svelte';
 
 export const ROUTES = {
   '/': Dashboard,
@@ -27,4 +29,6 @@ export const ROUTES = {
   '/goals': Goals,
   '/profile': Profile,
   '/settings': Settings,
+  '/privacy': Privacy,
+  '/terms': Terms,
 };

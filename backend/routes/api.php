@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AccountController;
 use App\Http\Controllers\Api\ActivityController;
 use App\Http\Controllers\Api\ActivityPointController;
 use App\Http\Controllers\Api\AuthController;
@@ -56,6 +57,8 @@ Route::get('/docs', fn () => response()->json([
         'GET  /api/activities/{id}',
         'DEL  /api/activities/{id}',
         'GET  /api/activities/summary',
+        'GET  /api/activities/export',
+        'DEL  /api/account',
         'GET  /api/goals',
         'PUT  /api/goals',
         'GET  /api/goals/history',
@@ -77,36 +80,45 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
 
+    // Data rights: account erasure (password-confirmed) + full CSV export.
+    Route::delete('/account', [AccountController::class, 'destroy'])->middleware('throttle:writes');
+
     // Step 4 — fitness profile: create, view, edit, update weight/level.
     Route::get('/profile', [ProfileController::class, 'show']);
-    Route::post('/profile', [ProfileController::class, 'store']);
-    Route::match(['put', 'patch'], '/profile', [ProfileController::class, 'update']);
-    Route::patch('/profile/weight', [ProfileController::class, 'updateWeight']);
-    Route::patch('/profile/fitness-level', [ProfileController::class, 'updateFitnessLevel']);
+    Route::post('/profile', [ProfileController::class, 'store'])->middleware('throttle:writes');
+    Route::match(['put', 'patch'], '/profile', [ProfileController::class, 'update'])->middleware('throttle:writes');
+    Route::patch('/profile/weight', [ProfileController::class, 'updateWeight'])->middleware('throttle:writes');
+    Route::patch('/profile/fitness-level', [ProfileController::class, 'updateFitnessLevel'])->middleware('throttle:writes');
 
     Route::get('/activities/summary', [ActivityController::class, 'summary']);
-    Route::apiResource('activities', ActivityController::class)->only(['index', 'store', 'show', 'destroy']);
-    Route::post('/activities/{activity}/points', [ActivityPointController::class, 'store']);
+    Route::get('/activities/export', [AccountController::class, 'exportCsv'])->middleware('throttle:writes');
+    Route::apiResource('activities', ActivityController::class)->only(['index', 'show']);
+    Route::post('/activities', [ActivityController::class, 'store'])->middleware('throttle:writes');
+    Route::delete('/activities/{activity}', [ActivityController::class, 'destroy'])->middleware('throttle:writes');
+    Route::post('/activities/{activity}/points', [ActivityPointController::class, 'store'])->middleware('throttle:writes');
 
-    Route::apiResource('routes', RouteController::class)->only(['index', 'store', 'show']);
+    Route::apiResource('routes', RouteController::class)->only(['index', 'show']);
+    Route::post('/routes', [RouteController::class, 'store'])->middleware('throttle:writes');
 
     // Wearable energy expenditure (e.g. WEEE dataset) for calorie calibration
     Route::get('/energy-expenditure', [EnergyExpenditureController::class, 'index']);
-    Route::post('/energy-expenditure', [EnergyExpenditureController::class, 'store']);
+    Route::post('/energy-expenditure', [EnergyExpenditureController::class, 'store'])->middleware('throttle:writes');
     Route::get('/energy-expenditure/calibration', [EnergyExpenditureController::class, 'calibration']);
 
     Route::get('/goals', [GoalController::class, 'show']);
-    Route::put('/goals', [GoalController::class, 'update']);
+    Route::put('/goals', [GoalController::class, 'update'])->middleware('throttle:writes');
     Route::get('/goals/history', [GoalController::class, 'history']);
 
     // Daily sessions — daily progress tracking that resets at midnight
     Route::get('/daily-sessions/today', [DailySessionController::class, 'today']);
-    Route::apiResource('daily-sessions', DailySessionController::class)->only(['index', 'show', 'update', 'destroy']);
+    Route::apiResource('daily-sessions', DailySessionController::class)->only(['index', 'show']);
+    Route::match(['put', 'patch'], '/daily-sessions/{dailySession}', [DailySessionController::class, 'update'])->middleware('throttle:writes');
+    Route::delete('/daily-sessions/{dailySession}', [DailySessionController::class, 'destroy'])->middleware('throttle:writes');
 
     // Daily session foods — breakfast, lunch, dinner, snack
-    Route::post('/daily-sessions/{dailySession}/foods', [DailySessionFoodController::class, 'store']);
-    Route::put('/daily-sessions/{dailySession}/foods/{dailySessionFood}', [DailySessionFoodController::class, 'update']);
-    Route::delete('/daily-sessions/{dailySession}/foods/{dailySessionFood}', [DailySessionFoodController::class, 'destroy']);
+    Route::post('/daily-sessions/{dailySession}/foods', [DailySessionFoodController::class, 'store'])->middleware('throttle:writes');
+    Route::put('/daily-sessions/{dailySession}/foods/{dailySessionFood}', [DailySessionFoodController::class, 'update'])->middleware('throttle:writes');
+    Route::delete('/daily-sessions/{dailySession}/foods/{dailySessionFood}', [DailySessionFoodController::class, 'destroy'])->middleware('throttle:writes');
 
     Route::middleware('throttle:predictions')->group(function () {
         Route::post('/predictions/preview', [PredictionController::class, 'preview']);

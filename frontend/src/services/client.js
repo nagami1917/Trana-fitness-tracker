@@ -81,6 +81,36 @@ async function listAll(path, limit) {
   return rows;
 }
 
+// Authenticated file download (CSV export). Fetches as a blob so the bearer
+// token never lands in a plain <a href>, then hands the file to the browser.
+async function downloadFile(path, fallbackName) {
+  const headers = { Accept: 'text/csv' };
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  let res;
+  try {
+    res = await fetch(`${BASE}/api${path}`, { headers });
+  } catch {
+    throw new Error('Could not reach the TRANA API. Check that the backend is running and try again.');
+  }
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    const data = safeJson(text);
+    throw new Error(data?.message || `Export failed (${res.status}).`);
+  }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fallbackName || path.split('/').pop() || 'download';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 function saveSession(data) {
   if (!data?.token || !data?.user) {
     throw new Error('The TRANA API returned an invalid sign-in response.');
@@ -144,6 +174,12 @@ export const api = {
     list: () => listAll('/activities', 500),
     create: (payload) => request('/activities', { method: 'POST', body: payload }).then((d) => d.data),
     remove: (id) => request(`/activities/${id}`, { method: 'DELETE' }),
+    exportCsv: () => downloadFile('/activities/export', 'trana-activities.csv'),
+  },
+
+  // Data rights: export lives under activities; erasure removes everything.
+  account: {
+    delete: (password) => request('/account', { method: 'DELETE', body: { password } }),
   },
 
   predictions: {

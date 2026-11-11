@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { Plus, Search, LoaderCircle, Trash2, MapPin, Flame, Timer, Gauge, Route as RouteIcon, Sparkles, TrendingUp, X, Undo2 } from 'lucide-svelte';
+  import { Plus, Search, LoaderCircle, Trash2, MapPin, Flame, Timer, Gauge, Route as RouteIcon, Sparkles, TrendingUp, X, Undo2, Download } from 'lucide-svelte';
   import Card from '../../components/common/Card.svelte';
   import ActivityIcon from '../../components/activities/ActivityIcon.svelte';
   import RouteMap from '../../components/route/RouteMap.svelte';
@@ -29,6 +29,19 @@
   let addOpen = $state(false);
   let detail = $state(null);
   let saving = $state(false);
+  let exporting = $state(false);
+
+  async function exportCsv() {
+    exporting = true;
+    try {
+      await api.activities.exportCsv();
+      notify('Downloading your activity history…');
+    } catch (error) {
+      notify(error.message, 'error');
+    } finally {
+      exporting = false;
+    }
+  }
   let model = $state(null);
   let draft = $state(blankDraft());
   let draftRouteOpen = $state(false);
@@ -259,7 +272,12 @@
         Every session you log teaches TRANA your real pace.
       </p>
     </div>
-    <button class="btn-primary self-start" onclick={openAdd}><Plus size={16} /> Log activity</button>
+    <div class="flex flex-wrap items-center gap-2 self-start">
+      <button class="btn-ghost" onclick={exportCsv} disabled={exporting} title="Download your full history as CSV">
+        {#if exporting}<LoaderCircle size={15} class="animate-spin" /> Exporting…{:else}<Download size={15} /> Export CSV{/if}
+      </button>
+      <button class="btn-primary" onclick={openAdd}><Plus size={16} /> Log activity</button>
+    </div>
   </div>
 
   <!-- filters -->
