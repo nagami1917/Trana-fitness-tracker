@@ -53,8 +53,13 @@ class WeightLog extends Model
             ]);
         }
 
+        // Newest-date guard for the profile mirror. whereDate() is mandatory:
+        // SQLite stores 'Y-m-d 00:00:00' text, and raw text comparison against
+        // a 'Y-m-d' string breaks lexicographically across day digits
+        // ('2026-11-10' < '2026-11-07' as text — a backdated entry would
+        // wrongly clobber the profile; Postgres DATE coercion hides this).
         $hasNewer = static::where('user_id', $user->id)
-            ->where('measured_at', '>', $date)
+            ->whereDate('measured_at', '>', $date)
             ->exists();
 
         if (! $hasNewer) {
