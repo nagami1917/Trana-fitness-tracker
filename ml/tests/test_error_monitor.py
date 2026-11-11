@@ -110,6 +110,24 @@ def test_forward_posts_the_client_contract_when_configured(monkeypatch):
     assert body == {"kind": "ml", "message": "x", "stack": "s", "route": "/predict", "app_version": "dev"}
 
 
+def test_long_tracebacks_keep_the_exception_identity():
+    # CI runner paths make traces long; head-clipping must never lose the
+    # exception line (the regression that failed only on GitHub's runners).
+    def deep(n: int) -> None:
+        if n:
+            deep(n - 1)
+        raise ValueError("deep failure")
+
+    try:
+        deep(300)
+    except ValueError as exc:
+        payload = error_monitor.build_payload(exc, "/predict", 1.0)
+
+    assert payload["message"].startswith("ValueError: deep failure")
+    assert "ValueError: deep failure" in payload["stack"]
+    assert len(payload["stack"]) <= error_monitor.MAX_STACK
+
+
 def test_forward_is_silent_without_an_endpoint(monkeypatch):
     monkeypatch.delenv("ERROR_REPORT_ENDPOINT", raising=False)
 

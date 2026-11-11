@@ -50,7 +50,10 @@ def _origin(exc: BaseException) -> str:
 
 def build_payload(exc: BaseException, path: str, duration_ms: float) -> dict[str, Any]:
     """Client-contract payload (same fields POST /api/client-errors accepts)."""
-    stack = _clip("".join(traceback.format_exception(exc)), MAX_STACK)
+    # Summary line FIRST: deep traces (CI runner paths are long) get clipped
+    # from the head, and the exception identity must always survive.
+    summary = f"{type(exc).__name__}: {exc}"
+    stack = _clip(summary + "\n" + "".join(traceback.format_exception(exc)), MAX_STACK)
     return {
         "kind": "ml",
         "message": _clip(f"{type(exc).__name__}: {exc}", MAX_MESSAGE),
