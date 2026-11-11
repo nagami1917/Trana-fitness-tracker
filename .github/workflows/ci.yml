@@ -110,8 +110,14 @@ jobs:
             # lines wherever they appear — a crash mid-run never prints the
             # usual FAILURES! block, so grep them out explicitly.
             printf '%s\n' "$plain" \
-              | grep -E 'There (was|were) [0-9]+ (failure|error)|Failed asserting|[A-Za-z]*Exception: |^Tests: [0-9]+|ERRORS?!$' \
-              | cut -c1-450 | head -30 \
+              | grep -iE 'fatal error|uncaught|there (was|were) [0-9]+ (failure|error)|failed asserting|exception|^[[:space:]]*tests: [0-9]+|errors?!$' \
+              | cut -c1-450 | head -40 \
               | while IFS= read -r line; do [ -n "$line" ] && echo "::error::$line"; done
+            # If nothing matched, fall back to the last 120 lines verbatim so
+            # a mystery crash is never invisible.
+            if ! printf '%s\n' "$plain" | grep -qiE 'fatal error|uncaught|failed asserting|exception'; then
+              printf '%s\n' "$plain" | tail -120 | cut -c1-450 | head -40 \
+                | while IFS= read -r line; do [ -n "$line" ] && echo "::error::$line"; done
+            fi
             exit "$code"
           fi
