@@ -1,0 +1,158 @@
+{
+  "name": "TRANA external validation \u2014 GeoLife GPS Trajectories",
+  "generated_at": "2026-11-11T00:37:43+00:00",
+  "model_version": "20261108.0445",
+  "source": {
+    "dataset": "GeoLife GPS Trajectories Dataset (Microsoft Research)",
+    "paper": "Zheng, X., Xie, X., Wang, L., Yu, Y., Jiang, S. (2008). Mining interesting locations and travel sequences from GPS trajectories. WWW '08. Dataset: GeoLife v1.3, Microsoft Research, https://www.microsoft.com/en-us/research/publication/geolife-gps-trajectories-dataset/",
+    "processed_feature_table": "github.com/jbremz/Beijing-Trajectories-Project (Metadata/trajFeatures.csv)",
+    "modes_used": [
+      "ride",
+      "run",
+      "walk"
+    ],
+    "rows_input": 4362
+  },
+  "protocol": {
+    "history": "same user's earlier trajectories of the same mode (chronological, no future data)",
+    "cold_start": "empty history \u2192 model's population-speed fallback (new-account behaviour)",
+    "elevation_gain_m": 0.0,
+    "weight_kg": 60.0,
+    "experience": "inferred from history length (production behaviour)",
+    "speed_trim_kmh": [
+      0.5,
+      50.0
+    ]
+  },
+  "limitations": [
+    "GeoLife has no elevation in the feature table \u2192 elevation features are 0 (Beijing is flat).",
+    "Durations are door-to-door elapsed GPS times (includes stops), matching Trana's elapsed-time target.",
+    "Mode labels are transportation modes: bike\u2192ride, walk\u2192walk; motorised modes excluded; run has n=2.",
+    "Weight and experience are synthetic assumptions, not measured per participant."
+  ],
+  "dataset": {
+    "rows_evaluated": 4362,
+    "users": 51,
+    "by_mode": {
+      "ride": 1372,
+      "run": 2,
+      "walk": 2988
+    }
+  },
+  "overall": {
+    "n": 4362,
+    "mae_min": 5.65,
+    "mape_pct": 32.8,
+    "mdape_pct": 21.89,
+    "within_15_pct": 36.43,
+    "within_20_pct": 46.58,
+    "r2": 0.461,
+    "interval_coverage_pct": 24.09,
+    "baseline_pop_prior_mae_min": 7.1,
+    "baseline_anchor_base_mae_min": 5.8,
+    "mae_improvement_vs_pop_prior_pct": 20.4,
+    "mae_improvement_vs_anchor_base_pct": 2.5
+  },
+  "by_mode": {
+    "ride": {
+      "n": 1372,
+      "mae_min": 4.93,
+      "mape_pct": 23.51,
+      "mdape_pct": 17.22,
+      "within_15_pct": 44.46,
+      "within_20_pct": 56.71,
+      "r2": 0.498,
+      "interval_coverage_pct": 20.7,
+      "baseline_pop_prior_mae_min": 9.49,
+      "baseline_anchor_base_mae_min": 5.06,
+      "mae_improvement_vs_pop_prior_pct": 48.1,
+      "mae_improvement_vs_anchor_base_pct": 2.7
+    },
+    "run": {
+      "n": 2,
+      "mae_min": 2.22,
+      "mape_pct": 21.76,
+      "mdape_pct": 21.76,
+      "within_15_pct": 50.0,
+      "within_20_pct": 50.0,
+      "r2": null,
+      "interval_coverage_pct": 0.0,
+      "baseline_pop_prior_mae_min": 2.45,
+      "baseline_anchor_base_mae_min": 2.45,
+      "mae_improvement_vs_pop_prior_pct": 9.0,
+      "mae_improvement_vs_anchor_base_pct": 9.0
+    },
+    "walk": {
+      "n": 2988,
+      "mae_min": 5.99,
+      "mape_pct": 37.07,
+      "mdape_pct": 25.0,
+      "within_15_pct": 32.73,
+      "within_20_pct": 41.93,
+      "r2": 0.441,
+      "interval_coverage_pct": 25.67,
+      "baseline_pop_prior_mae_min": 6.01,
+      "baseline_anchor_base_mae_min": 6.13,
+      "mae_improvement_vs_pop_prior_pct": 0.3,
+      "mae_improvement_vs_anchor_base_pct": 2.4
+    }
+  },
+  "by_history": {
+    "cold_start": {
+      "n": 80,
+      "mae_min": 12.88,
+      "mape_pct": 48.81,
+      "mdape_pct": 49.63,
+      "within_15_pct": 15.0,
+      "within_20_pct": 18.75,
+      "r2": 0.107,
+      "interval_coverage_pct": 11.25,
+      "baseline_pop_prior_mae_min": 12.36,
+      "baseline_anchor_base_mae_min": 12.36,
+      "mae_improvement_vs_pop_prior_pct": -4.3,
+      "mae_improvement_vs_anchor_base_pct": -4.2
+    },
+    "thin_history_1": {
+      "n": 67,
+      "mae_min": 12.33,
+      "mape_pct": 51.21,
+      "mdape_pct": 29.21,
+      "within_15_pct": 25.37,
+      "within_20_pct": 32.84,
+      "r2": 0.197,
+      "interval_coverage_pct": 11.94,
+      "baseline_pop_prior_mae_min": 12.31,
+      "baseline_anchor_base_mae_min": 12.76,
+      "mae_improvement_vs_pop_prior_pct": -0.2,
+      "mae_improvement_vs_anchor_base_pct": 3.3
+    },
+    "personalized_2plus": {
+      "n": 4215,
+      "mae_min": 5.41,
+      "mape_pct": 32.2,
+      "mdape_pct": 21.43,
+      "within_15_pct": 37.01,
+      "within_20_pct": 47.33,
+      "r2": 0.475,
+      "interval_coverage_pct": 24.53,
+      "baseline_pop_prior_mae_min": 6.92,
+      "baseline_anchor_base_mae_min": 5.56,
+      "mae_improvement_vs_pop_prior_pct": 21.8,
+      "mae_improvement_vs_anchor_base_pct": 2.7
+    }
+  },
+  "in_training_domain": {
+    "n": 543,
+    "mae_min": 17.02,
+    "mape_pct": 49.75,
+    "mdape_pct": 31.77,
+    "within_15_pct": 23.76,
+    "within_20_pct": 32.41,
+    "r2": -0.199,
+    "interval_coverage_pct": 13.63,
+    "baseline_pop_prior_mae_min": 17.22,
+    "baseline_anchor_base_mae_min": 17.37,
+    "mae_improvement_vs_pop_prior_pct": 1.2,
+    "mae_improvement_vs_anchor_base_pct": 2.0
+  }
+}
