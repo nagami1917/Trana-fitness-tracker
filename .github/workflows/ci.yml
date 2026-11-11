@@ -104,9 +104,16 @@ jobs:
             # PHPUnit's FAILURES!/ERRORS! section (assertions + summary) — and
             # only fall back to class lines / log tail when there is none.
             plain=$(sed -E 's/\x1b\[[0-9;]*m//g' /tmp/trana-tests.log)
-            if printf '%s\n' "$plain" | grep -qE '^(FAILURES|ERRORS)!'; then
-              printf '%s\n' "$plain" | sed -n '/^\(FAILURES\|ERRORS\)!/,$p' \
-                | cut -c1-450 | head -10
+            if printf '%s\n' "$plain" | grep -qE '(FAILURES|ERRORS)!'; then
+              # From the first "N) test_name" entry: method, assertion message,
+              # code frame, FAILURES! header and the Tests: summary — the full
+              # verdict in one block (fall back to the header range if there is
+              # no numbered entry, e.g. boot/migration errors).
+              if printf '%s\n' "$plain" | grep -qE '^[0-9]+\) '; then
+                printf '%s\n' "$plain" | sed -n '/^[0-9]*[0-9]) /,$p' | cut -c1-450 | head -10
+              else
+                printf '%s\n' "$plain" | sed -n '/\(FAILURES\|ERRORS\)!/,$p' | cut -c1-450 | head -10
+              fi
             else
               {
                 printf '%s\n' "$plain" | grep -E 'Tests:|^[[:space:]]*OK \(|WARN  |FAIL  ' | head -6
