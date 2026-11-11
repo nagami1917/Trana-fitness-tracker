@@ -113,7 +113,7 @@ class AdminAccessTest extends TestCase
         $suspended->assertJsonCount(1, 'data');
     }
 
-    public function test_suspension_blocks_login_and_requests_until_reactivated(): void
+    public function test_suspension_endpoint_revokes_sessions_and_blocks_login_until_reactivated(): void
     {
         $admin = $this->admin();
         $victim = $this->registerAthlete('suspended.athlete@gmail.com');
@@ -128,9 +128,10 @@ class AdminAccessTest extends TestCase
             ->assertOk();
         $this->assertNotNull($suspend->json('data.suspended_at'));
 
-        // Live session dies immediately (token revoked + middleware re-check).
+        // The endpoint revoked every token: the live session answers 401,
+        // which makes the SPA drop it automatically.
         $switch();
-        $this->getJson('/api/auth/me', $victimAuth)->assertForbidden();
+        $this->getJson('/api/auth/me', $victimAuth)->assertUnauthorized();
         // And a fresh login is refused with a clear reason.
         $this->postJson('/api/auth/login', [
             'email' => 'suspended.athlete@gmail.com',
@@ -149,6 +150,23 @@ class AdminAccessTest extends TestCase
             'email' => 'suspended.athlete@gmail.com',
             'password' => 'test-password-123',
         ])->assertOk()->assertJsonPath('user.role', 'athlete');
+    }
+
+    public function test_suspension_middleware_refuses_a_live_session(): void
+    {
+        // Defense-in-depth: the flag set without going through the endpoint
+        // (e.g. directly in the DB) must still kill an otherwise-valid token.
+        $victim = $this->registerAthlete('flagged.athlete@gmail.com');
+        $victimAuth = $this->bearer($victim);
+
+        User::findOrFail($victim['id'])->forceFill(['suspended_at' => now()])->save();
+
+        app('auth')->forgetGuards();
+        $this->getJson('/api/auth/me', $victimAuth)->assertForbidden();
+
+        // The 403 revoked the token on the way out — next request is a 401.
+        app('auth')->forgetGuards();
+        $this->getJson('/api/auth/me', $victimAuth)->assertUnauthorized();
     }
 
     public function test_admin_cannot_suspend_their_own_account(): void
