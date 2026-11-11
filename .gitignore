@@ -17,6 +17,8 @@ build/
 
 # generated data / artifacts that can be rebuilt
 ml/data/*.csv
+# FitRec sample (Endomondo exports) — dataset terms forbid redistribution
+ml/data/external/endomondo_*.csv
 ml/.pytest_cache/
 frontend/.vite/
 frontend/.svelte-kit/

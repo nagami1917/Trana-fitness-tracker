@@ -144,6 +144,37 @@ experience assumed, not measured; elapsed times include stops.
 → Findings motivate **ML phase 2**: retrain and recalibrate on accumulated
 real user activities (`python -m duration_model.train --source supabase`).
 
+## External validation (FitRec sample — Endomondo)
+
+A second external dataset guards against over-fitting the GeoLife quirks:
+the **FitRec sample** — Endomondo Sports Tracker exports
+(`endomondoMeta.json.gz` + `endomondoHR.json.gz`, ~3.1 GB) delivered to the
+project owner. Dataset terms forbid redistribution, so the raw exports stay
+in personal storage (Google Drive) and are **never committed**; the repo
+holds the converter, the evaluator, and the aggregate report.
+
+- **Protocol:** identical to the GeoLife run — the same
+  `evaluation.geolife_validation.evaluate_activities` engine (chronological
+  per-account history, cold-start fallback, weight 60 kg, elevation 0,
+  0.5–50 km/h speed trim) — so the two datasets are directly comparable.
+- **Derivation:** `ml/data/endomondo_to_csv.py` streams the multi-GB
+  gzip exports with bounded memory, maps sports → Trana modes
+  (`running→run`, `cycling→ride`, `walking→walk`, `hiking→hike`), and
+  writes `ml/data/external/endomondo_activities.csv` (same columns as the
+  GeoLife table; git-ignored).
+- **User ids:** if the export carries no user ids, every workout becomes
+  its own account and all rows are evaluated **cold-start** — the report
+  states this explicitly rather than implying personalization.
+- **Reproduce:**
+  ```bash
+  python ml/data/endomondo_to_csv.py --meta /path/endomondoMeta.json.gz
+  cd ml && python -m evaluation.endomondo_validation
+  ```
+  Report artifact: `ml/evaluation/reports/endomondo_validation.json`
+  (metrics only — no raw data). CI keeps running the GeoLife validation;
+  the FitRec run is manual because the data is not in the repository.
+- **Provenance & terms:** `ml/data/external/README.md`.
+
 ## Known limitations
 
 - The committed artifact is trained on **synthetic** data — correct shape, wrong

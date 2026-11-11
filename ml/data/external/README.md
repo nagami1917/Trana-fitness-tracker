@@ -51,3 +51,54 @@ prefix and start time from the filename.
 
 Not used: motorised modes (bus/car/subway/taxi/train/boat/airplane);
 elevation is absent from the feature table (validation assumes 0 m).
+
+---
+
+# FitRec sample (Endomondo exports) — not committed
+
+`endomondo_activities.csv` — the evaluation table used by
+`python -m evaluation.endomondo_validation`. **Not in the repository**: the
+sample is delivered under dataset terms that forbid redistribution; only this
+derived table exists, produced on the owner's machine and kept in personal
+storage (Google Drive). It is covered by `.gitignore`
+(`ml/data/external/endomondo_*.csv`).
+
+## Source
+
+- **Package:** the FitRec sample — Endomondo Sports Tracker exports
+  `endomondoMeta.json.gz` (~1.1 GB, per-workout metadata) and
+  `endomondoHR (1).json.gz` (~2.0 GB, GPS/heart-rate series), held in the
+  project owner's Google Drive.
+- **Platform:** Endomondo Sports Tracker research release (workouts with
+  sport labels, GPS traces, heart rate). See the FitRec dataset page cited
+  in the thesis for the authoritative citation and terms.
+
+## Derivation (reproducible, stdlib only)
+
+```bash
+# from repo root — streams the multi-GB exports with bounded memory
+python ml/data/endomondo_to_csv.py \
+  --meta "/path/endomondoMeta.json.gz" \
+  --hr   "/path/endomondoHR (1).json.gz" \
+  --max 8000            # optional: --stride N to spread the sample
+```
+
+Steps: keep sports `running/cycling/walking/hiking` (+ mountain biking) →
+map to Trana `run/ride/walk/hike` → recover duration from elapsed-time
+fields or the timestamp span → distance from the last distance sample →
+drop rows without both, and speeds outside 0.5–50 km/h (same trim as
+GeoLife) → `user_id` from the export when present, else the workout id
+(every session its own account → **cold-start protocol**, flagged in the
+report). Columns are identical to `geolife_activities.csv`.
+
+## Columns
+
+| column | meaning |
+|---|---|
+| `user_id` | export user id, else `w<workout_id>` (cold-start) |
+| `activity_type` | Trana modality (`run`/`ride`/`walk`/`hike`) |
+| `mode_original` | original Endomondo sport label |
+| `distance_km` | last distance sample (m → km) |
+| `duration_min` | elapsed time (s → min) |
+| `start_time` | first timestamp, UTC-normalised |
+| `source_path` | `<export filename>#<workout id>` |
