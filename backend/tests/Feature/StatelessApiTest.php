@@ -26,7 +26,7 @@ class StatelessApiTest extends TestCase
         try {
             $response = $this->postJson('/api/auth/register', [
                 'name' => 'Browser Athlete',
-                'email' => 'browser@example.test',
+                'email' => 'browser@gmail.com',
                 'password' => 'test-password-123',
             ], self::FRONTEND)->assertCreated();
             $response->assertCookieMissing(config('session.cookie'));
@@ -47,10 +47,10 @@ class StatelessApiTest extends TestCase
         // accept that session alone nor prefer it over a different bearer user.
         $this->assertSame([], config('sanctum.guard'));
         $sessionUser = User::create([
-            'name' => 'Session User', 'email' => 'session@example.test', 'password' => 'test-password-123',
+            'name' => 'Session User', 'email' => 'session@gmail.com', 'password' => 'test-password-123',
         ]);
         $tokenUser = User::create([
-            'name' => 'Bearer User', 'email' => 'bearer@example.test', 'password' => 'test-password-123',
+            'name' => 'Bearer User', 'email' => 'bearer@gmail.com', 'password' => 'test-password-123',
         ]);
         $token = $tokenUser->createToken('test')->plainTextToken;
 

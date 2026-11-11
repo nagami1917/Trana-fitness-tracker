@@ -11,7 +11,7 @@ class WeightLogTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function registerAthlete(string $email = 'weight@example.com'): array
+    private function registerAthlete(string $email = 'weight@gmail.com'): array
     {
         $response = $this->postJson('/api/auth/register', [
             'name' => 'Weight Athlete',
@@ -84,11 +84,11 @@ class WeightLogTest extends TestCase
 
     public function test_athletes_cannot_delete_each_others_weigh_ins(): void
     {
-        $headersA = $this->registerAthlete('a-weight@example.com');
+        $headersA = $this->registerAthlete('a-weight@gmail.com');
         $this->postJson('/api/weight-logs', ['weight_kg' => 70], $headersA)->assertCreated();
         $log = WeightLog::firstOrFail();
 
-        $headersB = $this->registerAthlete('b-weight@example.com');
+        $headersB = $this->registerAthlete('b-weight@gmail.com');
         app('auth')->forgetGuards();
 
         $this->deleteJson('/api/weight-logs/'.$log->id, [], $headersB)->assertNotFound();

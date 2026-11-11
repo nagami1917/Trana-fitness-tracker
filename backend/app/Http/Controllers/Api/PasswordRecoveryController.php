@@ -22,6 +22,9 @@ class PasswordRecoveryController extends Controller
             'email' => ['required', 'email'],
         ]);
 
+        // Stored emails are lowercase (registration normalizes) — match that.
+        $request->merge(['email' => strtolower(trim((string) $request->input('email')))]);
+
         // Broker failures (unknown email, throttled) are intentionally ignored.
         Password::broker()->sendResetLink($request->only('email'));
 
@@ -41,6 +44,9 @@ class PasswordRecoveryController extends Controller
             'email' => ['required', 'email'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
         ]);
+
+        // Same canonical-lowercase rule as registration and login.
+        $request->merge(['email' => strtolower(trim((string) $request->input('email')))]);
 
         $status = Password::broker()->reset(
             $request->only('token', 'email', 'password', 'password_confirmation'),

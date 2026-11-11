@@ -18,12 +18,16 @@ This does not check FastAPI or verify that all migrations are applied.
 
 ### `POST /auth/register`
 ```json
-{ "name": "Nagami", "email": "nagami@trana.app", "password": "secret123" }
+{ "name": "Nagami", "email": "nagami@gmail.com", "password": "secret123" }
 ```
 `201`
 ```json
-{ "token": "1|abc…", "user": { "id": 1, "name": "Nagami", "email": "nagami@trana.app" } }
+{ "token": "1|abc…", "user": { "id": 1, "name": "Nagami", "email": "nagami@gmail.com" } }
 ```
+**Gmail-only sign-up**: the address must end with `@gmail.com` (case-insensitive;
+emails are stored lowercase). Non-Gmail addresses get `422` on `email`.
+Existing accounts with other domains can still log in — the gate applies to
+new registrations only.
 
 ### `POST /auth/login`
 ```json
