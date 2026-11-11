@@ -15,6 +15,8 @@ export const activities = writable([]);
 export const plans = writable([]);
 export const goals = writable(null);
 export const modelCard = writable(null);
+/** Health of the optional prediction service: { status: 'ok' | 'not_configured' | 'unavailable', … } */
+export const mlStatus = writable(null);
 export const ready = writable(false);
 export const booting = writable(true);
 export const bootError = writable(null);
@@ -33,6 +35,7 @@ function clearUserData() {
   activities.set([]);
   plans.set([]);
   goals.set(null);
+  mlStatus.set(null);
 }
 
 onUnauthorized(() => {
@@ -46,7 +49,10 @@ export async function bootstrap() {
   bootError.set(null);
   try {
     // A healthy response confirms the API can reach its configured database.
-    await api.health();
+    const health = await api.health();
+    // The prediction service is optional for reading data but required to
+    // save a plan — keep its state so the UI can say so before a save fails.
+    mlStatus.set(health?.ml ?? null);
     const user = await api.auth.user();
     if (user) {
       await refresh();

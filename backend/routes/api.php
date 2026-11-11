@@ -38,7 +38,13 @@ Route::get('/health', function () {
         ], 503);
     }
 
-    return response()->json(['status' => 'ok']);
+    // The prediction service is optional for reads but required to save a
+    // plan. Reporting its state here makes a missing ML_API_URL visible up
+    // front instead of surfacing as a failed save with no explanation.
+    return response()->json([
+        'status' => 'ok',
+        'ml' => app(\App\Services\MlClient::class)->health(),
+    ]);
 });
 
 Route::get('/docs', fn () => response()->json([

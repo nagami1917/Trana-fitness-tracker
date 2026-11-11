@@ -15,10 +15,11 @@
     ChevronDown,
     MapPin,
     CalendarDays,
+    Info,
   } from 'lucide-svelte';
   import { onMount } from 'svelte';
   import { route, navigate, link, isActive } from '../../lib/router.js';
-  import { profile, session, logout, plans, todayStats } from '../../stores/index.js';
+  import { profile, session, logout, plans, todayStats, mlStatus } from '../../stores/index.js';
   import { api } from '../../services/client.js';
   import { nf } from '../../lib/format.js';
   import Logo from './Logo.svelte';
@@ -358,6 +359,17 @@
       </header>
 
       <main class="px-4 pb-4 pt-5 sm:px-6">
+        {#if $mlStatus && $mlStatus.status !== 'ok'}
+          <div class="mb-4 flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[11px] font-bold text-amber-800">
+            <Info size={14} class="mt-0.5 shrink-0" />
+            <span>
+              The prediction service is unavailable, so plans can't be saved right now — previews still work on this device.
+              {#if $mlStatus.status === 'not_configured'}
+                (The API is missing its ML_API_URL setting.)
+              {/if}
+            </span>
+          </div>
+        {/if}
         {@render children?.()}
       </main>
       <div class="px-4 pb-24 sm:px-6 lg:pb-6">

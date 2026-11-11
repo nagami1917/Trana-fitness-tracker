@@ -26,6 +26,7 @@
   let model = $state(null);
   let saving = $state(false);
   let saved = $state(null);
+  let saveError = $state('');
   let drawing = $state(false);
 
   let form = $state({
@@ -123,6 +124,7 @@
     void routePath;
     void $activities.length;
     saved = null;
+    saveError = '';
     clearTimeout(timer);
     timer = setTimeout(run, 160);
   });
@@ -205,6 +207,7 @@
   async function save() {
     if (!prediction) return;
     saving = true;
+    saveError = '';
     let written = false;
     let created = null;
     try {
@@ -227,6 +230,11 @@
       if (written) {
         saved = created;
         prediction = created;
+      } else {
+        // Keep the reason on screen: a toast disappears after a few seconds
+        // and the button silently returns to its idle state, which makes a
+        // failed save look like a button that never worked.
+        saveError = error.message || 'Could not save the plan';
       }
       notify(written ? 'Plan saved, but the view could not refresh. Reload when connected.' : (error.message || 'Could not save the plan'), 'error');
     } finally {
@@ -404,6 +412,8 @@
                 <LoaderCircle size={16} class="animate-spin" /> Saving…
               {:else if saved}
                 <Save size={16} /> Saved
+              {:else if saveError}
+                <Save size={16} /> Try saving again
               {:else}
                 <Save size={16} /> Save this plan
               {/if}
@@ -416,6 +426,10 @@
           {#if saved}
             <div class="mt-3 rounded-2xl bg-emerald-50 p-3 text-[11px] font-bold text-emerald-700">
               Plan #{saved.id} saved. Tap “Activities” to log it once you’re done — TRANA will learn from the real time.
+            </div>
+          {:else if saveError}
+            <div class="mt-3 rounded-2xl bg-rose-50 p-3 text-[11px] font-bold text-rose-700">
+              {saveError} — the plan was not saved, so nothing was written to your account.
             </div>
           {/if}
         </Card>

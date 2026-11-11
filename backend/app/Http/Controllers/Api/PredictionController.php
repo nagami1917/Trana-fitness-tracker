@@ -12,6 +12,7 @@ use App\Services\PredictionService;
 use App\Services\RouteService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 class PredictionController extends Controller
@@ -54,8 +55,12 @@ class PredictionController extends Controller
         try {
             $prediction = $this->predictions->create($request->user(), $request->validated());
         } catch (RuntimeException $e) {
+            // The operator needs the technical reason; the athlete needs to
+            // know that this is a server-side outage and not their plan.
+            Log::warning('Prediction save failed: '.$e->getMessage());
+
             return response()->json([
-                'message' => $e->getMessage(),
+                'message' => 'The prediction service is unavailable, so this plan cannot be saved yet.',
                 'hint' => 'A local preview may be available, but saving requires the prediction service.',
             ], 503);
         }

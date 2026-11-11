@@ -88,9 +88,23 @@ point `DB_*` at Supabase and drop `vercel.json`.
 
 ---
 
-## 3. ML service (Render / Railway / Fly.io / Cloud Run)
+## 3. ML service (Vercel / Render / Railway / Fly.io / Cloud Run)
 
 The folder contains a `Dockerfile`.
+
+**Vercel (serverless Python function)**
+
+The `ml` folder is a ready-made Vercel project: `ml/vercel.json` rewrites every
+route to the Python function in `ml/api/index.py`, which exposes the FastAPI
+app from `ml/api/main.py`. Model artifacts ship with the repository, so the
+function serves predictions with no build step beyond `pip install`.
+
+* New project → framework **Other** → root directory `ml` → connect the repo.
+* `pip install -r requirements.txt` is automatic (Vercel detects `ml/requirements.txt`).
+* Environment: `ML_API_TOKEN` (same value as Laravel) and `ADMIN_TOKEN` are
+  optional but recommended; `ALLOWED_ORIGINS` only matters for browser calls.
+* The production URL is `https://<project>.vercel.app` — set that as Laravel's
+  `ML_API_URL`.
 
 **Render**
 
@@ -205,6 +219,7 @@ alone does not prove end-to-end integration.
 | `SQLSTATE[08006]` on Vercel | Wrong pooler host or `DB_SSLMODE` missing → set `require`. |
 | CORS error in the browser | Add the exact frontend origin (scheme included) to `CORS_ALLOWED_ORIGINS`, redeploy. |
 | `503` from `/api/predictions` | ML service asleep/unreachable → check `/health`, raise `ML_TIMEOUT`, warm it with a cron ping. |
+| “Save this plan” does nothing | The plan was **not** saved. `GET /api/health` reports `ml.status`: `not_configured` → Laravel has no `ML_API_URL`; `unavailable` → the ML service is down or unreachable. Both answer `503` on `POST /api/predictions`. The on-device preview still works, so the page looks healthy while saving fails. |
 | Predictions look slow (> 2 s) | Cold start of the Python host; keep one instance warm or precompute at deploy time. |
 | PWA serves an old bundle | `registerType: 'autoUpdate'` handles it, but a hard reload clears the stale service worker. |
 | `429` on login | Auth is limited to 10 requests/min/IP — expected during automated testing. |

@@ -71,7 +71,7 @@ class MlClient
 
         try {
             $response = $this->request()->get('/model/info');
-        } catch (HttpClientException $e) {
+        } catch (\Throwable $e) {
             return ['status' => 'unavailable'];
         }
 
@@ -89,13 +89,21 @@ class MlClient
 
         try {
             $response = $request->post('/model/reload');
-        } catch (HttpClientException $e) {
+        } catch (\Throwable $e) {
             return ['reloaded' => false];
         }
 
         return $response->successful() ? $response->json() : ['reloaded' => false];
     }
 
+    /**
+     * Liveness probe for the prediction service.
+     *
+     * Never throws and never retries: it is called from the public health
+     * endpoint, so a dead ML service must not turn into a slow or failed
+     * request. The status tells the client whether saving a plan can work
+     * ('ok' / 'not_configured' / 'unavailable').
+     */
     public function health(): array
     {
         if (! $this->configured()) {
@@ -103,15 +111,21 @@ class MlClient
         }
 
         try {
-            $response = $this->request()->get('/health');
-        } catch (HttpClientException $e) {
+            $response = $this->request(timeout: 3, retries: 0)->get('/health');
+        } catch (\Throwable $e) {
             return ['status' => 'unavailable'];
         }
 
-        return $response->successful() ? $response->json() : ['status' => 'unavailable'];
+        if (! $response->successful()) {
+            return ['status' => 'unavailable'];
+        }
+
+        $payload = $response->json();
+
+        return is_array($payload) ? $payload : ['status' => 'ok'];
     }
 
-    private function request(): PendingRequest
+    private function request(?int $timeout = null, ?int $retries = null): PendingRequest
     {
         if (! $this->configured()) {
             throw new RuntimeException('ML_API_URL is not configured.');
@@ -126,8 +140,8 @@ class MlClient
         $request = Http::baseUrl((string) config('ml.url'))
             ->acceptJson()
             ->asJson()
-            ->timeout((int) config('ml.timeout', 12))
-            ->retry((int) config('ml.retry', 2), 200, throw: false);
+            ->timeout($timeout ?? (int) config('ml.timeout', 12))
+            ->retry($retries ?? (int) config('ml.retry', 2), 200, throw: false);
 
         if ($token = config('ml.token')) {
             $request = $request->withToken($token);

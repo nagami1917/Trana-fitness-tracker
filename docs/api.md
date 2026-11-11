@@ -12,7 +12,17 @@ Responses are JSON; collections are wrapped in `{ "data": [...] }`.
 
 `GET /health` returns `{ "status": "ok" }` if Laravel can connect to its
 configured database, or a generic `503` without connection details if it cannot.
-This does not check FastAPI or verify that all migrations are applied.
+The response also carries the state of the prediction service, because saving a
+plan needs it while reading data does not:
+
+```json
+{ "status": "ok", "ml": { "status": "ok", "model_ready": true, "model_version": "20261108.0445" } }
+```
+
+`ml.status` is `ok` when the service answered, `not_configured` when Laravel has
+no `ML_API_URL`, and `unavailable` when the service could not be reached. The
+probe never retries and times out after three seconds, so it cannot slow the
+client's start-up down. It does not verify that all migrations are applied.
 
 ## Auth
 
