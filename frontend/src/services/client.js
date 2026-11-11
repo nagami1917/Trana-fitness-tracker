@@ -189,6 +189,13 @@ export const api = {
     delete: (password) => request('/account', { method: 'DELETE', body: { password } }),
   },
 
+  // Body-weight timeline — one weigh-in per day, profile auto-synced.
+  weightLogs: {
+    list: (days = 180) => request(`/weight-logs?days=${days}`).then((d) => d.data),
+    add: (payload) => request('/weight-logs', { method: 'POST', body: payload }).then((d) => d.data),
+    remove: (id) => request(`/weight-logs/${id}`, { method: 'DELETE' }),
+  },
+
   // In-app notification center — the server synthesizes reminders on read.
   notifications: {
     list: () =>

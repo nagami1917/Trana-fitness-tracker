@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\PasswordRecoveryController;
 use App\Http\Controllers\Api\PredictionController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\RouteController;
+use App\Http\Controllers\Api\WeightLogController;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
@@ -53,6 +54,9 @@ Route::get('/docs', fn () => response()->json([
         'GET  /api/notifications',
         'POST /api/notifications/read-all',
         'POST /api/notifications/{id}/read',
+        'GET  /api/weight-logs',
+        'POST /api/weight-logs',
+        'DEL  /api/weight-logs/{id}',
         'GET  /api/health',
         'GET  /api/auth/me',
         'POST /api/auth/logout',
@@ -109,6 +113,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead'])
         ->middleware('throttle:writes');
     Route::post('/notifications/{notification}/read', [NotificationController::class, 'markRead'])
+        ->middleware('throttle:writes');
+
+    // Body-metrics timeline — daily weigh-ins feeding the Analytics chart.
+    Route::get('/weight-logs', [WeightLogController::class, 'index']);
+    Route::post('/weight-logs', [WeightLogController::class, 'store'])->middleware('throttle:writes');
+    Route::delete('/weight-logs/{weightLog}', [WeightLogController::class, 'destroy'])
         ->middleware('throttle:writes');
 
     // Data rights: account erasure (password-confirmed) + full CSV export.
