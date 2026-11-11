@@ -56,7 +56,7 @@ class PasswordRecoveryTest extends TestCase
         $this->postJson('/api/auth/login', [
             'email' => $user->email,
             'password' => 'brand-new-password-9',
-        ])->assertCreated()->assertJsonStructure(['token', 'user']);
+        ])->assertOk()->assertJsonStructure(['token', 'user']);
 
         $this->postJson('/api/auth/login', [
             'email' => $user->email,
