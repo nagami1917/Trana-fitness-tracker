@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\EmailVerificationController;
 use App\Http\Controllers\Api\DailySessionFoodController;
 use App\Http\Controllers\Api\EnergyExpenditureController;
 use App\Http\Controllers\Api\GoalController;
+use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PasswordRecoveryController;
 use App\Http\Controllers\Api\PredictionController;
 use App\Http\Controllers\Api\ProfileController;
@@ -49,6 +50,9 @@ Route::get('/docs', fn () => response()->json([
         'POST /api/password/reset',
         'POST /api/email/verify/resend',
         'GET  /api/email/verify/{id}/{hash}  (signed)',
+        'GET  /api/notifications',
+        'POST /api/notifications/read-all',
+        'POST /api/notifications/{id}/read',
         'GET  /api/health',
         'GET  /api/auth/me',
         'POST /api/auth/logout',
@@ -99,6 +103,13 @@ Route::middleware('auth:sanctum')->group(function () {
     // Resend the verification link for the signed-in athlete.
     Route::post('/email/verify/resend', [EmailVerificationController::class, 'resend'])
         ->middleware('throttle:6,1');
+
+    // In-app notification center (reminders synthesized lazily on read).
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead'])
+        ->middleware('throttle:writes');
+    Route::post('/notifications/{notification}/read', [NotificationController::class, 'markRead'])
+        ->middleware('throttle:writes');
 
     // Data rights: account erasure (password-confirmed) + full CSV export.
     Route::delete('/account', [AccountController::class, 'destroy'])->middleware('throttle:writes');
