@@ -22,6 +22,16 @@ const safeJson = (text) => {
   }
 };
 
+/** Skip empty values so query strings stay clean (`?q=&status=` → `?status=`). */
+function queryString(params) {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '') search.set(key, String(value));
+  }
+  const out = search.toString();
+  return out ? `?${out}` : '';
+}
+
 async function request(path, { method = 'GET', body, auth = true } = {}) {
   const headers = { Accept: 'application/json' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
@@ -214,6 +224,18 @@ export const api = {
       })),
     read: (id) => request(`/notifications/${id}/read`, { method: 'POST' }),
     readAll: () => request('/notifications/read-all', { method: 'POST' }),
+  },
+
+  // Admin console — every call is server-side role-gated (admin middleware);
+  // these methods exist for the operator UI, never for privilege itself.
+  admin: {
+    dashboard: () => request('/admin/dashboard').then((d) => d.data),
+    users: (params = {}) => request(`/admin/users${queryString(params)}`),
+    suspend: (id) => request(`/admin/users/${id}/suspend`, { method: 'PATCH' }).then((d) => d.data),
+    reactivate: (id) => request(`/admin/users/${id}/reactivate`, { method: 'PATCH' }).then((d) => d.data),
+    model: () => request('/admin/model').then((d) => d.data),
+    errors: (params = {}) => request(`/admin/errors${queryString(params)}`),
+    triage: (id, status) => request(`/admin/errors/${id}`, { method: 'PATCH', body: { status } }).then((d) => d.data),
   },
 
   predictions: {

@@ -15,6 +15,7 @@
     ChevronDown,
     MapPin,
     CalendarDays,
+    ShieldCheck,
   } from 'lucide-svelte';
   import { onMount } from 'svelte';
   import { route, navigate, link, isActive } from '../../lib/router.js';
@@ -26,7 +27,9 @@
 
   let { children } = $props();
 
-  const NAV = [
+  // Desktop nav — the Admin entry exists only for admin sessions (cosmetic
+  // gating: the API re-checks the role server-side on every request).
+  const NAV = $derived([
     { href: '/', label: 'Dashboard', Icon: House },
     { href: '/plan', label: 'Plan Activity', Icon: Sparkles },
     { href: '/calendar', label: 'Week Calendar', Icon: CalendarDays },
@@ -37,7 +40,8 @@
     { href: '/goals', label: 'Goals', Icon: Target },
     { href: '/profile', label: 'Profile', Icon: CircleUserRound },
     { href: '/settings', label: 'Settings', Icon: Settings },
-  ];
+    ...($session?.role === 'admin' ? [{ href: '/admin', label: 'Admin', Icon: ShieldCheck }] : []),
+  ]);
 
   const MOBILE = [
     { href: '/', label: 'Home', Icon: House },
@@ -331,6 +335,11 @@
                   <a href="/profile" use:link class="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-ink-500 hover:bg-brand-50 hover:text-brand-700">
                     <CircleUserRound size={15} /> Your profile
                   </a>
+                  {#if $session?.role === 'admin'}
+                    <a href="/admin" use:link class="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-ink-500 hover:bg-brand-50 hover:text-brand-700">
+                      <ShieldCheck size={15} /> Admin console
+                    </a>
+                  {/if}
                   <a href="/fueling" use:link class="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-ink-500 hover:bg-brand-50 hover:text-brand-700">
                     <Salad size={15} /> Fueling guide
                   </a>

@@ -23,7 +23,7 @@ globalThis.localStorage = {
   setItem: (k, v) => store.set(k, String(v)),
   removeItem: (k) => store.delete(k),
 };
-const fixtureUser = { id: 1, name: 'Test Athlete', email: 'athlete@example.test' };
+const fixtureUser = { id: 1, name: 'Test Athlete', email: 'athlete@example.test', role: 'admin' };
 const fixtureProfile = {
   ...fixtureUser, weight_kg: 60, height_cm: 168, birth_year: 1998, sex: 'other',
   sweat_profile: 'normal', experience_level: 2, typical_temperature_c: 26, units: 'metric',
@@ -45,7 +45,19 @@ globalThis.fetch = async (url) => {
   else if (url.startsWith('/api/activities?')) body = page(fixtureActivities);
   else if (url.startsWith('/api/predictions?')) body = page([]);
   else if (url === '/api/goals') body = { data: fixtureGoals };
-  else throw new Error(`Unexpected test request: ${url}`);
+  else if (url.startsWith('/api/admin/dashboard')) {
+    body = { data: {
+      users: { total: 2, new_7d: 2, suspended: 0, admins: 1 },
+      content: { activities: 3, predictions: 0, goals: 0 },
+      errors: { open_groups: 0, groups_24h: 0, total_groups: 0 },
+    } };
+  } else if (url.startsWith('/api/admin/users')) {
+    body = page([{ id: 2, name: 'Other Athlete', email: 'other@example.test', role: 'athlete', suspended_at: null, created_at: '2026-11-01T00:00:00Z', activities_count: 1 }]);
+  } else if (url.startsWith('/api/admin/errors')) {
+    body = page([]);
+  } else if (url.startsWith('/api/admin/model')) {
+    body = { data: { version: 'test', training_source: 'synthetic', corpus_rows: 10, metrics: { r2: 0.9, mae_min: 2, mape_pct: 10, interval_coverage_pct: 80 }, feature_importance: { distance_km: 0.5 } } };
+  } else throw new Error(`Unexpected test request: ${url}`);
   return new Response(JSON.stringify(body), { status: 200 });
 };
 globalThis.window = { location: { pathname: '/', search: '' }, addEventListener() {}, scrollTo() {} };
@@ -96,6 +108,7 @@ try {
     ['/goals', 'Goals'],
     ['/profile', 'Profile'],
     ['/settings', 'Settings'],
+    ['/admin', 'Admin'],
     ['/nope', 'NotFound'],
   ];
 
