@@ -434,6 +434,35 @@ notification answers `404`.
 
 ---
 
+## Error monitoring
+
+### `POST /client-errors`
+
+Public intake for browser-side faults (and ML-service forwards). Unauthenticated
+by design — errors happen before login — rate-limited to 60/min/IP.
+
+```json
+{
+  "message": "TypeError: Cannot read properties of undefined (reading 'chart')",
+  "stack": "    at drawChart (analytics.js:42:11)",
+  "route": "/analytics",
+  "kind": "client",
+  "app_version": "1.0.0"
+}
+```
+
+- `message` **required** (≤ 1000 chars); `stack` (≤ 8000), `route`, `kind`
+  (`client` | `ml`), `app_version` optional.
+- `202` → `{ "status": "accepted" }` · `422` validation failure.
+- Reports are grouped server-side by fingerprint: repeat faults bump an
+  occurrence counter instead of creating rows. Nothing from the payload is
+  ever echoed back or shown to other users.
+
+See [monitoring.md](monitoring.md) for the full pipeline (server exceptions,
+browser errors, ML-service faults → one `error_logs` table).
+
+---
+
 ## Account & data rights
 
 ### `DELETE /account`
@@ -457,5 +486,5 @@ so the athlete can keep a copy of their data first.
 | 404 | Not found **or** owned by another athlete |
 | 409 | The resource already exists (for example, `POST /profile` on an account that has one) |
 | 422 | Validation — `{ message, errors: { field: [msg] } }` |
-| 429 | Rate limit (auth 10/min/IP, predictions 60/min/user) |
+| 429 | Rate limit (auth 10/min/IP, predictions 60/min/user, client-errors 60/min/IP) |
 | 503 | Database unavailable on `/health`, or ML service unavailable for predictions |

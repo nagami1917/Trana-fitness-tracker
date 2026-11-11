@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\ActivityPointController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DailySessionController;
 use App\Http\Controllers\Api\EmailVerificationController;
+use App\Http\Controllers\Api\ErrorReportController;
 use App\Http\Controllers\Api\DailySessionFoodController;
 use App\Http\Controllers\Api\EnergyExpenditureController;
 use App\Http\Controllers\Api\GoalController;
@@ -82,8 +83,14 @@ Route::get('/docs', fn () => response()->json([
         'GET  /api/predictions/{id}',
         'DEL  /api/predictions/{id}',
         'GET  /api/model',
+        'POST /api/client-errors',
     ],
 ]));
+
+// Public intake for browser-side faults (and ML-service forwards).
+// Unauthenticated by design — errors happen before login — but throttled.
+Route::post('/client-errors', [ErrorReportController::class, 'store'])
+    ->middleware('throttle:errors');
 
 Route::middleware('throttle:auth')->group(function () {
     Route::post('/auth/register', [AuthController::class, 'register']);

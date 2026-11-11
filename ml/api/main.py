@@ -24,6 +24,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from fueling_model.predict import FuelingInput, estimate_met, recommend
 from duration_model.model_store import DurationModel, route_metrics
+from .error_monitor import install_error_monitor
 from .schemas import PredictRequest, PredictResponse
 
 app = FastAPI(
@@ -31,6 +32,10 @@ app = FastAPI(
     version="1.0.0",
     description="Predicts activity duration and personalized fueling recommendations.",
 )
+
+# Uncaught faults → stderr JSON line (+ optional forward to Laravel intake).
+# Registered before CORS so CORS stays the outermost middleware.
+install_error_monitor(app)
 
 app.add_middleware(
     CORSMiddleware,

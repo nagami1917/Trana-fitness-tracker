@@ -16,6 +16,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // Vercel / any reverse proxy terminates TLS in front of the app.
         $middleware->trustProxies(at: '*');
 
+        // Outermost: capture unescaped server faults for the error monitor,
+        // then rethrow so rendering/logging behave exactly as before.
+        $middleware->prepend(\App\Http\Middleware\RecordServerErrors::class);
+
         // API requests use Sanctum bearer tokens, not cookie sessions. Do not
         // enable Sanctum's stateful SPA middleware: it requires a CSRF cookie.
 
