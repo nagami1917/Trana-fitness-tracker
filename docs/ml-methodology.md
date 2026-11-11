@@ -89,6 +89,61 @@ SPA ──POST /api/predictions──▶ Laravel ──POST /predict──▶ Fa
    [database.md](database.md)) with the full payload and `model_version`.
 4. `docs/api.md` documents the exact request/response contract.
 
+## External validation (GeoLife)
+
+The trained artifact is also validated against **real measured movement**, not
+just the synthetic holdout: the **GeoLife GPS Trajectories Dataset**
+(Microsoft Research; Zheng et al., WWW '08) via the processed per-trajectory
+feature table in the public `jbremz/Beijing-Trajectories-Project` mirror.
+
+- **Dataset:** `ml/data/external/geolife_activities.csv` — **4,362 labelled
+  walk/bike/run trajectories from 51 users** (provenance and reproducible
+  derivation: `ml/data/external/README.md`).
+- **Protocol:** for every trajectory the model receives **only that same
+  user's earlier trajectories of the same mode** as history — exactly the
+  information Trana has when predicting for a real account; empty history
+  exercises the production cold-start fallback. No future data, no other
+  users. Elevation 0 m (absent in GeoLife), weight 60 kg (assumed),
+  experience inferred from history length (production behaviour). Target
+  values are door-to-door elapsed times — what Trana predicts for a planned
+  session.
+- **Reproduce:** `python -m evaluation.geolife_validation` — run by CI after
+  every training run; report artifact: `ml/evaluation/reports/geolife_validation.json`.
+
+**Results — artifact `20261108.0445`, n = 4,362:**
+
+| Slice | n | MAE (min) | MdAPE | ±15 % hit | R² | q10–q90 coverage |
+| --- | --- | --- | --- | --- | --- | --- |
+| overall | 4,362 | **5.65** | 21.9 % | 36.4 % | 0.461 | 24.1 % |
+| walk | 2,988 | 5.99 | 25.0 % | 32.7 % | 0.441 | 25.7 % |
+| ride | 1,372 | 4.93 | 17.2 % | 44.5 % | 0.498 | 20.7 % |
+| cold start (no history) | 80 | 12.88 | 49.6 % | 15.0 % | 0.107 | 11.3 % |
+| personalized (≥ 2 prior) | 4,215 | 5.41 | 21.4 % | 37.0 % | 0.475 | 24.5 % |
+
+Baselines (overall MAE): population prior **7.10 min** → personal Riegel
+anchor alone **5.80 min** → full model **5.65 min**.
+
+**Reading:**
+
+1. The model beats the population prior by **20.4 % MAE** — the
+   distance→duration mapping transfers to real GPS movement.
+2. **Personalization is the main lever:** cold-start error is ~2.4× the
+   personalized error, empirically justifying Trana's own-log anchoring.
+3. The learned correction contributes ~2.5 % beyond the personal anchor on
+   this data — most of the win is the anchor itself; the synthetic-trained
+   factor helps but is not the star.
+4. **Interval coverage falls to 24 %** on real data (vs 76.8 % synthetic):
+   door-to-door GPS durations vary more than the synthetic noise model —
+   the q10/q90 range is optimistic for real sessions, and long in-domain
+   activities are the weakest slice (n = 543, MAE 17.0 min).
+
+**Dataset-specific limitations:** no elevation in GeoLife (features = 0;
+Beijing is flat); `bike`→`ride` mapping; `run` has n = 2; weight and
+experience assumed, not measured; elapsed times include stops.
+
+→ Findings motivate **ML phase 2**: retrain and recalibrate on accumulated
+real user activities (`python -m duration_model.train --source supabase`).
+
 ## Known limitations
 
 - The committed artifact is trained on **synthetic** data — correct shape, wrong
@@ -96,3 +151,7 @@ SPA ──POST /api/predictions──▶ Laravel ──POST /predict──▶ Fa
 - Age is not yet a feature (birth_year is stored, unused by the model).
 - Wearable HR stream is stored (`avg_heart_rate`) but unused by the model.
 - Interval coverage 76.8 % vs 80 % target — acceptable for a range display, not for pacing a race.
+- External GeoLife validation (`evaluation/geolife_validation.py`): coverage
+  drops to **24 %** on real door-to-door durations and long in-domain
+  activities are weakest — see *External validation (GeoLife)* above;
+  motivates retraining on real logs.
