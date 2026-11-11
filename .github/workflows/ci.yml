@@ -44,7 +44,27 @@ jobs:
       - run: python -m duration_model.train
       - run: python -m evaluation.sanity_check
       - run: python -m evaluation.geolife_validation
-      - run: python -m pytest -q tests
+      - name: Run ML tests
+        run: |
+          set +e
+          python -m pytest -q tests 2>&1 | tee /tmp/ml-tests.log
+          code=${PIPESTATUS[0]}
+          if [ "$code" -ne 0 ]; then
+            # Surface the failure as annotations: job logs live on a host the
+            # PR-comment channel cannot reach, annotations are the readable path.
+            {
+              pip list --format=freeze 2>/dev/null | grep -E '^(fastapi|starlette|httpx|pydantic|pytest|anyio)==' || true
+              plain=$(sed -E 's/\x1b\[[0-9;]*m//g' /tmp/ml-tests.log)
+              if printf '%s\n' "$plain" | grep -qE '^[[:space:]]*[0-9]+\) '; then
+                printf '%s\n' "$plain" | sed -n '/^[[:space:]]*[0-9][0-9]*) /,$p'
+              else
+                printf '%s\n' "$plain" | tail -40
+              fi
+            } | cut -c1-450 | head -14 | while IFS= read -r line; do
+              if [ -n "$line" ]; then echo "::error::$line"; fi
+            done
+            exit "$code"
+          fi
 
   backend:
     name: API (Laravel)
