@@ -14,7 +14,7 @@ class NotificationCenterTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function registerAthlete(string $email = 'notify@example.com'): array
+    private function registerAthlete(string $email = 'notify@gmail.com'): array
     {
         $response = $this->postJson('/api/auth/register', [
             'name' => 'Notify Athlete',
@@ -97,14 +97,14 @@ class NotificationCenterTest extends TestCase
 
     public function test_athletes_cannot_touch_each_others_notifications(): void
     {
-        $headersA = $this->registerAthlete('a@example.com');
-        $userA = User::where('email', 'a@example.com')->firstOrFail();
+        $headersA = $this->registerAthlete('a@gmail.com');
+        $userA = User::where('email', 'a@gmail.com')->firstOrFail();
         $this->makePlan($userA);
         $this->getJson('/api/notifications', $headersA);
 
         $notification = InAppNotification::where('user_id', $userA->id)->firstOrFail();
 
-        $headersB = $this->registerAthlete('b@example.com');
+        $headersB = $this->registerAthlete('b@gmail.com');
         // Guards are reused across requests inside one test process — drop
         // athlete A's resolution before athlete B authenticates.
         app('auth')->forgetGuards();

@@ -135,7 +135,7 @@ def main():
 
                 expect_status(request(port, "GET", "/api/health"), 200, "database health")
                 registration = request(port, "POST", "/api/auth/register", body={
-                    "name": "Browser Origin Test", "email": "browser@example.test", "password": "test-password-123",
+                    "name": "Browser Origin Test", "email": "browser@gmail.com", "password": "test-password-123",
                 }, cookie="laravel_session=stale; XSRF-TOKEN=stale")
                 data = expect_status(registration, 201, "browser-origin registration without CSRF token")
                 assert data.get("token") and data.get("user"), "Registration must return a bearer token and user."
@@ -151,7 +151,7 @@ def main():
                 expect_status(request(port, "POST", "/api/auth/logout", token=token), 200, "bearer logout")
                 expect_status(request(port, "GET", "/api/profile", token=token), 401, "revoked bearer token")
                 expect_status(request(port, "POST", "/api/auth/login", body={
-                    "email": "browser@example.test", "password": "test-password-123",
+                    "email": "browser@gmail.com", "password": "test-password-123",
                 }), 200, "browser-origin login without CSRF token")
                 print("Browser-origin bearer API smoke test passed.")
             finally:

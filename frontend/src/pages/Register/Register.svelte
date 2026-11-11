@@ -13,6 +13,11 @@
     event.preventDefault();
     error = '';
 
+    if (!/@gmail\.com$/i.test(email.trim())) {
+      error = 'Sign-up is limited to Gmail addresses — please use your @gmail.com address.';
+      return;
+    }
+
     if (password.length < 8 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
       error = 'Password must be at least 8 characters and include letters and numbers.';
       return;
@@ -103,8 +108,11 @@
           <label class="label" for="email">Email</label>
           <div class="relative">
             <Mail size={16} class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink-400" />
-            <input id="email" type="email" class="input pl-11" bind:value={email} placeholder="you@example.com" autocomplete="email" required />
+            <input id="email" type="email" class="input pl-11" bind:value={email} placeholder="you@gmail.com" autocomplete="email" required />
           </div>
+          <p class="mt-1.5 text-[11px] font-semibold leading-snug text-ink-400">
+            Gmail addresses only — your verification link is sent there.
+          </p>
         </div>
 
         <div>

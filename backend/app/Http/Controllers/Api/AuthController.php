@@ -50,7 +50,8 @@ class AuthController extends Controller
             'device_name' => ['nullable', 'string', 'max:60'],
         ]);
 
-        $user = User::where('email', $credentials['email'])->first();
+        // Registration lowercases emails — match case-insensitively too.
+        $user = User::where('email', strtolower($credentials['email']))->first();
 
         if (! $user || ! Hash::check($credentials['password'], $user->password)) {
             throw ValidationException::withMessages([

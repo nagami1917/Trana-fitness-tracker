@@ -64,7 +64,7 @@ class LiveAccountTest extends TestCase
         $this->assertDatabaseCount('predictions', 0);
         $this->postJson('/api/auth/demo')->assertNotFound();
 
-        $token = $this->registerAthlete('Alice', 'alice@example.test');
+        $token = $this->registerAthlete('Alice', 'alice@gmail.com');
         $this->postJson('/api/activities', [
             'activity_type' => 'run', 'distance_km' => 5, 'duration_min' => 30,
             'started_at' => now()->subDay()->toIso8601String(),
@@ -76,8 +76,8 @@ class LiveAccountTest extends TestCase
     public function test_real_account_data_persists_and_is_isolated_between_users(): void
     {
         $this->getJson('/api/profile')->assertUnauthorized();
-        $tokenA = $this->registerAthlete('Alice', 'alice@example.test');
-        $alice = User::where('email', 'alice@example.test')->firstOrFail();
+        $tokenA = $this->registerAthlete('Alice', 'alice@gmail.com');
+        $alice = User::where('email', 'alice@gmail.com')->firstOrFail();
         $this->assertTrue(Hash::check(self::PASSWORD, $alice->password));
         $this->assertDatabaseHas('fitness_profiles', ['user_id' => $alice->id]);
         $this->assertDatabaseHas('goals', ['user_id' => $alice->id]);
@@ -97,7 +97,7 @@ class LiveAccountTest extends TestCase
             'duration_min' => 60, 'duration_low_min' => 50, 'duration_high_min' => 70,
         ]);
 
-        $tokenB = $this->registerAthlete('Bob', 'bob@example.test');
+        $tokenB = $this->registerAthlete('Bob', 'bob@gmail.com');
         $headersB = $this->bearer($tokenB);
         $this->getJson('/api/profile', $headersB)->assertOk()->assertJsonPath('data.name', 'Bob');
         $this->getJson('/api/activities', $headersB)->assertOk()->assertJsonCount(0, 'data');
@@ -112,7 +112,7 @@ class LiveAccountTest extends TestCase
         $this->postJson('/api/auth/logout', [], $this->bearer($tokenA))->assertOk();
         $this->getJson('/api/auth/me', $this->bearer($tokenA))->assertUnauthorized();
         $newToken = $this->postJson('/api/auth/login', [
-            'email' => 'alice@example.test', 'password' => self::PASSWORD,
+            'email' => 'alice@gmail.com', 'password' => self::PASSWORD,
         ])->assertOk()->json('token');
         $this->getJson('/api/profile', $this->bearer($newToken))
             ->assertOk()->assertJsonPath('data.city', 'Lusacan')->assertJsonPath('data.onboarded', true);
@@ -130,9 +130,9 @@ class LiveAccountTest extends TestCase
 
     public function test_activity_and_prediction_lists_expose_all_pages(): void
     {
-        $token = $this->registerAthlete('Alice', 'alice@example.test');
+        $token = $this->registerAthlete('Alice', 'alice@gmail.com');
         $headers = $this->bearer($token);
-        $alice = User::where('email', 'alice@example.test')->firstOrFail();
+        $alice = User::where('email', 'alice@gmail.com')->firstOrFail();
         for ($i = 1; $i <= 3; $i++) {
             $this->postJson('/api/activities', [
                 'activity_type' => 'run', 'distance_km' => $i, 'duration_min' => 20,
