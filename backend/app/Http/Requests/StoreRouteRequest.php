@@ -66,17 +66,27 @@ class StoreRouteRequest extends FormRequest
     {
         $out = [];
 
-        $walk = function (array $geometry) use (&$walk, &$out) {
-            if (! isset($geometry['type'], $geometry['coordinates'])) {
+        $walk = function (array $geometry) use (&$out) {
+            if (! isset($geometry['type'], $geometry['coordinates']) || ! is_array($geometry['coordinates'])) {
                 return;
             }
 
-            match ($geometry['type']) {
-                'Point' => $out[] = $geometry['coordinates'],
-                'LineString' => array_walk($geometry['coordinates'], fn ($coord) => $out[] = $coord),
-                'MultiLineString' => array_walk($geometry['coordinates'], fn ($line) => array_walk($line, fn ($coord) => $out[] = $coord)),
-                default => null,
-            };
+            if ($geometry['type'] === 'Point') {
+                $out[] = $geometry['coordinates'];
+            } elseif ($geometry['type'] === 'LineString') {
+                foreach ($geometry['coordinates'] as $coord) {
+                    $out[] = $coord;
+                }
+            } elseif ($geometry['type'] === 'MultiLineString') {
+                foreach ($geometry['coordinates'] as $line) {
+                    if (! is_array($line)) {
+                        continue;
+                    }
+                    foreach ($line as $coord) {
+                        $out[] = $coord;
+                    }
+                }
+            }
         };
 
         if ((string) ($geojson['type'] ?? '') === 'FeatureCollection') {
