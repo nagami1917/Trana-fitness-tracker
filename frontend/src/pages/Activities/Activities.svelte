@@ -13,6 +13,7 @@
   import { loadModel, predictDuration, routeLengthKm } from '../../lib/ml/index.js';
   import { estimateMet } from '../../lib/ml/fueling.js';
   import { routeThroughRoads, routingEnabled } from '../../services/roadRoutingService.js';
+  import { acquireLivePosition, releaseLivePosition, livePosition } from '../../lib/liveLocation.svelte.js';
   import { duration as fmtDuration, pace, kcal, km, nf, fullDate, timeLabel, dayLabel, activityLabel } from '../../lib/format.js';
 
   const TYPES = [
@@ -38,10 +39,17 @@
   let snapTimer;
   let snapSeq = 0;
 
-  onMount(async () => {
-    model = await loadModel();
-    const q = $query.get('q');
-    if (q) term = q;
+  // Blue dot: join the shared follow-me watch; the returned cleanup releases
+  // it (sync onMount → client-only; top-level onDestroy breaks this SSR
+  // harness because ssr_context is already torn down at registration).
+  onMount(() => {
+    acquireLivePosition();
+    void (async () => {
+      model = await loadModel();
+      const q = $query.get('q');
+      if (q) term = q;
+    })();
+    return () => releaseLivePosition();
   });
 
   function blankDraft() {
@@ -395,7 +403,14 @@
       </div>
       {#if draftRouteOpen}
         <div class="mt-2">
-          <RouteMap points={draft.route} path={routePath} height={220} interactive onPick={onPick} />
+          <RouteMap
+            points={draft.route}
+            path={routePath}
+            height={220}
+            interactive
+            userLocation={livePosition.current ? [livePosition.current.latitude, livePosition.current.longitude] : null}
+            onPick={onPick}
+          />
         </div>
         <div class="mt-2 flex flex-wrap items-center gap-2">
           {#if draft.route.length}

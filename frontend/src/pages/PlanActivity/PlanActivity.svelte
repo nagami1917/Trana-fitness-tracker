@@ -13,6 +13,7 @@
   import { loadModel, predictPlan } from '../../lib/ml/index.js';
   import { routeLengthKm, suggestElevation } from '../../lib/ml/index.js';
   import { routeThroughRoads, routingEnabled, waypointsFromPath } from '../../services/roadRoutingService.js';
+  import { acquireLivePosition, releaseLivePosition, livePosition } from '../../lib/liveLocation.svelte.js';
   import { nf, km, pace } from '../../lib/format.js';
 
   const TYPES = [
@@ -45,7 +46,12 @@
   let snapTimer;
   let snapSeq = 0;
 
-  onMount(async () => {
+  // Blue dot: join the shared follow-me watch; the returned cleanup releases
+  // it (sync onMount → client-only; top-level onDestroy breaks this SSR
+  // harness because ssr_context is already torn down at registration).
+  onMount(() => {
+    acquireLivePosition();
+    void (async () => {
     model = await loadModel();
     // hydrate from the dashboard shortcut (?type=run&distance=5&elevation=45)
     const params = $query;
@@ -61,6 +67,8 @@
       routePath = $activities[0].route.length > 2 ? [...$activities[0].route] : [];
     }
     await run();
+    })();
+    return () => releaseLivePosition();
   });
 
   const routeKm = $derived(
@@ -344,6 +352,7 @@
             path={routePath}
             height={250}
             interactive={drawing}
+            userLocation={livePosition.current ? [livePosition.current.latitude, livePosition.current.longitude] : null}
             onPick={onPick}
           />
         </div>

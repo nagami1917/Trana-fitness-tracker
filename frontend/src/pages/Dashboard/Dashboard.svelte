@@ -26,7 +26,8 @@
   import { activities, profile, goals, todayStats, weekStats, trends, chartSeries, modelCard, plans } from '../../stores/index.js';
   import { navigate } from '../../lib/router.js';
   import { api } from '../../services/client.js';
-  import { detectPlace, readCachedPlace, writeCachedPlace, watchPosition } from '../../lib/location.js';
+  import { detectPlace, readCachedPlace, writeCachedPlace } from '../../lib/location.js';
+  import { acquireLivePosition, releaseLivePosition, seedLivePosition, livePosition } from '../../lib/liveLocation.svelte.js';
   import { loadModel, predictDuration } from '../../lib/ml/duration.js';
   import { recommendFueling, INTENSITY_COPY } from '../../lib/ml/fueling.js';
   import { duration as fmtDuration, kcal, km, nf, dayLabel, timeLabel, greeting, pct, shortDate, activityLabel } from '../../lib/format.js';
@@ -34,19 +35,16 @@
   let model = $state(null);
   let loadingModel = $state(true);
   let livePlace = $state(null); // { label, latitude, longitude } from device GPS
-  let livePos = $state(null); // { latitude, longitude } — follow-me blue dot
   let locating = $state(false);
   let draft = $state({ type: 'run', distance: 5, elevation: 45 });
   let range = $state('7D');
   let metric = $state('calories');
 
-  let stopWatch = null;
   let lastLookup = null; // { latitude, longitude, at } — throttle reverse-geocoding
 
   /** Persist a detected place: chip label, 10-min cache, profile city sync. */
   async function applyLivePlace(place, { sync = true } = {}) {
     livePlace = place;
-    livePos = { latitude: place.latitude, longitude: place.longitude };
     writeCachedPlace(place);
     lastLookup = { latitude: place.latitude, longitude: place.longitude, at: Date.now() };
     if (sync && $profile && ($profile.city ?? '').trim() !== place.label) {
@@ -79,13 +77,15 @@
     const cached = readCachedPlace();
     if (cached) {
       livePlace = cached;
-      livePos = { latitude: cached.latitude, longitude: cached.longitude };
+      seedLivePosition(cached); // instant blue dot while the watch spins up
       lastLookup = { latitude: cached.latitude, longitude: cached.longitude, at: Date.now() };
       return;
     }
     locating = true;
     try {
-      await applyLivePlace(await detectPlace());
+      const place = await detectPlace();
+      await applyLivePlace(place);
+      seedLivePosition(place);
     } catch {
       // Permission denied / offline / lookup failed → keep the saved city.
     } finally {
@@ -112,25 +112,23 @@
 
   onMount(() => {
     void locateLive();
-    // Continuous GPS while the dashboard is open: the blue dot follows the
-    // user; the watch is cancelled on unmount so the radio isn't left on.
-    stopWatch = watchPosition({
-      onUpdate: (pos) => {
-        livePos = pos;
-        void refreshPlaceFrom(pos);
-      },
-      onError: () => {
-        // Deny/offline → the chip keeps the saved city, the dot stays put.
-      },
-    });
+    // Shared app-wide watch: joined here, released on leave — every map
+    // page (dashboard, planner, route editor) shows the same blue dot.
+    acquireLivePosition();
     void (async () => {
       model = await loadModel();
       loadingModel = false;
     })();
     return () => {
-      stopWatch?.();
-      stopWatch = null;
+      releaseLivePosition();
     };
+  });
+
+  $effect(() => {
+    // Follow-me place refresh: re-geocode only after actually moving (≥1 km)
+    // and not more than once per 90 s (see refreshPlaceFrom).
+    const pos = livePosition.current;
+    if (pos) void refreshPlaceFrom(pos);
   });
 
   const TYPES = [
@@ -355,7 +353,7 @@
               points={previewRoute}
               height={214}
               showAttribution={false}
-              userLocation={livePos ? [livePos.latitude, livePos.longitude] : null}
+              userLocation={livePosition.current ? [livePosition.current.latitude, livePosition.current.longitude] : null}
               class="!rounded-2xl"
             >
               <div class="pointer-events-none absolute left-3 top-3 rounded-xl bg-white/85 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-brand-600 shadow-soft">
