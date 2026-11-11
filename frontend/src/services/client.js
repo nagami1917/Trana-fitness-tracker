@@ -189,6 +189,17 @@ export const api = {
     delete: (password) => request('/account', { method: 'DELETE', body: { password } }),
   },
 
+  // In-app notification center — the server synthesizes reminders on read.
+  notifications: {
+    list: () =>
+      request('/notifications').then((d) => ({
+        items: Array.isArray(d?.data) ? d.data : [],
+        unread: d?.meta?.unread ?? 0,
+      })),
+    read: (id) => request(`/notifications/${id}/read`, { method: 'POST' }),
+    readAll: () => request('/notifications/read-all', { method: 'POST' }),
+  },
+
   predictions: {
     list: () => listAll('/predictions', 100),
     create: (payload) => request('/predictions', { method: 'POST', body: payload }).then((d) => d.data),

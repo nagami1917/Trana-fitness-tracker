@@ -15,8 +15,10 @@
     ChevronDown,
     MapPin,
   } from 'lucide-svelte';
+  import { onMount } from 'svelte';
   import { route, navigate, link, isActive } from '../../lib/router.js';
   import { profile, session, logout, plans, todayStats } from '../../stores/index.js';
+  import { api } from '../../services/client.js';
   import { nf } from '../../lib/format.js';
   import Logo from './Logo.svelte';
   import Footer from './Footer.svelte';
@@ -47,6 +49,71 @@
   let menuOpen = $state(false);
   let searchOpen = $state(false);
   let searchTerm = $state('');
+
+  // --- notification center -------------------------------------------------
+  let notifOpen = $state(false);
+  let notifItems = $state([]);
+  let notifUnread = $state(0);
+  let notifLoading = $state(false);
+  let notifLoaded = $state(false);
+
+  async function loadNotifications() {
+    notifLoading = true;
+    try {
+      const { items, unread } = await api.notifications.list();
+      notifItems = items;
+      notifUnread = unread;
+      notifLoaded = true;
+    } catch {
+      // Non-blocking: badge stays hidden if the feed can't load.
+    } finally {
+      notifLoading = false;
+    }
+  }
+
+  function toggleNotif() {
+    notifOpen = !notifOpen;
+    if (notifOpen) void loadNotifications(); // fresh feed on every open
+  }
+
+  async function markRead(id) {
+    const item = notifItems.find((n) => n.id === id);
+    if (!item || item.read_at) return;
+    item.read_at = new Date().toISOString();
+    notifUnread = Math.max(0, notifUnread - 1);
+    try {
+      await api.notifications.read(id);
+    } catch {
+      void loadNotifications(); // resync on failure
+    }
+  }
+
+  async function markAllRead() {
+    const nowIso = new Date().toISOString();
+    notifItems = notifItems.map((n) => (n.read_at ? n : { ...n, read_at: nowIso }));
+    notifUnread = 0;
+    try {
+      await api.notifications.readAll();
+    } catch {
+      void loadNotifications();
+    }
+  }
+
+  function ago(iso) {
+    if (!iso) return '';
+    const min = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
+    if (min < 1) return 'now';
+    if (min < 60) return `${min}m`;
+    const hours = Math.floor(min / 60);
+    if (hours < 24) return `${hours}h`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days}d`;
+    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
+  onMount(() => {
+    void loadNotifications(); // badge value as soon as the shell mounts
+  });
 
   function submitSearch(event) {
     event.preventDefault();
@@ -185,14 +252,59 @@
             >
               <Search size={18} />
             </button>
-            <button
-              class="relative grid h-10 w-10 place-items-center rounded-2xl text-ink-500 transition hover:bg-white hover:text-brand-700"
-              onclick={() => navigate('/goals')}
-              aria-label="Notifications"
-            >
-              <Bell size={18} />
-              <span class="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-brand-500 ring-2 ring-white"></span>
-            </button>
+            <div class="relative">
+              <button
+                class="relative grid h-10 w-10 place-items-center rounded-2xl text-ink-500 transition hover:bg-white hover:text-brand-700"
+                onclick={toggleNotif}
+                aria-label="Notifications"
+                aria-expanded={notifOpen}
+              >
+                <Bell size={18} />
+                {#if notifUnread > 0}
+                  <span class="absolute right-1 top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-brand-500 px-1 text-[9px] font-extrabold leading-none text-white ring-2 ring-white">
+                    {notifUnread > 9 ? '9+' : notifUnread}
+                  </span>
+                {/if}
+              </button>
+
+              {#if notifOpen}
+                <div class="absolute right-0 top-12 z-40 w-80 overflow-hidden rounded-2xl border border-brand-100 bg-white shadow-card animate-pop">
+                  <div class="flex items-center justify-between px-4 pb-2 pt-3">
+                    <p class="text-sm font-extrabold text-ink-900">Notifications</p>
+                    {#if notifUnread > 0}
+                      <button class="text-[11px] font-bold text-brand-600 transition hover:text-brand-700" onclick={markAllRead}>
+                        Mark all read
+                      </button>
+                    {/if}
+                  </div>
+                  <div class="divider mx-3"></div>
+                  <div class="max-h-80 overflow-y-auto p-2">
+                    {#if notifLoading && !notifLoaded}
+                      <p class="px-3 py-5 text-center text-xs font-semibold text-ink-400">Loading…</p>
+                    {:else if !notifItems.length}
+                      <p class="px-3 py-6 text-center text-xs font-semibold text-ink-400">You're all caught up 🎉</p>
+                    {:else}
+                      {#each notifItems as item (item.id)}
+                        <button
+                          class="flex w-full items-start gap-2.5 rounded-xl px-3 py-2.5 text-left transition hover:bg-brand-50 {item.read_at ? '' : 'bg-brand-50/60'}"
+                          onclick={() => markRead(item.id)}
+                        >
+                          <span class="mt-1.5 h-2 w-2 shrink-0 rounded-full {item.read_at ? 'bg-transparent' : 'bg-brand-500'}"></span>
+                          <span class="min-w-0 flex-1">
+                            <span class="flex items-baseline justify-between gap-2">
+                              <span class="truncate text-xs font-extrabold text-ink-900">{item.title}</span>
+                              <span class="shrink-0 text-[10px] font-semibold text-ink-400">{ago(item.created_at)}</span>
+                            </span>
+                            <span class="mt-0.5 block text-[11px] font-semibold leading-snug text-ink-500">{item.body}</span>
+                          </span>
+                        </button>
+                      {/each}
+                    {/if}
+                  </div>
+                </div>
+                <button class="fixed inset-0 z-30 cursor-default" aria-label="Close notifications" onclick={() => (notifOpen = false)}></button>
+              {/if}
+            </div>
 
             <div class="relative">
               <button

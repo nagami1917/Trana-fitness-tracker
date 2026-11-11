@@ -387,6 +387,26 @@ activity's calendar `date` so the UI can group them per day.
 
 ---
 
+## Notifications
+
+### `GET /notifications`
+In-app reminder feed (max 50, newest first). On every fetch the server
+**synthesizes** pending reminders from existing data — plans scheduled for
+today (`plan_today`) and goals reached today (`goal_reached`) — inserting each
+at most once per user via a dedupe key.
+```json
+{ "data": [ { "id": 7, "type": "goal_reached", "title": "Goal reached 🎯",
+              "body": "Calories burned · 2,810 / 2,700 kcal",
+              "read_at": null, "created_at": "2026-11-11T12:10:11+00:00" } ],
+  "meta": { "unread": 1 } }
+```
+
+### `POST /notifications/{id}/read` · `POST /notifications/read-all`
+Mark one / all notifications read → `{ message }`. Marking someone else's
+notification answers `404`.
+
+---
+
 ## Account & data rights
 
 ### `DELETE /account`
