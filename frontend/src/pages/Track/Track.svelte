@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { link } from '../../lib/router.js';
+  import { link, query } from '../../lib/router.js';
   import TranaMap from '../../components/map/TranaMap.svelte';
   import GPSStatus from '../../components/activity/GPSStatus.svelte';
   import ActivityStats from '../../components/activity/ActivityStats.svelte';
@@ -8,7 +8,7 @@
   import DailyProgress from '../../components/activity/DailyProgress.svelte';
   import FoodLogger from '../../components/activity/FoodLogger.svelte';
   import ActivityIcon from '../../components/activities/ActivityIcon.svelte';
-  import { profile, refresh, notify } from '../../stores/index.js';
+  import { profile, plans, refresh, notify } from '../../stores/index.js';
   import { activityApi, validateTrackPoint } from '../../services/activityService.js';
   import { dailySessionApi } from '../../services/dailySessionService.js';
   import { estimateMet } from '../../lib/ml/fueling.js';
@@ -16,6 +16,7 @@
   import { acquireLivePosition, releaseLivePosition, seedLivePosition, livePosition } from '../../lib/liveLocation.svelte.js';
   import { watch, getCurrentPosition, trackPoint, GpsError } from '../../services/gpsService.js';
   import { snapRoute } from '../../services/roadSnappingService.js';
+  import { pathToGeoJson } from '../../services/roadRoutingService.js';
   import { haversineKm, elevationGainM } from '../../services/mapService.js';
 
   const SPORTS = [
@@ -64,6 +65,15 @@
 
   let roadSnapping = $state(true);
   let showRoads = $state(true);
+
+  // Optional planned road route loaded from /plan (?plan=<id> or ?plan=draft)
+  let activePlan = $state(null);
+  const plansWithRoutes = $derived($plans.filter((p) => Array.isArray(p.route) && p.route.length >= 2));
+  const plannedRoute = $derived(
+    activePlan?.route?.length >= 2
+      ? pathToGeoJson(activePlan.route, activePlan.activity_type || activityType)
+      : null,
+  );
 
   // Today's daily session (shared between DailyProgress and FoodLogger)
   let todaySession = $state(null);
@@ -367,10 +377,31 @@
     }
   }
 
+  function selectPlanRoute(plan) {
+    activePlan = plan;
+    if (!tracking && plan?.activity_type) {
+      activityType = plan.activity_type;
+    }
+  }
+
   onMount(() => {
     if (cachedPlace) seedLivePosition(cachedPlace);
     acquireLivePosition();
     loadTodaySession();
+
+    const planParam = $query.get('plan');
+    if (planParam === 'draft' && typeof sessionStorage !== 'undefined') {
+      try {
+        const raw = sessionStorage.getItem('trana:draft_planned_route');
+        const parsed = raw ? JSON.parse(raw) : null;
+        if (parsed?.route?.length >= 2) selectPlanRoute(parsed);
+      } catch {
+        // ignore invalid draft storage
+      }
+    } else if (planParam) {
+      const found = $plans.find((p) => String(p.id) === String(planParam));
+      if (found?.route?.length >= 2) selectPlanRoute(found);
+    }
 
     return () => {
       stopTicker();
@@ -429,10 +460,45 @@
       </div>
     </div>
 
+    {#if activePlan || plansWithRoutes.length}
+      <div class="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-brand-100 bg-brand-50/60 px-3.5 py-2 text-xs">
+        {#if activePlan}
+          <div class="flex items-center gap-2 font-bold text-ink-800">
+            <span class="h-2 w-2 rounded-full bg-brand-500"></span>
+            <span class="capitalize">
+              Guiding along planned route: {activePlan.distance_km} km {activePlan.activity_type}
+            </span>
+          </div>
+          <button
+            type="button"
+            class="font-extrabold text-brand-600 hover:underline cursor-pointer"
+            onclick={() => (activePlan = null)}
+          >
+            Hide guide
+          </button>
+        {:else}
+          <span class="font-bold text-ink-600">Guide route available:</span>
+          <div class="flex flex-wrap gap-1.5">
+            {#each plansWithRoutes.slice(0, 3) as plan (plan.id)}
+              <button
+                type="button"
+                class="btn-chip !py-1"
+                onclick={() => selectPlanRoute(plan)}
+              >
+                {plan.distance_km} km {plan.activity_type}
+              </button>
+            {/each}
+          </div>
+        {/if}
+      </div>
+    {/if}
+
     <!-- Live Map (explicit height so MapLibre never collapses to 0px) -->
     <div class="relative h-[340px] sm:h-[420px] lg:h-[460px] w-full">
       <TranaMap
         {points}
+        {plannedRoute}
+        fitRoute={!tracking && Boolean(plannedRoute)}
         center={mapCenter}
         {currentPosition}
         {startPosition}

@@ -131,6 +131,12 @@ try {
         assert.ok(html.indexOf('coordinates and IP') < html.indexOf('Use current location'));
       }
       if (name === 'Dashboard') assert.match(html, /Test City/);
+      if (name === 'PlanActivity') {
+        assert.match(html, /Route planner/);
+        assert.match(html, /Follow roads/);
+        assert.match(html, /Straight lines/);
+        assert.match(html, /Search street, park, or stop/);
+      }
       if (name === 'Track') {
         assert.match(html, /Track Activity/);
         assert.match(html, /Start activity/);

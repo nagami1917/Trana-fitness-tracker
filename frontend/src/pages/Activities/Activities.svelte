@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { Plus, Search, LoaderCircle, Trash2, MapPin, Flame, Timer, Gauge, Route as RouteIcon, Sparkles, TrendingUp, X, Undo2, Download } from 'lucide-svelte';
+  import { Plus, Search, LoaderCircle, Trash2, MapPin, Flame, Timer, Gauge, Route as RouteIcon, Sparkles, TrendingUp, X, Undo2, Download, ArrowLeftRight, Repeat } from 'lucide-svelte';
   import Card from '../../components/common/Card.svelte';
   import ActivityIcon from '../../components/activities/ActivityIcon.svelte';
   import RouteMap from '../../components/route/RouteMap.svelte';
@@ -12,7 +12,12 @@
   import { query } from '../../lib/router.js';
   import { loadModel, predictDuration, routeLengthKm } from '../../lib/ml/index.js';
   import { estimateMet } from '../../lib/ml/fueling.js';
-  import { routeThroughRoads, routingEnabled } from '../../services/roadRoutingService.js';
+  import {
+    routeThroughRoads,
+    outAndBackWaypoints,
+    closeLoopWaypoints,
+    isClosedLoop,
+  } from '../../services/roadRoutingService.js';
   import { acquireLivePosition, releaseLivePosition, livePosition } from '../../lib/liveLocation.svelte.js';
   import { duration as fmtDuration, pace, kcal, km, nf, fullDate, timeLabel, dayLabel, activityLabel } from '../../lib/format.js';
 
@@ -45,12 +50,14 @@
   let model = $state(null);
   let draft = $state(blankDraft());
   let draftRouteOpen = $state(false);
+  let routeMode = $state('roads');
   let confirmingDelete = $state(null);
   // Road-snapped geometry for the draft's waypoints (null/[] → straight lines).
   let routePath = $state([]);
   let routing = $state(false);
   let snapTimer;
   let snapSeq = 0;
+  let snapAbort = null;
 
   // Blue dot: join the shared follow-me watch; the returned cleanup releases
   // it (sync onMount → client-only; top-level onDestroy breaks this SSR
@@ -62,7 +69,11 @@
       const q = $query.get('q');
       if (q) term = q;
     })();
-    return () => releaseLivePosition();
+    return () => {
+      clearTimeout(snapTimer);
+      snapAbort?.abort();
+      releaseLivePosition();
+    };
   });
 
   function blankDraft() {
@@ -161,38 +172,68 @@
     draft = blankDraft();
     draft.activity_type = filter === 'all' ? 'run' : filter;
     draftRouteOpen = false;
+    routeMode = 'roads';
     resetSnap();
     addOpen = true;
   }
 
   function resetSnap() {
     clearTimeout(snapTimer);
+    snapAbort?.abort();
+    snapAbort = null;
     snapSeq += 1;
     routePath = [];
     routing = false;
   }
 
-  /** Re-route the draft's waypoints along roads (debounced, stale-safe). */
-  function scheduleSnap() {
+  /** Re-route the draft's stops along roads & paths (debounced, stale-safe). */
+  function scheduleSnap({ immediate = false } = {}) {
     clearTimeout(snapTimer);
-    if (!routingEnabled() || draft.route.length < 2) {
+    snapAbort?.abort();
+    snapAbort = null;
+
+    if (routeMode !== 'roads' || draft.route.length < 2) {
       snapSeq += 1;
       routePath = [];
       routing = false;
       return;
     }
     routing = true;
-    snapTimer = setTimeout(runSnap, 450);
+    snapTimer = setTimeout(runSnap, immediate ? 0 : 220);
   }
 
   async function runSnap() {
     const seq = ++snapSeq;
+    const controller = new AbortController();
+    snapAbort = controller;
+
     const waypoints = [...draft.route];
     const activityType = draft.activity_type;
-    const result = await routeThroughRoads(waypoints, activityType);
+    const result = await routeThroughRoads(waypoints, activityType, {
+      allowKeyless: true,
+      signal: controller.signal,
+    });
     if (seq !== snapSeq) return; // a newer edit superseded this request
     routePath = result?.path ?? [];
     routing = false;
+  }
+
+  function setRouteMode(mode) {
+    routeMode = mode;
+    if (mode === 'straight') resetSnap();
+    else scheduleSnap({ immediate: true });
+  }
+
+  function makeOutAndBack() {
+    if (draft.route.length < 2 || isClosedLoop(draft.route)) return;
+    draft.route = outAndBackWaypoints(draft.route);
+    scheduleSnap({ immediate: true });
+  }
+
+  function makeLoop() {
+    if (draft.route.length < 2 || isClosedLoop(draft.route)) return;
+    draft.route = closeLoopWaypoints(draft.route);
+    scheduleSnap({ immediate: true });
   }
 
   function clearRoute() {
@@ -200,16 +241,16 @@
     resetSnap();
   }
 
-  /** Remove only the last waypoint — keeps the rest of the drawn route. */
+  /** Remove only the last stop — keeps the rest of the drawn route. */
   function undoPoint() {
     if (!draft.route.length) return;
     draft.route = draft.route.slice(0, -1);
-    scheduleSnap();
+    scheduleSnap({ immediate: true });
   }
 
   function setDraftType(id) {
     draft.activity_type = id;
-    scheduleSnap(); // routing profile follows the activity type
+    scheduleSnap({ immediate: true }); // routing profile follows the activity type
   }
 
   async function submit() {
@@ -256,10 +297,18 @@
   function onPick(mode, index, latlng) {
     if (!latlng) return;
     const point = [Number(latlng.lat.toFixed(5)), Number(latlng.lng.toFixed(5))];
-    draft.route = mode === 'move'
-      ? draft.route.map((existing, i) => (i === index ? point : existing))
-      : [...draft.route, point];
-    scheduleSnap();
+    if (mode === 'remove') {
+      draft.route = draft.route.filter((_, i) => i !== index);
+      scheduleSnap({ immediate: true });
+      return;
+    }
+    if (mode === 'move') {
+      draft.route = draft.route.map((existing, i) => (i === index ? point : existing));
+      scheduleSnap();
+      return;
+    }
+    draft.route = [...draft.route, point];
+    scheduleSnap({ immediate: draft.route.length >= 2 });
   }
 </script>
 
@@ -413,30 +462,48 @@
     </div>
 
     <div class="sm:col-span-2">
-      <div class="flex items-center justify-between">
+      <div class="flex flex-wrap items-center justify-between gap-2">
         <span class="label !mb-0">Route (optional)</span>
-        <button class="btn-chip" onclick={() => (draftRouteOpen = !draftRouteOpen)}>
-          {draftRouteOpen ? 'Hide map' : 'Draw route'}
-        </button>
+        <div class="flex items-center gap-1.5">
+          {#if draftRouteOpen}
+            <button
+              type="button"
+              class="btn-chip"
+              class:btn-chip-active={routeMode === 'roads'}
+              onclick={() => setRouteMode(routeMode === 'roads' ? 'straight' : 'roads')}
+            >
+              <RouteIcon size={12} /> {routeMode === 'roads' ? 'Follow roads: ON' : 'Straight lines'}
+            </button>
+          {/if}
+          <button type="button" class="btn-chip" onclick={() => (draftRouteOpen = !draftRouteOpen)}>
+            {draftRouteOpen ? 'Hide map' : 'Draw route'}
+          </button>
+        </div>
       </div>
       {#if draftRouteOpen}
         <div class="mt-2">
           <RouteMap
             points={draft.route}
             path={routePath}
-            height={220}
+            height={230}
             interactive
+            {routing}
+            {routeMode}
             userLocation={livePosition.current ? [livePosition.current.latitude, livePosition.current.longitude] : null}
             onPick={onPick}
           />
         </div>
-        <div class="mt-2 flex flex-wrap items-center gap-2">
+        <div class="mt-2 flex flex-wrap items-center gap-1.5">
+          {#if draft.route.length >= 2 && !isClosedLoop(draft.route)}
+            <button type="button" class="btn-chip" onclick={makeOutAndBack}><ArrowLeftRight size={12} /> Out & back</button>
+            <button type="button" class="btn-chip" onclick={makeLoop}><Repeat size={12} /> Close loop</button>
+          {/if}
           {#if draft.route.length}
-            <button class="btn-chip" onclick={undoPoint}><Undo2 size={12} /> Undo</button>
-            <button class="btn-chip" onclick={clearRoute}><Trash2 size={12} /> Clear route</button>
+            <button type="button" class="btn-chip" onclick={undoPoint}><Undo2 size={12} /> Undo</button>
+            <button type="button" class="btn-chip" onclick={clearRoute}><Trash2 size={12} /> Clear route</button>
           {/if}
           {#if routing}
-            <span class="pill"><LoaderCircle size={12} class="animate-spin" /> Snapping to roads…</span>
+            <span class="pill"><LoaderCircle size={12} class="animate-spin" /> Following roads…</span>
           {/if}
         </div>
       {/if}
