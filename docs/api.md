@@ -463,6 +463,33 @@ browser errors, ML-service faults → one `error_logs` table).
 
 ---
 
+## Admin console
+
+Tier-1 operator API. **Every endpoint requires an account with `role = admin`**
+(`admin` middleware — enforced server-side; the SPA only hides what it cannot
+access). There is no HTTP way to grant roles: bootstrap the first admin with
+
+```bash
+cd backend && php artisan admin:promote you@gmail.com
+```
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /admin/dashboard` | KPI counts: users (total / new 7d / suspended / admins), content (activities, predictions, goals), errors (open / 24 h / total) |
+| `GET /admin/users?q=&status=all\|active\|suspended&limit=&page=` | Paginated roster with role, suspension state, activity counts |
+| `PATCH /admin/users/{id}/suspend` | Suspend one account: sets `suspended_at`, revokes all its tokens (403 on self) |
+| `PATCH /admin/users/{id}/reactivate` | Lift a suspension; the athlete signs in again normally |
+| `GET /admin/model` | **Read-only** model-ops view (version, metrics, importances) from the ML service · `503` when it is down |
+| `GET /admin/errors?status=open\|acknowledged\|resolved\|all&kind=api\|client\|ml` | Error-log viewer with traces (RLS-locked table) |
+| `PATCH /admin/errors/{id}` | Triage: `status` → `open` / `acknowledged` / `resolved` |
+
+By design **not** available over HTTP: role editing, account deletion,
+secrets/config viewing, raw database access, mass messaging. Suspension also
+blocks login and every authenticated request (`ensure.active` middleware), so
+a suspended token dies even if login were bypassed.
+
+---
+
 ## Account & data rights
 
 ### `DELETE /account`

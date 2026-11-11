@@ -16,7 +16,12 @@ class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
 
-    protected $fillable = ['name', 'email', 'password'];
+    /** Application-level role allowlist — anything else is not an admin. */
+    public const ROLE_ATHLETE = 'athlete';
+
+    public const ROLE_ADMIN = 'admin';
+
+    protected $fillable = ['name', 'email', 'password', 'role', 'suspended_at'];
 
     protected $hidden = ['password', 'remember_token'];
 
@@ -25,7 +30,19 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'suspended_at' => 'datetime',
         ];
+    }
+
+    /** The `admin` middleware trusts only this check — never client input. */
+    public function isAdmin(): bool
+    {
+        return $this->role === self::ROLE_ADMIN;
+    }
+
+    public function isSuspended(): bool
+    {
+        return $this->suspended_at !== null;
     }
 
     /**
