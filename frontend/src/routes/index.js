@@ -15,6 +15,7 @@ import Fueling from '../pages/Fueling/Fueling.svelte';
 import Goals from '../pages/Goals/Goals.svelte';
 import Profile from '../pages/Profile/Profile.svelte';
 import Settings from '../pages/Settings/Settings.svelte';
+import Admin from '../pages/Admin/Admin.svelte';
 import Privacy from '../pages/Legal/Privacy.svelte';
 import Terms from '../pages/Legal/Terms.svelte';
 import ForgotPassword from '../pages/Auth/ForgotPassword.svelte';
@@ -34,6 +35,7 @@ export const ROUTES = {
   '/goals': Goals,
   '/profile': Profile,
   '/settings': Settings,
+  '/admin': Admin,
   '/privacy': Privacy,
   '/terms': Terms,
   '/forgot-password': ForgotPassword,
