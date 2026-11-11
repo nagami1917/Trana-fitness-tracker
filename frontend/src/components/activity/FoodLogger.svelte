@@ -159,10 +159,17 @@
           </div>
           <ul class="mt-2 space-y-1 max-h-32 overflow-y-auto">
             {#each mealFoods as food (food.id)}
-              <li class="flex items-center justify-between px-2 py-1 rounded-lg hover:bg-brand-50 cursor-pointer group" onclick={() => startEdit(food)}>
-                <span class="text-sm text-ink-700 truncate">{food.food_name}</span>
-                <span class="text-xs font-bold text-ink-400">{food.calories} kcal</span>
-                <span class="text-rose-500 opacity-0 group-hover:opacity-100 transition">×</span>
+              <li>
+                <!-- Native button: keyboard-focusable and Enter/Space-activatable. -->
+                <button
+                  type="button"
+                  class="group flex w-full items-center justify-between px-2 py-1 rounded-lg hover:bg-brand-50 cursor-pointer text-left"
+                  onclick={() => startEdit(food)}
+                >
+                  <span class="text-sm text-ink-700 truncate">{food.food_name}</span>
+                  <span class="text-xs font-bold text-ink-400">{food.calories} kcal</span>
+                  <span class="text-rose-500 opacity-0 group-hover:opacity-100 transition" aria-hidden="true">×</span>
+                </button>
               </li>
             {/each}
           </ul>
@@ -198,42 +205,43 @@
       <form class="rounded-xl border border-brand-100 bg-white p-4 shadow-sm" onsubmit={(event) => { event.preventDefault(); addFood(); }}>
         <div class="grid grid-cols-2 gap-3 mb-3">
           <div class="col-span-2">
-            <label class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Food Name</label>
+            <label for="food-name" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Food Name</label>
             <input
+              id="food-name"
               bind:value={form.food_name}
               class="w-full px-3 py-2 rounded-lg border border-brand-200 text-sm focus:border-brand-500 focus:outline-none"
               placeholder="e.g. oatmeal with banana"
             />
           </div>
           <div>
-            <label class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Meal</label>
-            <select bind:value={form.meal_type} class="w-full px-3 py-2 rounded-lg border border-brand-200 text-sm focus:border-brand-500 focus:outline-none">
+            <label for="food-meal" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Meal</label>
+            <select id="food-meal" bind:value={form.meal_type} class="w-full px-3 py-2 rounded-lg border border-brand-200 text-sm focus:border-brand-500 focus:outline-none">
               {#each MEALS as meal}
                 <option value={meal.id}>{meal.icon} {meal.label}</option>
               {/each}
             </select>
           </div>
           <div>
-            <label class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Calories</label>
-            <input type="number" bind:value={form.calories} class="w-full px-3 py-2 rounded-lg border border-brand-200 text-sm focus:border-brand-500 focus:outline-none" placeholder="0" />
+            <label for="food-calories" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Calories</label>
+            <input id="food-calories" type="number" bind:value={form.calories} class="w-full px-3 py-2 rounded-lg border border-brand-200 text-sm focus:border-brand-500 focus:outline-none" placeholder="0" />
           </div>
           <div>
-            <label class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Qty</label>
-            <input type="number" bind:value={form.quantity} class="w-full px-3 py-2 rounded-lg border border-brand-200 text-sm focus:border-brand-500 focus:outline-none" placeholder="1" />
+            <label for="food-qty" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Qty</label>
+            <input id="food-qty" type="number" bind:value={form.quantity} class="w-full px-3 py-2 rounded-lg border border-brand-200 text-sm focus:border-brand-500 focus:outline-none" placeholder="1" />
           </div>
         </div>
         <div class="grid grid-cols-2 gap-3 mb-3 sm:grid-cols-4">
           <div>
-            <label class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Carbs (g)</label>
-            <input type="number" bind:value={form.carbs_g} class="w-full px-3 py-2 rounded-lg border border-brand-200 text-sm focus:border-brand-500 focus:outline-none" placeholder="0" />
+            <label for="food-carbs" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Carbs (g)</label>
+            <input id="food-carbs" type="number" bind:value={form.carbs_g} class="w-full px-3 py-2 rounded-lg border border-brand-200 text-sm focus:border-brand-500 focus:outline-none" placeholder="0" />
           </div>
           <div>
-            <label class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Protein (g)</label>
-            <input type="number" bind:value={form.protein_g} class="w-full px-3 py-2 rounded-lg border border-brand-200 text-sm focus:border-brand-500 focus:outline-none" placeholder="0" />
+            <label for="food-protein" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Protein (g)</label>
+            <input id="food-protein" type="number" bind:value={form.protein_g} class="w-full px-3 py-2 rounded-lg border border-brand-200 text-sm focus:border-brand-500 focus:outline-none" placeholder="0" />
           </div>
           <div>
-            <label class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Fat (g)</label>
-            <input type="number" bind:value={form.fat_g} class="w-full px-3 py-2 rounded-lg border border-brand-200 text-sm focus:border-brand-500 focus:outline-none" placeholder="0" />
+            <label for="food-fat" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Fat (g)</label>
+            <input id="food-fat" type="number" bind:value={form.fat_g} class="w-full px-3 py-2 rounded-lg border border-brand-200 text-sm focus:border-brand-500 focus:outline-none" placeholder="0" />
           </div>
           <div class="flex items-end">
             <button
@@ -245,8 +253,9 @@
           </div>
         </div>
         <div class="col-span-2">
-          <label class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Notes</label>
+          <label for="food-notes" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Notes</label>
           <textarea
+            id="food-notes"
             bind:value={form.notes}
             rows="2"
             class="w-full px-3 py-2 rounded-lg border border-brand-200 text-sm focus:border-brand-500 focus:outline-none"
@@ -262,19 +271,20 @@
         <div class="grid grid-cols-2 gap-3 mb-3">
           <div class="col-span-2">
             <input
+              aria-label="Food name"
               bind:value={editForm.food_name}
               class="w-full px-3 py-2 rounded-lg border border-brand-200 text-sm focus:border-brand-500 focus:outline-none"
             />
           </div>
           <div>
-            <select bind:value={editForm.meal_type} class="w-full px-3 py-2 rounded-lg border border-brand-200 text-sm focus:border-brand-500 focus:outline-none">
+            <select aria-label="Meal" bind:value={editForm.meal_type} class="w-full px-3 py-2 rounded-lg border border-brand-200 text-sm focus:border-brand-500 focus:outline-none">
               {#each MEALS as meal}
                 <option value={meal.id}>{meal.label}</option>
               {/each}
             </select>
           </div>
           <div>
-            <input type="number" bind:value={editForm.calories} class="w-full px-3 py-2 rounded-lg border border-brand-200 text-sm focus:border-brand-500 focus:outline-none" />
+            <input aria-label="Calories" type="number" bind:value={editForm.calories} class="w-full px-3 py-2 rounded-lg border border-brand-200 text-sm focus:border-brand-500 focus:outline-none" />
           </div>
           <div>
             <button type="submit" class="w-full rounded-xl py-3 border border-transparent bg-brand-gradient text-white font-bold">Save</button>

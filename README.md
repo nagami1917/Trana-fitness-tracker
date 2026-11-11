@@ -97,9 +97,12 @@ ml/              Python FastAPI service + scikit-learn training pipeline
   duration_model/  quantile GBM: train.py · predict.py · preprocess.py · model_store.py · artifacts
   fueling_model/   deterministic ACSM/ISSN fueling engine (predict.py)
   data/          synthetic corpus generator   ·   evaluation/sanity_check.py
-docs/            api.md · architecture.md · database.md · ml-methodology.md · DEPLOYMENT.md
+docs/            api.md · architecture.md · database.md · ml-methodology.md · DEPLOYMENT.md · user-manual.md · test-report.md
 supabase/        PostgreSQL schema, RLS policies, analytical views
 ```
+
+New to the project? Start with the **[user manual](docs/user-manual.md)**;
+verification evidence lives in the **[test report](docs/test-report.md)**.
 
 ---
 
