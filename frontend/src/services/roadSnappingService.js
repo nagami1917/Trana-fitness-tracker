@@ -204,3 +204,14 @@ export async function snapPointsToRoads(points) {
   }
   return results;
 }
+
+/**
+ * Snap a [[lat, lng], ...] route polyline cleanly with a cap on Overpass queries
+ * so saving long live-tracked routes never stalls.
+ */
+export async function snapRoute(coords = []) {
+  if (!Array.isArray(coords) || coords.length < 2) return coords ?? [];
+  if (coords.length > 20) return coords;
+  const snapped = await snapPointsToRoads(coords.map(([lat, lng]) => ({ lat, lng })));
+  return snapped.map((p) => [p.lat, p.lng]);
+}

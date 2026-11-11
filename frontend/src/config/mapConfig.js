@@ -20,9 +20,39 @@
 
 /* ------------------------------------------------------------------ style */
 
-export const MAP_STYLE_URL =
-  import.meta.env?.VITE_MAP_STYLE_URL ??
-  'https://demotiles.maplibre.org/style.json';
+const rawStyleUrl = (import.meta.env?.VITE_MAP_STYLE_URL ?? '').trim();
+
+export const HAS_CUSTOM_STYLE = Boolean(rawStyleUrl);
+export const MAP_STYLE_URL = rawStyleUrl || 'https://demotiles.maplibre.org/style.json';
+
+export const DEFAULT_OSM_STYLE = {
+  version: 8,
+  sources: {
+    osm: {
+      type: 'raster',
+      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+      tileSize: 256,
+      maxzoom: 19,
+      attribution: '&copy; OpenStreetMap contributors',
+    },
+  },
+  layers: [
+    {
+      id: 'background',
+      type: 'background',
+      paint: { 'background-color': '#eaf3ee' },
+    },
+    {
+      id: 'osm-tiles',
+      type: 'raster',
+      source: 'osm',
+      minzoom: 0,
+      maxzoom: 22,
+    },
+  ],
+};
+
+export const MAP_STYLE = rawStyleUrl || DEFAULT_OSM_STYLE;
 
 export const MAP_API_KEY = import.meta.env?.VITE_MAP_API_KEY ?? '';
 
@@ -58,9 +88,12 @@ export const TRANA_THEME = {
 // Route layer widths / opacity — tweak here, not inside components.
 export const ACTUAL_ROUTE_WIDTH = 5;
 export const ACTUAL_ROUTE_OPACITY = 0.95;
+export const ACTIVITY_LINE_WIDTH = ACTUAL_ROUTE_WIDTH;
+export const ACTIVITY_LINE_OPACITY = ACTUAL_ROUTE_OPACITY;
+export const PLANNED_ROUTE_COLOR = '#64748b';
 export const PLANNED_ROUTE_WIDTH = 5;
 export const PLANNED_ROUTE_OPACITY = 0.7;
-export const PLANNED_ROUTE_DASH = '3 2';
+export const PLANNED_ROUTE_DASH = [3, 2];
 
 // Speed colour bands (km/h). Segments are coloured by the speed of that segment.
 export const SLOW_SPEED_KMH = 8;
@@ -69,6 +102,16 @@ export const MODERATE_SPEED_KMH = 13;
 export const SLOW_ROUTE_COLOR = '#f9569b';    // brand pink — easy effort
 export const MODERATE_ROUTE_COLOR = '#f59e0b'; // amber — tempo
 export const FAST_ROUTE_COLOR = '#10b981';    // emerald — fast
+
+export const SPEED_COLOR_RAMP = [
+  'interpolate',
+  ['linear'],
+  ['coalesce', ['get', 'speedKmh'], SLOW_SPEED_KMH],
+  0, SLOW_ROUTE_COLOR,
+  SLOW_SPEED_KMH, SLOW_ROUTE_COLOR,
+  MODERATE_SPEED_KMH, MODERATE_ROUTE_COLOR,
+  20, FAST_ROUTE_COLOR,
+];
 
 export const ROUTE_MIN_WIDTH = 3;
 export const ROUTE_MAX_WIDTH = 7;

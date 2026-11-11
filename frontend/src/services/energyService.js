@@ -10,12 +10,12 @@ import { api } from './client.js';
 export const energyApi = {
   /** List the authenticated user's energy expenditure entries. */
   list() {
-    return api.request('/api/energy-expenditure').then((d) => d.data);
+    return api.request('/energy-expenditure').then((d) => d.data);
   },
 
   /** Record a new energy expenditure entry (wearable import or manual). */
   create(payload) {
-    return api.request('/api/energy-expenditure', {
+    return api.request('/energy-expenditure', {
       method: 'POST',
       body: payload,
     }).then((d) => d.data);
@@ -23,7 +23,7 @@ export const energyApi = {
 
   /** Get the user's current calibration factor and sample count. */
   calibration() {
-    return api.request('/api/energy-expenditure/calibration').then((d) => d.data);
+    return api.request('/energy-expenditure/calibration').then((d) => d.data);
   },
 };
 

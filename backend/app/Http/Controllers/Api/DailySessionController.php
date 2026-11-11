@@ -22,8 +22,9 @@ class DailySessionController extends Controller
         ]);
 
         $query = DailySession::forUser($request->user()->id)
-            ->when($validated['from'] ?? null, fn ($q, $from) => $q->where('session_date', '>=', $from))
-            ->when($validated['to'] ?? null, fn ($q, $to) => $q->where('session_date', '<=', $to))
+            ->withCount('foods')
+            ->when($validated['from'] ?? null, fn ($q, $from) => $q->whereDate('session_date', '>=', $from))
+            ->when($validated['to'] ?? null, fn ($q, $to) => $q->whereDate('session_date', '<=', $to))
             ->orderByDesc('session_date');
 
         $sessions = $query->paginate($validated['limit'] ?? 30, ['*'], 'page', $validated['page'] ?? 1);
@@ -57,15 +58,30 @@ class DailySessionController extends Controller
                 'notes' => ['nullable', 'string', 'max:2000'],
             ]);
 
-            $session = DailySession::updateOrCreate(
-                ['user_id' => $request->user()->id, 'session_date' => $today],
-                [
-                    'calories_burned' => $validated['calories_burned'] ?? 0,
-                    'calories_eaten' => $validated['calories_eaten'] ?? 0,
-                    'water_ml' => $validated['water_ml'] ?? 0,
-                    'notes' => $validated['notes'] ?? null,
-                ]
-            )->load('foods');
+            $attributes = [
+                'calories_burned' => array_key_exists('calories_burned', $validated)
+                    ? ($validated['calories_burned'] ?? 0)
+                    : ($session?->calories_burned ?? 0),
+                'calories_eaten' => array_key_exists('calories_eaten', $validated)
+                    ? ($validated['calories_eaten'] ?? 0)
+                    : ($session?->calories_eaten ?? 0),
+                'water_ml' => array_key_exists('water_ml', $validated)
+                    ? ($validated['water_ml'] ?? 0)
+                    : ($session?->water_ml ?? 0),
+                'notes' => array_key_exists('notes', $validated)
+                    ? $validated['notes']
+                    : $session?->notes,
+            ];
+
+            if ($session) {
+                $session->update($attributes);
+            } else {
+                $session = DailySession::create(array_merge([
+                    'user_id' => $request->user()->id,
+                    'session_date' => $today,
+                ], $attributes));
+            }
+            $session->load('foods');
 
             return response()->json(['data' => new DailySessionResource($session)], 201);
         }
@@ -102,7 +118,20 @@ class DailySessionController extends Controller
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        $dailySession->update($validated);
+        $dailySession->update([
+            'calories_burned' => array_key_exists('calories_burned', $validated)
+                ? ($validated['calories_burned'] ?? 0)
+                : $dailySession->calories_burned,
+            'calories_eaten' => array_key_exists('calories_eaten', $validated)
+                ? ($validated['calories_eaten'] ?? 0)
+                : $dailySession->calories_eaten,
+            'water_ml' => array_key_exists('water_ml', $validated)
+                ? ($validated['water_ml'] ?? 0)
+                : $dailySession->water_ml,
+            'notes' => array_key_exists('notes', $validated)
+                ? $validated['notes']
+                : $dailySession->notes,
+        ]);
 
         return response()->json([
             'data' => new DailySessionResource($dailySession->load('foods')),

@@ -140,6 +140,7 @@ function saveSession(data) {
 
 export const api = {
   mode: 'live',
+  request: (path, options) => request(path.startsWith('/api/') ? path.slice(4) : path, options),
 
   async health() {
     const data = await request('/health', { auth: false });

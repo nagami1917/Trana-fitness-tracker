@@ -67,7 +67,6 @@ process.env.VITE_API_BASE_URL = '';
 
 const { createServer } = await import('vite');
 const { svelte } = await import('@sveltejs/vite-plugin-svelte');
-const { render } = await import('svelte/server');
 
 const vite = await createServer({
   root,
@@ -75,19 +74,24 @@ const vite = await createServer({
   envFile: false,
   logLevel: 'error',
   appType: 'custom',
+  optimizeDeps: { noDiscovery: true },
   plugins: [svelte({ compilerOptions: { generate: 'server', dev: false } })],
   resolve: {
     alias: [
-      // Leaflet and Chart.js touch `window` at import time; neither is needed for
+      // Leaflet, MapLibre GL, and Chart.js touch `window` at import time; neither is needed for
       // template rendering, so swap them for inert stand-ins.
       { find: /^leaflet\/dist\/leaflet\.css$/, replacement: resolve(here, 'stubs/empty.css') },
       { find: /^leaflet$/, replacement: resolve(here, 'stubs/leaflet.js') },
+      { find: /^maplibre-gl\/dist\/maplibre-gl\.css$/, replacement: resolve(here, 'stubs/empty.css') },
+      { find: /^maplibre-gl$/, replacement: resolve(here, 'stubs/maplibre-gl.js') },
       { find: /^chart\.js\/auto$/, replacement: resolve(here, 'stubs/chart.js') },
     ],
   },
   ssr: { noExternal: true },
   server: { middlewareMode: true, hmr: false },
 });
+
+const { render } = await vite.ssrLoadModule('svelte/server');
 
 let failures = 0;
 
@@ -101,6 +105,9 @@ try {
   const routes = [
     ['/', 'Dashboard'],
     ['/plan', 'PlanActivity'],
+    ['/track', 'Track'],
+    ['/track/history', 'Track', 'History'],
+    ['/track/session', 'Track', 'SessionDetail'],
     ['/calendar', 'Calendar'],
     ['/activities', 'Activities'],
     ['/analytics', 'Analytics'],
@@ -112,8 +119,9 @@ try {
     ['/nope', 'NotFound'],
   ];
 
-  for (const [path, name] of routes) {
-    const file = `/src/pages/${name}/${name}.svelte`;
+  for (const [path, folder, component] of routes) {
+    const name = component ?? folder;
+    const file = `/src/pages/${folder}/${name}.svelte`;
     try {
       const mod = await vite.ssrLoadModule(file);
       const html = render(mod.default).body;
@@ -123,11 +131,16 @@ try {
         assert.ok(html.indexOf('coordinates and IP') < html.indexOf('Use current location'));
       }
       if (name === 'Dashboard') assert.match(html, /Test City/);
+      if (name === 'Track') {
+        assert.match(html, /Track Activity/);
+        assert.match(html, /Start activity/);
+        assert.match(html, /View History/);
+      }
       const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
       if (!text.length) throw new Error('rendered no text');
       const suspicious = ['NaN', 'undefined', 'Infinity', '[object Object]'].filter((bad) => text.includes(bad));
       if (suspicious.length) throw new Error(`rendered suspicious tokens: ${suspicious.join(', ')}`);
-      console.log(`✔ ${path.padEnd(12)} ${name.padEnd(11)} ${String(text.length).padStart(5)} chars`);
+      console.log(`✔ ${path.padEnd(14)} ${name.padEnd(13)} ${String(text.length).padStart(5)} chars`);
       if (process.env.DUMP === name) console.log(`\n--- ${name} ---\n${text.slice(0, 1600)}\n`);
     } catch (error) {
       failures += 1;
@@ -158,6 +171,29 @@ try {
     failures += 1;
     stores.profile.set(fixtureProfile);
     console.error(`✘ Profile without a birth year: ${error.message}`);
+  }
+
+  // SessionCard links to /track/session?id=<id> (query param, matching SessionDetail)
+  try {
+    const mod = await vite.ssrLoadModule('/src/components/activity/SessionCard.svelte');
+    const html = render(mod.default, {
+      props: {
+        session: {
+          id: 99,
+          session_date: '2026-11-11',
+          calories_burned: 400,
+          calories_eaten: 600,
+          water_ml: 750,
+          net_calories: 200,
+          foods_count: 2,
+        },
+      },
+    }).body;
+    assert.match(html, /href="\/track\/session\?id=99"/);
+    assert.match(html, /2 foods/);
+  } catch (error) {
+    failures += 1;
+    console.error(`✘ SessionCard: ${error.message}`);
   }
 
   // App shell + auth gate
