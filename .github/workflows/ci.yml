@@ -104,20 +104,15 @@ jobs:
             else
               details=$(printf '%s\n' "$plain" | tail -60)
             fi
-            printf '%s\n' "$details" | cut -c1-450 | head -10 \
+            # GitHub allows only ~10 annotations per step, so lead with the
+            # informative lines (error header, exception, summary) and only
+            # then pad with the raw tail.
+            priority=$(printf '%s\n' "$plain" \
+              | grep -iE 'fatal error|uncaught|there (was|were) [0-9]+ (failure|error)|failed asserting|[a-z]*exception:|^[[:space:]]*tests: [0-9]+|^[[:space:]]*(failures|errors)!' \
+              | head -8)
+            fallback=$(printf '%s\n' "$details" | head -10)
+            { [ -n "$priority" ] && printf '%s\n' "$priority"; printf '%s\n' "$fallback"; } \
+              | cut -c1-450 | head -10 \
               | while IFS= read -r line; do [ -n "$line" ] && echo "::error::$line"; done
-            # Also surface the failure header / exception class / test summary
-            # lines wherever they appear — a crash mid-run never prints the
-            # usual FAILURES! block, so grep them out explicitly.
-            printf '%s\n' "$plain" \
-              | grep -iE 'fatal error|uncaught|there (was|were) [0-9]+ (failure|error)|failed asserting|exception|^[[:space:]]*tests: [0-9]+|errors?!$' \
-              | cut -c1-450 | head -40 \
-              | while IFS= read -r line; do [ -n "$line" ] && echo "::error::$line"; done
-            # If nothing matched, fall back to the last 120 lines verbatim so
-            # a mystery crash is never invisible.
-            if ! printf '%s\n' "$plain" | grep -qiE 'fatal error|uncaught|failed asserting|exception'; then
-              printf '%s\n' "$plain" | tail -120 | cut -c1-450 | head -40 \
-                | while IFS= read -r line; do [ -n "$line" ] && echo "::error::$line"; done
-            fi
             exit "$code"
           fi
