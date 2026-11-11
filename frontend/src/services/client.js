@@ -1,5 +1,6 @@
 /** Laravel API facade. All account data is stored by the server, not seeded in the browser. */
 import { resolveApiConfig } from './config.js';
+import { reportClientError } from '../lib/errorMonitor.js';
 
 const { base: BASE } = resolveApiConfig(import.meta.env);
 const TOKEN_KEY = 'trana.token';
@@ -42,6 +43,14 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
   const data = text ? safeJson(text) : null;
 
   if (!res.ok) {
+    // 5xx = the server already recorded its own fault; mirror it from the
+    // client's viewpoint (which request the user was on) for correlation.
+    if (res.status >= 500) {
+      reportClientError({
+        message: `HTTP ${res.status} ${method} ${path}`,
+        stack: data?.message || '',
+      });
+    }
     // Only an actual 401 invalidates the token. A network/server outage must
     // not sign the user out; also avoid clearing a newer token from a late reply.
     if (res.status === 401 && auth && token && getToken() === token) {

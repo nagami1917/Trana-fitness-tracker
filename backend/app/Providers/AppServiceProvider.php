@@ -31,5 +31,11 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('writes', function (Request $request) {
             return Limit::perMinute(120)->by($request->user()?->id ?: $request->ip());
         });
+
+        // Client-error intake: browsers may burst after a fault, but the
+        // endpoint stores no value to an attacker — keep it cheap and bounded.
+        RateLimiter::for('errors', function (Request $request) {
+            return Limit::perMinute(60)->by($request->ip());
+        });
     }
 }
