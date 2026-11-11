@@ -112,7 +112,7 @@ class NotificationController extends Controller
         }
 
         $events = GoalEvent::where('user_id', $user->id)
-            ->where('date', $today->toDateString())
+            ->whereDate('date', $today)
             ->orderByDesc('id')
             ->limit(20)
             ->get(['id', 'goal_key', 'target', 'achieved_value']);
