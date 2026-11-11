@@ -25,6 +25,29 @@ final class ErrorMonitor
     private const MAX_TRACE = 4000;
 
     /**
+     * Is this a genuine production fault (record it) rather than a
+     * deliberate protocol answer (401/403/404/422/429 …)?
+     *
+     * The handler's internalDontReport already drops most of these before
+     * any callback runs — this is the belt-and-braces filter for the rest.
+     */
+    public static function isServerFault(Throwable $e): bool
+    {
+        if ($e instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface && $e->getStatusCode() < 500) {
+            return false;
+        }
+
+        if ($e instanceof \Illuminate\Auth\AuthenticationException
+            || $e instanceof \Illuminate\Auth\Access\AuthorizationException
+            || $e instanceof \Illuminate\Validation\ValidationException
+            || $e instanceof \Illuminate\Database\Eloquent\ModelNotFoundException) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
      * Persist an uncaught server exception for the current request.
      */
     public static function recordServer(Throwable $e, Request $request): void

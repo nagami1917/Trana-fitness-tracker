@@ -13,19 +13,26 @@ via `php artisan errors:report` today and via the admin module next.
 └──────────────────┘          └────────┬─────────┘       └────────┬─────────┘
                                        │                          │ stderr JSON line
 ┌──────────────────┐                  │                          │ + optional POST
-│ RecordServerErrors│──uncaught 5xx───┤                          │ to /client-errors
-│ middleware (global)│                ▼                          │ (kind = ml)
+│ Exception handler │──report()───────┤                          │ to /client-errors
+│ reportable hook   │                 ▼                          │ (kind = ml)
 └──────────────────┘          ┌──────────────────────────────────┴─────────┐
                               │ error_logs: kind, fingerprint, message,     │
                               │ trace, context, occurrences, first/last_seen│
                               └─────────────────────────────────────────────┘
 ```
 
+The Laravel hook is `$exceptions->reportable(...)` in `bootstrap/app.php` —
+**not** a middleware: route-level exceptions are converted to responses
+inside `Routing\Pipeline::handleException` (report + render) and never
+reach the global stack, while `report()` fires for *every* reported fault
+(route, middleware, console). Returning `null` from the callback keeps
+default logging and JSON rendering byte-for-byte identical.
+
 ## What each source contributes
 
 | kind | source | level | how it arrives |
 | --- | --- | --- | --- |
-| `api` | Uncaught Laravel exceptions (5xx-class) | `error` | `RecordServerErrors` middleware — prepended globally, records then **rethrows**, so JSON rendering and default logging are untouched |
+| `api` | Uncaught Laravel exceptions (5xx-class) | `error` | `reportable` hook in `bootstrap/app.php` — fires inside the handler's `report()` before rendering; deliberate 4xx never reach it (`internalDontReport`) and are filtered again in `ErrorMonitor::isServerFault` |
 | `client` | Uncaught browser JS errors, unhandled promise rejections, HTTP 5xx seen by the API client | `warning` | `frontend/src/lib/errorMonitor.js` → `POST /api/client-errors` (fire-and-forget, deduped, capped at 40/page session) |
 | `ml` | Unhandled FastAPI exceptions | `error` | `ml/api/error_monitor.py` → one `ERROR_MONITOR {json}` stderr line (log-based alerting) **plus**, when `ERROR_REPORT_ENDPOINT` is set, a forwarded POST to the same intake |
 

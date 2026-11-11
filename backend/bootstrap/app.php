@@ -16,10 +16,6 @@ return Application::configure(basePath: dirname(__DIR__))
         // Vercel / any reverse proxy terminates TLS in front of the app.
         $middleware->trustProxies(at: '*');
 
-        // Outermost: capture unescaped server faults for the error monitor,
-        // then rethrow so rendering/logging behave exactly as before.
-        $middleware->prepend(\App\Http\Middleware\RecordServerErrors::class);
-
         // API requests use Sanctum bearer tokens, not cookie sessions. Do not
         // enable Sanctum's stateful SPA middleware: it requires a CSRF cookie.
 
@@ -32,6 +28,26 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson()
         );
+
+        // Error monitoring: group and persist genuine production faults as a
+        // side effect of the handler's report(). This is the single reliable
+        // hook — route-level exceptions are rendered inside
+        // Routing\Pipeline and never reach global middleware. Returning
+        // null (not false) keeps default logging and JSON rendering
+        // exactly as they were; deliberate 4xx answers never get here
+        // (internalDontReport) and are filtered again below regardless.
+        $exceptions->reportable(function (\Throwable $e) {
+            if (! \App\Services\ErrorMonitor::isServerFault($e)) {
+                return;
+            }
+            if (! app()->bound('request')) {
+                return; // console/queue faults belong to the default log
+            }
+            $request = app('request');
+            if ($request instanceof Request) {
+                \App\Services\ErrorMonitor::recordServer($e, $request);
+            }
+        });
 
         // Never leak stack traces or SQL to the client, even in debug mode.
         $exceptions->render(function (\Throwable $e, Request $request) {
