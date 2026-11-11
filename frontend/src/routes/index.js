@@ -5,6 +5,7 @@
  */
 import Dashboard from '../pages/Dashboard/Dashboard.svelte';
 import PlanActivity from '../pages/PlanActivity/PlanActivity.svelte';
+import Calendar from '../pages/Calendar/Calendar.svelte';
 import Track from '../pages/Track/Track.svelte';
 import TrackHistory from '../pages/Track/History.svelte';
 import TrackSession from '../pages/Track/SessionDetail.svelte';
@@ -23,6 +24,7 @@ import VerifyEmail from '../pages/Auth/VerifyEmail.svelte';
 export const ROUTES = {
   '/': Dashboard,
   '/plan': PlanActivity,
+  '/calendar': Calendar,
   '/track': Track,
   '/track/history': TrackHistory,
   '/track/session': TrackSession,

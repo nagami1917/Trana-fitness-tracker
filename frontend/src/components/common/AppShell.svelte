@@ -14,6 +14,7 @@
     CircleUserRound,
     ChevronDown,
     MapPin,
+    CalendarDays,
   } from 'lucide-svelte';
   import { onMount } from 'svelte';
   import { route, navigate, link, isActive } from '../../lib/router.js';
@@ -28,6 +29,7 @@
   const NAV = [
     { href: '/', label: 'Dashboard', Icon: House },
     { href: '/plan', label: 'Plan Activity', Icon: Sparkles },
+    { href: '/calendar', label: 'Week Calendar', Icon: CalendarDays },
     { href: '/track', label: 'Track Activity', Icon: MapPin },
     { href: '/activities', label: 'Activities', Icon: Footprints },
     { href: '/analytics', label: 'Analytics', Icon: ChartColumn },
@@ -40,6 +42,7 @@
   const MOBILE = [
     { href: '/', label: 'Home', Icon: House },
     { href: '/track', label: 'Track', Icon: MapPin },
+    { href: '/calendar', label: 'Calendar', Icon: CalendarDays },
     { href: '/activities', label: 'Activities', Icon: Footprints },
     { href: '/plan', label: 'Plan', Icon: Plus, fab: true },
     { href: '/analytics', label: 'Analytics', Icon: ChartColumn },
