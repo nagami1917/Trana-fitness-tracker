@@ -92,29 +92,26 @@ jobs:
         working-directory: backend
         run: |
           set +e
+          # Provide a .env so framework boots don't emit transient
+          # "file_get_contents(.../.env): Failed to open stream" warnings that
+          # flood the 10-annotation budget (phpunit env vars still override).
+          cp .env.example .env
           php artisan test 2>&1 | tee /tmp/trana-tests.log
           code=${PIPESTATUS[0]}
           if [ "$code" -ne 0 ]; then
             # Surface the failure details as annotations (viewable via the API).
-            # Use the PHPUnit failure/error summary when there is one; otherwise
-            # fall back to the log tail so boot and migration errors are visible.
+            # GitHub allows only ~10 per step: lead with the decisive block —
+            # PHPUnit's FAILURES!/ERRORS! section (assertions + summary) — and
+            # only fall back to class lines / log tail when there is none.
             plain=$(sed -E 's/\x1b\[[0-9;]*m//g' /tmp/trana-tests.log)
             if printf '%s\n' "$plain" | grep -qE '^(FAILURES|ERRORS)!'; then
-              details=$(printf '%s\n' "$plain" | sed -n '/^\(FAILURES\|ERRORS\)!/,$p')
+              printf '%s\n' "$plain" | sed -n '/^\(FAILURES\|ERRORS\)!/,$p' \
+                | cut -c1-450 | head -10
             else
-              details=$(printf '%s\n' "$plain" | tail -60)
-            fi
-            # GitHub allows only ~10 annotations per step, so lead with the
-            # informative lines (error header, exception, summary) and only
-            # then pad with the raw tail.
-            priority=$(printf '%s\n' "$plain" \
-              | grep -iE -A1 'fatal error|uncaught|there (was|were) [0-9]+ (failure|error)|failed asserting|[a-z]*exception:|assertionerror|file_get_contents|failed to open stream|traceback|^[[:space:]]*tests: [0-9]+|^[[:space:]]*(failures|errors)!' \
-              | head -8)
-            fallback=$(printf '%s\n' "$details" | head -10)
-            {
-              if [ -n "$priority" ]; then printf '%s\n' "$priority"; fi
-              printf '%s\n' "$fallback"
-            } | cut -c1-450 | head -10 \
-              | while IFS= read -r line; do [ -n "$line" ] && echo "::error::$line"; done
+              {
+                printf '%s\n' "$plain" | grep -E 'Tests:|^[[:space:]]*OK \(|WARN  |FAIL  ' | head -6
+                printf '%s\n' "$plain" | tail -8
+              } | cut -c1-450 | head -10
+            fi | while IFS= read -r line; do [ -n "$line" ] && echo "::error::$line"; done
             exit "$code"
           fi
