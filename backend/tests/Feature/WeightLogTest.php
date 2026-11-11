@@ -94,6 +94,10 @@ class WeightLogTest extends TestCase
         $this->deleteJson('/api/weight-logs/'.$log->id, [], $headersB)->assertNotFound();
         $this->assertNotNull($log->fresh(), 'Another athlete must not delete the row');
 
+        // Guards cache the resolved user across in-process requests — B's
+        // request above would otherwise leak into A's and 404 the owner.
+        app('auth')->forgetGuards();
+
         $this->deleteJson('/api/weight-logs/'.$log->id, [], $headersA)->assertOk();
         $this->assertNull($log->fresh());
     }
