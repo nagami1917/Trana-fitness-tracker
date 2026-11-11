@@ -80,7 +80,7 @@ class StoreActivityRequest extends FormRequest
     {
         $out = [];
 
-        $walk = function (array &$geometry) use (&$walk, &$out) {
+        $walk = function (array $geometry) use (&$walk, &$out) {
             if (! isset($geometry['type'], $geometry['coordinates'])) {
                 return;
             }
