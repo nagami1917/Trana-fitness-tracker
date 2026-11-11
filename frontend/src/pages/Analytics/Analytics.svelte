@@ -1,11 +1,13 @@
 <script>
-  import { ChartColumn, Brain, TrendingDown, Flame, Trophy, Gauge, Sparkles, Info, ArrowRight } from 'lucide-svelte';
+  import { onMount } from 'svelte';
+  import { ChartColumn, Brain, TrendingDown, Flame, Trophy, Gauge, Sparkles, Info, ArrowRight, Scale, LoaderCircle, Trash2 } from 'lucide-svelte';
   import Card from '../../components/common/Card.svelte';
   import BarChart from '../../components/analytics/BarChart.svelte';
   import LineChart from '../../components/analytics/LineChart.svelte';
   import DoughnutChart from '../../components/analytics/DoughnutChart.svelte';
   import ActivityIcon from '../../components/activities/ActivityIcon.svelte';
-  import { activities, modelCard, typeBreakdown, paceTrend, weekdayLoad, chartSeries, personalBests, streak } from '../../stores/index.js';
+  import { activities, modelCard, typeBreakdown, paceTrend, weekdayLoad, chartSeries, personalBests, streak, notify } from '../../stores/index.js';
+  import { api } from '../../services/client.js';
   import { navigate } from '../../lib/router.js';
   import { nf, pace, kcal, km, duration as fmtDuration, shortDate } from '../../lib/format.js';
 
@@ -43,6 +45,70 @@
       avgCalories: $activities.length ? $activities.reduce((s, a) => s + a.calories, 0) / $activities.length : 0,
     };
   });
+
+  // --- body-weight timeline ------------------------------------------------
+  let weightLogs = $state([]);
+  let weightLoading = $state(true);
+  let weightSaving = $state(false);
+  let weightKg = $state('');
+  let weightError = $state('');
+
+  function localToday() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  let weightDate = $state(localToday());
+
+  async function loadWeights() {
+    try {
+      weightLogs = await api.weightLogs.list(180);
+    } catch {
+      weightLogs = []; // chart is non-blocking
+    } finally {
+      weightLoading = false;
+    }
+  }
+
+  /** Ascending series for the chart (feed itself is newest-first). */
+  const weightTrend = $derived([...weightLogs].reverse());
+  const weightDelta = $derived.by(() => {
+    if (weightLogs.length < 2) return null;
+    return Math.round((weightLogs[0].weight_kg - weightLogs[1].weight_kg) * 10) / 10;
+  });
+
+  async function logWeight(event) {
+    event.preventDefault();
+    weightError = '';
+    const kg = Number(weightKg);
+    if (!Number.isFinite(kg) || kg < 30) {
+      weightError = 'Enter your weight in kg.';
+      return;
+    }
+    weightSaving = true;
+    try {
+      await api.weightLogs.add({ weight_kg: kg, measured_at: weightDate });
+      weightKg = '';
+      notify('Weight logged');
+      await loadWeights();
+    } catch (error) {
+      weightError = error.message || 'Could not save the weigh-in.';
+    } finally {
+      weightSaving = false;
+    }
+  }
+
+  async function removeWeight(id) {
+    try {
+      await api.weightLogs.remove(id);
+      notify('Weigh-in removed');
+      await loadWeights();
+    } catch (error) {
+      notify(error.message || 'Could not delete the weigh-in.', 'error');
+    }
+  }
+
+  onMount(loadWeights);
 </script>
 
 <div class="space-y-5">
@@ -213,6 +279,90 @@
       </div>
     </Card>
   </div>
+
+  <!-- body-weight timeline -->
+  <Card>
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <Scale size={17} class="text-brand-500" />
+        <h2 class="text-lg">Body weight</h2>
+      </div>
+      <span class="pill">one per day</span>
+    </div>
+
+    <div class="mt-3 grid gap-4 lg:grid-cols-[1.6fr_1fr]">
+      <div>
+        {#if weightLogs.length >= 2}
+          <LineChart
+            labels={weightTrend.map((w) => shortDate(w.measured_at))}
+            series={[{ label: 'kg', data: weightTrend.map((w) => w.weight_kg), color: '#f9569b' }]}
+            height={210}
+            tooltipLabel={(ctx) => `${Number(ctx.parsed.y).toFixed(1)} kg`}
+            yTicks={(v) => Number(v).toFixed(0)}
+          />
+          <p class="mt-2 text-[11px] font-semibold text-ink-400">
+            {weightLogs.length} weigh-ins · latest {nf(weightLogs[0].weight_kg, 1)} kg
+            {#if weightDelta !== null}
+              · {weightDelta > 0 ? '+' : ''}{nf(weightDelta, 1)} kg vs previous
+            {/if}
+          </p>
+        {:else if weightLoading}
+          <p class="flex items-center justify-center gap-2 py-8 text-sm font-semibold text-ink-400">
+            <LoaderCircle size={15} class="animate-spin" /> Loading trend…
+          </p>
+        {:else}
+          <p class="py-8 text-center text-sm font-semibold leading-relaxed text-ink-400">
+            Log your weight to start the trend — two weigh-ins are enough for a chart.
+          </p>
+        {/if}
+      </div>
+
+      <form class="space-y-2 rounded-2xl bg-brand-50/60 p-3" onsubmit={logWeight}>
+        <span class="label">New weigh-in</span>
+        <div class="flex gap-2">
+          <input
+            type="number"
+            step="0.1"
+            min="30"
+            max="300"
+            class="input w-full flex-1"
+            placeholder="kg"
+            bind:value={weightKg}
+            required
+          />
+          <input type="date" class="input w-36" bind:value={weightDate} max={localToday()} />
+        </div>
+        {#if weightError}
+          <p class="text-[11px] font-bold text-rose-500">{weightError}</p>
+        {/if}
+        <button type="submit" class="btn-primary w-full justify-center" disabled={weightSaving}>
+          {#if weightSaving}
+            <LoaderCircle size={15} class="animate-spin" /> Saving…
+          {:else}
+            <Scale size={15} /> Log weight
+          {/if}
+        </button>
+      </form>
+    </div>
+
+    {#if weightLogs.length}
+      <div class="mt-3 flex flex-wrap gap-1.5">
+        {#each weightLogs.slice(0, 6) as w (w.id)}
+          <span class="pill !py-1">
+            {shortDate(w.measured_at)} · {nf(w.weight_kg, 1)} kg
+            <button
+              type="button"
+              class="ml-1 text-ink-400 transition hover:text-rose-500"
+              aria-label="Delete weigh-in"
+              onclick={() => removeWeight(w.id)}
+            >
+              <Trash2 size={11} />
+            </button>
+          </span>
+        {/each}
+      </div>
+    {/if}
+  </Card>
 
   <!-- personal bests -->
   <Card>

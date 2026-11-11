@@ -10,6 +10,7 @@ use App\Http\Requests\UpdateWeightRequest;
 use App\Http\Resources\ProfileResource;
 use App\Models\FitnessProfile;
 use App\Models\User;
+use App\Models\WeightLog;
 use App\Services\ActivityService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -126,9 +127,12 @@ class ProfileController extends Controller
     {
         /** @var User $user */
         $user = $request->user();
-        $user->ensureProfile()->update([
-            'weight_kg' => (float) $request->validated('weight_kg'),
-        ]);
+        $weightKg = (float) $request->validated('weight_kg');
+        $user->ensureProfile()->update(['weight_kg' => $weightKg]);
+
+        // Mirror into the daily timeline so PATCH-built weight history shows
+        // up in the Analytics trend like POST /weight-logs entries do.
+        WeightLog::record($user, $weightKg);
 
         return response()->json(['data' => (new ProfileResource($user->fresh()))->toArray($request)]);
     }

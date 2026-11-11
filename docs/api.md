@@ -387,6 +387,29 @@ activity's calendar `date` so the UI can group them per day.
 
 ---
 
+## Body-weight timeline
+
+### `GET /weight-logs?days=180`
+Daily weigh-ins, newest first (window clamped 7–730 days, max 400 rows).
+```json
+{ "data": [ { "id": 3, "weight_kg": 68.4, "measured_at": "2026-11-11" } ] }
+```
+
+### `POST /weight-logs`
+```json
+{ "weight_kg": 68.4, "measured_at": "2026-11-11" }
+```
+`measured_at` is optional (defaults to today, never in the future). One row
+per day — re-logging a date **replaces** it. When the date is the athlete's
+newest, `fitness_profiles.weight_kg` (the value predictions read) is refreshed
+too. `PATCH /profile/weight` writes the same timeline automatically.
+
+### `DELETE /weight-logs/{id}`
+Removes one weigh-in (`404` if it isn't yours). The profile keeps its last
+known weight.
+
+---
+
 ## Notifications
 
 ### `GET /notifications`
