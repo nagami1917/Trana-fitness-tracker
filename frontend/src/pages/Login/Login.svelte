@@ -1,7 +1,7 @@
 <script>
   import { Lock, Mail, Eye, EyeOff, Sparkles, ArrowRight, LoaderCircle, Flame, Timer, Salad } from 'lucide-svelte';
   import { login, notify, profile } from '../../stores/index.js';
-  import { navigate } from '../../lib/router.js';
+  import { navigate, link } from '../../lib/router.js';
 
   let email = $state('');
   let password = $state('');
@@ -119,6 +119,12 @@
               {#if showPassword}<EyeOff size={16} aria-hidden="true" /> Hide{:else}<Eye size={16} aria-hidden="true" /> Show{/if}
             </button>
           </div>
+        </div>
+
+        <div class="-mt-1 text-right">
+          <a href="/forgot-password" use:link class="text-xs font-extrabold text-brand-600 transition hover:text-brand-700">
+            Forgot password?
+          </a>
         </div>
 
         {#if error}

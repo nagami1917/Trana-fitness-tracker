@@ -5,9 +5,11 @@ use App\Http\Controllers\Api\ActivityController;
 use App\Http\Controllers\Api\ActivityPointController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DailySessionController;
+use App\Http\Controllers\Api\EmailVerificationController;
 use App\Http\Controllers\Api\DailySessionFoodController;
 use App\Http\Controllers\Api\EnergyExpenditureController;
 use App\Http\Controllers\Api\GoalController;
+use App\Http\Controllers\Api\PasswordRecoveryController;
 use App\Http\Controllers\Api\PredictionController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\RouteController;
@@ -43,6 +45,10 @@ Route::get('/docs', fn () => response()->json([
     'endpoints' => [
         'POST /api/auth/register',
         'POST /api/auth/login',
+        'POST /api/password/forgot',
+        'POST /api/password/reset',
+        'POST /api/email/verify/resend',
+        'GET  /api/email/verify/{id}/{hash}  (signed)',
         'GET  /api/health',
         'GET  /api/auth/me',
         'POST /api/auth/logout',
@@ -74,11 +80,25 @@ Route::get('/docs', fn () => response()->json([
 Route::middleware('throttle:auth')->group(function () {
     Route::post('/auth/register', [AuthController::class, 'register']);
     Route::post('/auth/login', [AuthController::class, 'login']);
+
+    // Password recovery — forgot sends the link, reset consumes the token.
+    Route::post('/password/forgot', [PasswordRecoveryController::class, 'forgot']);
+    Route::post('/password/reset', [PasswordRecoveryController::class, 'reset']);
 });
+
+// Signed verification link (from the email). Validates HMAC + expiry, marks
+// the address verified, and redirects to the SPA — no session required.
+Route::get('/email/verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])
+    ->middleware('throttle:auth')
+    ->name('verification.verify');
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
+
+    // Resend the verification link for the signed-in athlete.
+    Route::post('/email/verify/resend', [EmailVerificationController::class, 'resend'])
+        ->middleware('throttle:6,1');
 
     // Data rights: account erasure (password-confirmed) + full CSV export.
     Route::delete('/account', [AccountController::class, 'destroy'])->middleware('throttle:writes');

@@ -33,6 +33,35 @@ This does not check FastAPI or verify that all migrations are applied.
 
 ### `GET /auth/me` → `{ user: {...} }` · `POST /auth/logout` → `{ message }`
 
+Registration sends a **verification email** (best-effort) and the `user` payload
+carries `email_verified_at` (`null` until verified). Unverified athletes are
+held on the SPA's verify screen; pre-existing accounts are grandfathered as
+verified.
+
+### `POST /password/forgot`
+```json
+{ "email": "nagami@trana.app" }
+```
+`202` always — the same generic answer whether or not the account exists
+(no enumeration). Sends a link to the SPA's `/reset-password` page.
+
+### `POST /password/reset`
+```json
+{ "token": "…", "email": "nagami@trana.app",
+  "password": "new-secret1", "password_confirmation": "new-secret1" }
+```
+`200` → `{ message }` · `422` on an invalid/expired/used token. On success
+**all existing API tokens for the account are revoked** (sign-out everywhere).
+
+### `POST /email/verify/resend` (authed)
+Re-sends the signed verification link. `202` · `422` if already verified ·
+`503` when mail delivery is not configured on the server yet.
+
+### `GET /email/verify/{id}/{hash}` (signed, from the email)
+Validates the HMAC signature + 2h expiry, marks the address verified, then
+`302`-redirects to `{FRONTEND_URL}/verify-email?status=verified`
+(`?status=invalid` on a bad/expired signature). No HTML is rendered.
+
 ---
 
 ## Profile

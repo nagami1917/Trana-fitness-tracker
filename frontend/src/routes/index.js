@@ -16,6 +16,9 @@ import Profile from '../pages/Profile/Profile.svelte';
 import Settings from '../pages/Settings/Settings.svelte';
 import Privacy from '../pages/Legal/Privacy.svelte';
 import Terms from '../pages/Legal/Terms.svelte';
+import ForgotPassword from '../pages/Auth/ForgotPassword.svelte';
+import ResetPassword from '../pages/Auth/ResetPassword.svelte';
+import VerifyEmail from '../pages/Auth/VerifyEmail.svelte';
 
 export const ROUTES = {
   '/': Dashboard,
@@ -31,4 +34,7 @@ export const ROUTES = {
   '/settings': Settings,
   '/privacy': Privacy,
   '/terms': Terms,
+  '/forgot-password': ForgotPassword,
+  '/reset-password': ResetPassword,
+  '/verify-email': VerifyEmail,
 };
