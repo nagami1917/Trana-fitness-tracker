@@ -1,10 +1,16 @@
 <script>
   import { onMount } from 'svelte';
   import * as maplibregl from 'maplibre-gl';
+  import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { LoaderCircle } from 'lucide-svelte';
 
+  if (typeof maplibregl.setWorkerUrl === 'function' && maplibreWorkerUrl) {
+    maplibregl.setWorkerUrl(maplibreWorkerUrl);
+  }
+
   import { createMap, applyTranaTheme, fitToPoints, panTo, toLatLng, isStyleInitialized } from '../../services/mapService.js';
+  import { reportClientError } from '../../lib/errorMonitor.js';
   import PlannedRoute from './PlannedRoute.svelte';
   import ActivityRoute from './ActivityRoute.svelte';
   import ActivityMarker from './ActivityMarker.svelte';
@@ -35,6 +41,7 @@
     // Interactive route drawing
     interactiveRoute = false,
     routeMode = 'roads',      // 'roads' | 'straight'
+    routeDashed = false,
     routing = false,
     onRoutePick = null,
 
@@ -136,6 +143,19 @@
       following = false;
     });
 
+    instance.on('error', (event) => {
+      if (event?.sourceId === 'osm') return;
+      const err = event?.error;
+      const msg = err?.message || String(err || '');
+      if (!msg) return;
+      if (/worker|style|geojson|webgl|shader/i.test(msg)) {
+        reportClientError({
+          message: `MapLibre: ${msg}`,
+          stack: err?.stack || '',
+        });
+      }
+    });
+
     instance.on('click', (event) => {
       if (!interactiveRef || !event?.lngLat) return;
       const targetEl = event?.originalEvent?.target;
@@ -213,6 +233,7 @@
       {plannedRoute}
       waypoints={plannedWaypoints}
       interactive={interactiveRoute}
+      dashed={routeDashed}
       onPick={onRoutePick}
     />
     <ActivityRoute {map} {points} {roadSnapping} />

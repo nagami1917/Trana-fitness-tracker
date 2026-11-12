@@ -15,12 +15,14 @@
     plannedRoute = null,
     waypoints = [],
     interactive = false,
+    dashed = false,
     onPick = null,
   } = $props();
 
   const sourceId = 'trana-planned-route';
   const casingLayerId = 'trana-planned-route-casing';
   const layerId = 'trana-planned-route-line';
+  const dashedLayerId = 'trana-planned-route-dashed';
 
   let markers = [];
   let styleReady = $state(false);
@@ -31,21 +33,17 @@
       styleReady = false;
       return;
     }
-    if (isStyleInitialized(target)) {
-      styleReady = true;
-      return;
-    }
-    styleReady = false;
-    const onReady = () => {
-      if (isStyleInitialized(target)) styleReady = true;
+    const syncReady = () => {
+      styleReady = isStyleInitialized(target);
     };
-    target.on?.('style.load', onReady);
-    target.on?.('load', onReady);
-    target.on?.('styledata', onReady);
+    syncReady();
+    target.on?.('style.load', syncReady);
+    target.on?.('load', syncReady);
+    target.on?.('styledata', syncReady);
     return () => {
-      target.off?.('style.load', onReady);
-      target.off?.('load', onReady);
-      target.off?.('styledata', onReady);
+      target.off?.('style.load', syncReady);
+      target.off?.('load', syncReady);
+      target.off?.('styledata', syncReady);
     };
   });
 
@@ -129,10 +127,64 @@
     return el;
   }
 
+  function sanitizeLineCoords(coords) {
+    if (!Array.isArray(coords)) return [];
+    const clean = [];
+    for (const pt of coords) {
+      if (!Array.isArray(pt) || pt.length < 2) continue;
+      const lng = Number(pt[0]);
+      const lat = Number(pt[1]);
+      if (Number.isFinite(lng) && Number.isFinite(lat)) clean.push([lng, lat]);
+    }
+    return clean;
+  }
+
+  /**
+   * Unwrap reactive Svelte proxies into plain GeoJSON so MapLibre's worker
+   * structured-clone (`postMessage`) never fails with DataCloneError.
+   */
+  function toPlainGeoJson(geojson) {
+    const features = [];
+    const pushGeometry = (geom) => {
+      if (!geom?.type || !Array.isArray(geom.coordinates)) return;
+      if (geom.type === 'LineString') {
+        const coordinates = sanitizeLineCoords(geom.coordinates);
+        if (coordinates.length >= 2) {
+          features.push({
+            type: 'Feature',
+            properties: {},
+            geometry: { type: 'LineString', coordinates },
+          });
+        }
+      } else if (geom.type === 'MultiLineString') {
+        const lines = geom.coordinates
+          .map((seg) => sanitizeLineCoords(seg))
+          .filter((seg) => seg.length >= 2);
+        if (lines.length > 0) {
+          features.push({
+            type: 'Feature',
+            properties: {},
+            geometry: { type: 'MultiLineString', coordinates: lines },
+          });
+        }
+      }
+    };
+
+    if (geojson?.type === 'FeatureCollection') {
+      for (const f of geojson.features ?? []) pushGeometry(f?.geometry);
+    } else if (geojson?.type === 'Feature') {
+      pushGeometry(geojson.geometry);
+    } else if (geojson) {
+      pushGeometry(geojson);
+    }
+
+    return { type: 'FeatureCollection', features };
+  }
+
   $effect(() => {
     if (!map || !styleReady || !isStyleInitialized(map)) return;
 
-    const data = plannedRoute ?? { type: 'FeatureCollection', features: [] };
+    const data = toPlainGeoJson(plannedRoute);
     const existing = map.getSource(sourceId);
     if (existing) {
       existing.setData(data);
@@ -165,7 +217,34 @@
           id: layerId,
           type: 'line',
           source: sourceId,
-          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          layout: {
+            'line-join': 'round',
+            'line-cap': 'round',
+            visibility: dashed ? 'none' : 'visible',
+          },
+          paint: {
+            'line-color': PLANNED_ROUTE_COLOR,
+            'line-width': PLANNED_ROUTE_WIDTH,
+            'line-opacity': PLANNED_ROUTE_OPACITY,
+          },
+        },
+        beforeLayer,
+      );
+    } else {
+      map.setLayoutProperty?.(layerId, 'visibility', dashed ? 'none' : 'visible');
+    }
+
+    if (!map.getLayer(dashedLayerId)) {
+      map.addLayer(
+        {
+          id: dashedLayerId,
+          type: 'line',
+          source: sourceId,
+          layout: {
+            'line-join': 'round',
+            'line-cap': 'round',
+            visibility: dashed ? 'visible' : 'none',
+          },
           paint: {
             'line-color': PLANNED_ROUTE_COLOR,
             'line-width': PLANNED_ROUTE_WIDTH,
@@ -175,6 +254,8 @@
         },
         beforeLayer,
       );
+    } else {
+      map.setLayoutProperty?.(dashedLayerId, 'visibility', dashed ? 'visible' : 'none');
     }
   });
 
@@ -250,6 +331,7 @@
     clearMarkers();
     if (!map) return;
     try {
+      if (map.getLayer(dashedLayerId)) map.removeLayer(dashedLayerId);
       if (map.getLayer(layerId)) map.removeLayer(layerId);
       if (map.getLayer(casingLayerId)) map.removeLayer(casingLayerId);
       if (map.getSource(sourceId)) map.removeSource(sourceId);

@@ -56,6 +56,7 @@ const vite = await createServer({
   resolve: {
     alias: [
       { find: /^maplibre-gl\/dist\/maplibre-gl\.css$/, replacement: resolve(here, 'stubs/empty.css') },
+      { find: 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url', replacement: resolve(here, 'stubs/empty-url.js') },
       { find: /^maplibre-gl$/, replacement: resolve(here, 'stubs/maplibre-gl.js') },
     ],
   },

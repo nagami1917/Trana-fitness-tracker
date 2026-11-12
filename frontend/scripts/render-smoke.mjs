@@ -104,6 +104,7 @@ const vite = await createServer({
       { find: /^leaflet\/dist\/leaflet\.css$/, replacement: resolve(here, 'stubs/empty.css') },
       { find: /^leaflet$/, replacement: resolve(here, 'stubs/leaflet.js') },
       { find: /^maplibre-gl\/dist\/maplibre-gl\.css$/, replacement: resolve(here, 'stubs/empty.css') },
+      { find: 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url', replacement: resolve(here, 'stubs/empty-url.js') },
       { find: /^maplibre-gl$/, replacement: resolve(here, 'stubs/maplibre-gl.js') },
       { find: /^chart\.js\/auto$/, replacement: resolve(here, 'stubs/chart.js') },
     ],

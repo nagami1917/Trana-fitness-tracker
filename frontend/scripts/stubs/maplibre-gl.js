@@ -1,3 +1,13 @@
+let workerUrl = '';
+
+export function setWorkerUrl(value) {
+  workerUrl = value || '';
+}
+
+export function getWorkerUrl() {
+  return workerUrl;
+}
+
 export class Map {
   constructor() {}
   on() {}
@@ -20,6 +30,7 @@ export class Map {
   removeLayer() {}
   removeSource() {}
   setPaintProperty() {}
+  setLayoutProperty() {}
 }
 
 export class Marker {
@@ -37,4 +48,11 @@ export class LngLatBounds {
   isEmpty() { return true; }
 }
 
-export default { Map, Marker, AttributionControl, LngLatBounds };
+export default {
+  Map,
+  Marker,
+  AttributionControl,
+  LngLatBounds,
+  setWorkerUrl,
+  getWorkerUrl,
+};
