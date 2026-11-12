@@ -251,4 +251,22 @@ class PredictionCreationTest extends TestCase
         Http::assertNothingSent();
         $this->assertDatabaseCount('predictions', 0);
     }
+
+    public function test_planned_for_accepts_current_minute_timestamp_and_rejects_old_past_dates(): void
+    {
+        Sanctum::actingAs($this->athlete());
+        $this->fakeMlPredict();
+
+        $this->postJson('/api/predictions', [
+            'activity_type' => 'run',
+            'distance_km' => 5,
+            'planned_for' => now()->subMinutes(5)->toIso8601String(),
+        ])->assertCreated();
+
+        $this->postJson('/api/predictions', [
+            'activity_type' => 'run',
+            'distance_km' => 5,
+            'planned_for' => now()->subDays(2)->toIso8601String(),
+        ])->assertUnprocessable()->assertJsonValidationErrors('planned_for');
+    }
 }

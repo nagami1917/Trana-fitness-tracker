@@ -23,7 +23,7 @@ class StorePredictionRequest extends FormRequest
             'elevation_gain_m' => ['nullable', 'integer', 'min:0', 'max:12000'],
             'temperature_c' => ['nullable', 'numeric', 'min:-20', 'max:55'],
             'sweat_profile' => ['nullable', Rule::in(['low', 'normal', 'high'])],
-            'planned_for' => ['nullable', 'date', 'after:now'],
+            'planned_for' => ['nullable', 'date', 'after:-1 hour'],
             'route' => ['nullable', 'array', 'min:2', 'max:2000'],
             'route.*' => ['array', 'size:2'],
             'route.*.0' => ['numeric', 'between:-90,90'],
@@ -51,6 +51,7 @@ class StorePredictionRequest extends FormRequest
     {
         return [
             'distance_km.required_without' => 'Provide a distance or draw a route.',
+            'planned_for.after' => 'Choose a planned date and time in the present or future.',
         ];
     }
 }

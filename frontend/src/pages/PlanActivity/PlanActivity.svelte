@@ -46,7 +46,7 @@
   } from '../../services/roadRoutingService.js';
   import { readCachedPlace } from '../../lib/location.js';
   import { acquireLivePosition, releaseLivePosition, seedLivePosition, livePosition } from '../../lib/liveLocation.svelte.js';
-  import { nf } from '../../lib/format.js';
+  import { nf, toDatetimeLocal } from '../../lib/format.js';
 
   const TYPES = [
     { id: 'run', label: 'Run', hint: 'Road, trail or treadmill' },
@@ -58,6 +58,7 @@
   let model = $state(null);
   let saving = $state(false);
   let saved = $state(null);
+  let saveSeq = 0;
   let loadedFromSaved = $state(false);
   let confirmDeletePlanId = $state(null);
   let deletingPlanId = $state(null);
@@ -67,6 +68,7 @@
   let following = $state(true);
   let routeMode = $state('roads'); // 'roads' (auto-follow roads & paths) | 'straight'
   let customElevation = $state(false);
+  let customPlannedFor = $state(false);
   let routeMap = $state(null);
 
   let form = $state({
@@ -76,7 +78,7 @@
     temperature_c: 26,
     route: [],
     sweat_profile: 'normal',
-    planned_for: '',
+    planned_for: toDatetimeLocal(new Date()),
   });
 
   let prediction = $state(null);
@@ -140,6 +142,9 @@
         if (params.get('type')) form.activity_type = params.get('type');
         form.temperature_c = $profile?.typical_temperature_c ?? 26;
         form.sweat_profile = $profile?.sweat_profile ?? 'normal';
+        if (!customPlannedFor && !form.planned_for) {
+          form.planned_for = toDatetimeLocal(new Date());
+        }
       }
     })();
     return () => {
@@ -187,6 +192,7 @@
   });
 
   function markEdited() {
+    saveSeq += 1;
     saved = null;
     loadedFromSaved = false;
   }
@@ -249,7 +255,9 @@
   function startOver() {
     clearTimeout(timer);
     resetSnap();
+    saveSeq += 1;
     customElevation = false;
+    customPlannedFor = false;
     saved = null;
     loadedFromSaved = false;
     confirmDeletePlanId = null;
@@ -266,7 +274,7 @@
       temperature_c: $profile?.typical_temperature_c ?? 26,
       route: [],
       sweat_profile: $profile?.sweat_profile ?? 'normal',
-      planned_for: '',
+      planned_for: toDatetimeLocal(new Date()),
     };
   }
 
@@ -431,8 +439,10 @@
     form.distance_km = Number(plan.distance_km) || 0;
     form.elevation_gain_m = Number(plan.elevation_gain_m) || 0;
     customElevation = true;
+    customPlannedFor = Boolean(plan.planned_for);
     form.temperature_c = Number(plan.temperature_c ?? ($profile?.typical_temperature_c ?? 26));
     form.sweat_profile = plan.sweat_profile || $profile?.sweat_profile || 'normal';
+    form.planned_for = plan.planned_for ? toDatetimeLocal(plan.planned_for) : toDatetimeLocal(new Date());
     if (Array.isArray(plan.route) && plan.route.length >= 2) {
       form.route = waypointsFromPath(plan.route);
       if (plan.route.length > 2) {
@@ -540,10 +550,17 @@
   }
 
   async function save() {
-    if (!prediction) return;
+    if (!prediction || saving) return;
     saving = true;
+    const seq = ++saveSeq;
     let written = false;
     let created = null;
+    if (!customPlannedFor) {
+      form.planned_for = toDatetimeLocal(new Date());
+    }
+    const plannedDate = form.planned_for ? new Date(form.planned_for) : null;
+    const plannedForIso =
+      plannedDate && Number.isFinite(plannedDate.getTime()) ? plannedDate.toISOString() : null;
     try {
       created = await api.predictions.create({
         activity_type: form.activity_type,
@@ -552,15 +569,17 @@
         route: plannedRoute,
         temperature_c: Number(form.temperature_c),
         sweat_profile: form.sweat_profile,
-        planned_for: form.planned_for ? new Date(form.planned_for).toISOString() : null,
+        planned_for: plannedForIso,
       });
       written = true;
       await refresh();
-      saved = created;
-      prediction = created;
+      if (seq === saveSeq) {
+        saved = created;
+        prediction = created;
+      }
       notify('Plan saved — it’s on your dashboard.');
     } catch (error) {
-      if (written) {
+      if (written && seq === saveSeq) {
         saved = created;
         prediction = created;
       }
@@ -694,7 +713,13 @@
 
           <div>
             <span class="label">When</span>
-            <input class="input" type="datetime-local" bind:value={form.planned_for} oninput={markEdited} />
+            <input
+              class="input"
+              type="datetime-local"
+              aria-label="When"
+              bind:value={form.planned_for}
+              oninput={() => { customPlannedFor = true; markEdited(); }}
+            />
           </div>
         </div>
 
