@@ -76,6 +76,14 @@ export function parseDate(value) {
   return value instanceof Date ? value : new Date(value);
 }
 
+/** Format a Date (or timestamp) for `<input type="datetime-local">` in local time ("YYYY-MM-DDTHH:mm"). */
+export function toDatetimeLocal(value = new Date()) {
+  const d = parseDate(value);
+  if (!Number.isFinite(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export function dayLabel(value) {
   const d = parseDate(value);
   const now = new Date();
