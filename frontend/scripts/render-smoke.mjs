@@ -239,6 +239,7 @@ try {
     assert.match(unavailable, /Try again/);
     stores.bootError.set(null);
     const html = render(mod.default).body;
+    assert.doesNotMatch(html, /Plan an activity/);
     console.log(`✔ /            App         ${String(html.length).padStart(5)} chars`);
   } catch (error) {
     failures += 1;

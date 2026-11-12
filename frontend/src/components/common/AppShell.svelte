@@ -7,7 +7,6 @@
     Settings,
     Bell,
     Search,
-    Plus,
     Sparkles,
     Salad,
     LogOut,
@@ -48,7 +47,6 @@
     { href: '/track', label: 'Track', Icon: MapPin },
     { href: '/calendar', label: 'Calendar', Icon: CalendarDays },
     { href: '/activities', label: 'Activities', Icon: Footprints },
-    { href: '/plan', label: 'Plan', Icon: Plus, fab: true },
     { href: '/analytics', label: 'Analytics', Icon: ChartColumn },
     { href: '/goals', label: 'Goals', Icon: Target },
   ];
@@ -376,25 +374,15 @@
   </div>
 
   <!-- bottom nav (mobile) -->
-  <nav class="fixed inset-x-0 bottom-0 z-40 border-t border-white/70 bg-white/85 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl lg:hidden">
-    <div class="mx-auto flex max-w-lg items-end justify-between px-3">
+  <nav class="fixed inset-x-0 bottom-0 z-40 border-t border-white/70 bg-white/85 pb-[max(0.45rem,env(safe-area-inset-bottom))] pt-1.5 backdrop-blur-xl lg:hidden">
+    <div class="mx-auto flex max-w-lg items-center justify-between gap-0.5 px-2">
       {#each MOBILE as item (item.href)}
         {@const active = isActive($route, item.href, item.href === '/')}
-        {#if item.fab}
-          <button
-            class="-mt-6 grid h-14 w-14 place-items-center rounded-full bg-brand-gradient text-white shadow-glow transition active:scale-95"
-            onclick={() => navigate(item.href)}
-            aria-label="Plan an activity"
-          >
-            <Plus size={26} strokeWidth={2.6} />
-          </button>
-        {:else}
-          <a href={item.href} use:link class="flex w-16 flex-col items-center gap-1 rounded-xl py-1.5 {active ? 'text-brand-600' : 'text-ink-400'}">
-            <item.Icon size={21} strokeWidth={active ? 2.6 : 2.1} />
-            <span class="text-[10px] font-bold">{item.label}</span>
-            <span class="h-1 w-6 rounded-full {active ? 'bg-brand-500' : 'bg-transparent'}"></span>
-          </a>
-        {/if}
+        <a href={item.href} use:link class="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl py-1.5 {active ? 'text-brand-600' : 'text-ink-400'}">
+          <item.Icon size={20} strokeWidth={active ? 2.6 : 2.1} />
+          <span class="max-w-full truncate text-[10px] font-bold">{item.label}</span>
+          <span class="h-1 w-5 rounded-full {active ? 'bg-brand-500' : 'bg-transparent'}"></span>
+        </a>
       {/each}
     </div>
   </nav>
