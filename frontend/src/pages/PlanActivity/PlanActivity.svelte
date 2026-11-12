@@ -161,6 +161,9 @@
   const plannedGeoJson = $derived(
     plannedRoute?.length >= 2 ? pathToGeoJson(plannedRoute, form.activity_type) : null,
   );
+  const routeDashed = $derived(
+    routeMode === 'straight' || (form.route.length >= 2 && routePath.length < 2),
+  );
 
   // Navigation-app behaviour: while a route exists, the distance field itself
   // shows the measured (road-following) route length — otherwise stays 0.
@@ -323,7 +326,7 @@
       allowKeyless: true,
       signal: controller.signal,
     });
-    if (seq !== snapSeq) return; // a newer edit superseded this request
+    if (seq !== snapSeq || controller.signal.aborted) return; // a newer edit superseded this request
 
     if (result?.path?.length >= 2) {
       routePath = result.path;
@@ -763,6 +766,7 @@
             plannedWaypoints={form.route}
             interactiveRoute={drawing}
             {routeMode}
+            {routeDashed}
             {routing}
             onRoutePick={onPick}
             fitRoute={false}

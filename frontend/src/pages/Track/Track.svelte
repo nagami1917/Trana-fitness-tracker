@@ -217,6 +217,11 @@
 
   const mapPlannedWaypoints = $derived(pathSource === 'create' ? customWaypoints : []);
   const interactiveRoute = $derived(pathSource === 'create' && customDrawing);
+  const routeDashed = $derived(
+    pathSource !== 'create' ||
+    customRouteMode === 'straight' ||
+    (customWaypoints.length >= 2 && customSnappedPath.length < 2),
+  );
   const mapRouting = $derived(
     (pathSource === 'create' && customRouting) ||
     (pathSource === 'plan' && planSnapping) ||
@@ -551,7 +556,7 @@
       allowKeyless: true,
       signal: controller.signal,
     });
-    if (seq !== customSnapSeq) return;
+    if (seq !== customSnapSeq || controller.signal.aborted) return;
 
     if (result?.path?.length >= 2) {
       customSnappedPath = result.path;
@@ -1427,6 +1432,7 @@
         plannedWaypoints={mapPlannedWaypoints}
         {interactiveRoute}
         routeMode={customRouteMode}
+        {routeDashed}
         routing={mapRouting}
         onRoutePick={onCustomRoutePick}
         fitRoute={!tracking && (pathSource === 'plan' || pathSource === 'activity') && Boolean(plannedRoute)}

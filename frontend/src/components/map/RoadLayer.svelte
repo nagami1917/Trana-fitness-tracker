@@ -88,17 +88,25 @@
     }
 
     if (!map.getLayer(LAYER_ID)) {
-      map.addLayer({
-        id: LAYER_ID,
-        type: 'line',
-        source: SOURCE_ID,
-        layout: { 'line-join': 'round', 'line-cap': 'round' },
-        paint: {
-          'line-color': '#475569',
-          'line-width': 2.5,
-          'line-opacity': 0.5,
+      const beforeLayer = [
+        'trana-gps-accuracy-fill',
+        'trana-planned-route-casing',
+        'trana-activity-route-line',
+      ].find((id) => map.getLayer?.(id));
+      map.addLayer(
+        {
+          id: LAYER_ID,
+          type: 'line',
+          source: SOURCE_ID,
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: {
+            'line-color': '#475569',
+            'line-width': 2.5,
+            'line-opacity': 0.5,
+          },
         },
-      });
+        beforeLayer,
+      );
     }
 
     const coords = toLatLng(center);
