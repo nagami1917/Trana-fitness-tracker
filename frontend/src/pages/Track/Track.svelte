@@ -63,6 +63,8 @@
   let points = $state([]);          // [{ latitude, longitude, altitudeM, speedKmh, timestamp }]
   let snappedPoints = $state([]);   // [[lat, lng], ...]
   let currentPosition = $state(null); // [lat, lng]
+  let currentAccuracyM = $state(null);
+  let currentHeading = $state(null);
   let startPosition = $state(null);
   let finishPosition = $state(null);
   let following = $state(true);
@@ -75,6 +77,9 @@
       ? [livePosition.current.latitude, livePosition.current.longitude]
       : null,
   );
+  const displayPosition = $derived(currentPosition ?? liveCoords);
+  const displayAccuracyM = $derived(currentAccuracyM ?? livePosition.current?.accuracy ?? null);
+  const displayHeading = $derived(currentHeading ?? livePosition.current?.heading ?? null);
   let mapCenter = $derived.by(() => {
     if (currentPosition) return currentPosition;
     if (liveCoords) return liveCoords;
@@ -563,6 +568,7 @@
 
   function onCustomRoutePick(mode, index, latlng) {
     if (!latlng) return;
+    following = false;
     const point = [Number(latlng.lat.toFixed(5)), Number(latlng.lng.toFixed(5))];
     if (mode === 'remove') {
       customWaypoints = customWaypoints.filter((_, i) => i !== index);
@@ -684,8 +690,8 @@
     }
   }
 
-  function appendGpsFix(coords, timestamp) {
-    const pt = trackPoint(coords, timestamp);
+  function appendGpsFix(fix) {
+    const pt = fix?.coords ? trackPoint(fix.coords, fix.timestamp) : fix;
     const errors = validateTrackPoint(pt);
     if (errors.length > 0) {
       gpsStatus = 'error';
@@ -695,8 +701,12 @@
 
     const pos = [pt.latitude, pt.longitude];
     currentPosition = pos;
+    if (pt.accuracyM != null) currentAccuracyM = pt.accuracyM;
+    if (pt.heading != null) currentHeading = pt.heading;
     if (!startPosition) startPosition = pos;
-    points = [...points, pt];
+    if (!pt.suppressedDrift || points.length === 0) {
+      points = [...points, pt];
+    }
     gpsStatus = 'tracking';
     gpsMessage = pt.accuracyM != null ? `±${Math.round(pt.accuracyM)}m` : 'Active';
   }
@@ -706,8 +716,8 @@
     gpsMessage = 'Acquiring GPS…';
 
     try {
-      const first = await getCurrentPosition({ enableHighAccuracy: true, timeout: 15000 });
-      appendGpsFix(first.coords, first.timestamp);
+      const first = await getCurrentPosition({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+      appendGpsFix(first);
     } catch (error) {
       if (error instanceof GpsError && error.code === 'unsupported') {
         gpsStatus = 'error';
@@ -731,20 +741,10 @@
     }
 
     watcher = watch({
+      activityType,
       onPoint: (pt) => {
         if (paused) return;
-        const errors = validateTrackPoint(pt);
-        if (errors.length > 0) {
-          gpsStatus = 'error';
-          gpsMessage = 'Invalid GPS reading';
-          return;
-        }
-        const pos = [pt.latitude, pt.longitude];
-        currentPosition = pos;
-        if (!startPosition) startPosition = pos;
-        points = [...points, pt];
-        gpsStatus = 'tracking';
-        gpsMessage = pt.accuracyM != null ? `±${Math.round(pt.accuracyM)}m` : 'Active';
+        appendGpsFix(pt);
       },
       onError: (err) => {
         if (err instanceof GpsError && err.code === 'denied') {
@@ -914,6 +914,8 @@
     points = [];
     snappedPoints = [];
     currentPosition = null;
+    currentAccuracyM = null;
+    currentHeading = null;
     startPosition = null;
     finishPosition = null;
     startedAtIso = null;
@@ -1429,7 +1431,9 @@
         onRoutePick={onCustomRoutePick}
         fitRoute={!tracking && (pathSource === 'plan' || pathSource === 'activity') && Boolean(plannedRoute)}
         center={mapCenter}
-        {currentPosition}
+        currentPosition={displayPosition}
+        accuracyM={displayAccuracyM}
+        heading={displayHeading}
         {startPosition}
         {finishPosition}
         bind:following

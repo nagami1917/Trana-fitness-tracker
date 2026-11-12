@@ -19,6 +19,8 @@
     points = [],              // track-point objects: { latitude, longitude, ... }
     center = [14.676, 121.0437], // initial/fallback center [lat, lng]
     currentPosition = null,   // [lat, lng]
+    accuracyM = null,         // GPS horizontal accuracy in metres
+    heading = null,           // movement heading in degrees [0..360)
     startPosition = null,     // [lat, lng]
     finishPosition = null,    // [lat, lng]
     nutritionMarkers = [],    // [{ lat, lng, label, message }]
@@ -214,7 +216,7 @@
       onPick={onRoutePick}
     />
     <ActivityRoute {map} {points} {roadSnapping} />
-    <ActivityMarker {map} {currentPosition} {startPosition} {finishPosition} />
+    <ActivityMarker {map} {currentPosition} {startPosition} {finishPosition} {accuracyM} {heading} />
     {#if showNutrition}
       <NutritionMarker {map} markers={nutritionMarkers} />
     {/if}

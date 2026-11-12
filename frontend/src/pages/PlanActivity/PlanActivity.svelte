@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import {
     Sparkles,
     MapPin,
@@ -21,11 +21,12 @@
     Pencil,
     Lock,
     History,
+    Maximize2,
   } from 'lucide-svelte';
   import Card from '../../components/common/Card.svelte';
   import BusyOverlay from '../../components/common/BusyOverlay.svelte';
   import ActivityIcon from '../../components/activities/ActivityIcon.svelte';
-  import RouteMap from '../../components/route/RouteMap.svelte';
+  import TranaMap from '../../components/map/TranaMap.svelte';
   import FuelingPlan from '../../components/fueling/FuelingPlan.svelte';
   import Segmented from '../../components/common/Segmented.svelte';
   import { activities, profile, plans, notify, refresh } from '../../stores/index.js';
@@ -34,6 +35,7 @@
   import { loadModel, predictPlan } from '../../lib/ml/index.js';
   import { routeLengthKm, suggestElevation } from '../../lib/ml/index.js';
   import {
+    pathToGeoJson,
     routeThroughRoads,
     waypointsFromPath,
     outAndBackWaypoints,
@@ -42,7 +44,8 @@
     isClosedLoop,
     searchPlaces,
   } from '../../services/roadRoutingService.js';
-  import { acquireLivePosition, releaseLivePosition, livePosition } from '../../lib/liveLocation.svelte.js';
+  import { readCachedPlace } from '../../lib/location.js';
+  import { acquireLivePosition, releaseLivePosition, seedLivePosition, livePosition } from '../../lib/liveLocation.svelte.js';
   import { nf } from '../../lib/format.js';
 
   const TYPES = [
@@ -55,15 +58,18 @@
   let model = $state(null);
   let saving = $state(false);
   let saved = $state(null);
+  let loadedFromSaved = $state(false);
   let drawing = $state(true);
+  let showRoads = $state(true);
+  let following = $state(true);
   let routeMode = $state('roads'); // 'roads' (auto-follow roads & paths) | 'straight'
   let customElevation = $state(false);
   let routeMap = $state(null);
 
   let form = $state({
     activity_type: 'run',
-    distance_km: 5,
-    elevation_gain_m: 45,
+    distance_km: 0,
+    elevation_gain_m: 0,
     temperature_c: 26,
     route: [],
     sweat_profile: 'normal',
@@ -89,6 +95,7 @@
   let searchError = $state('');
   let searchAbort = null;
 
+  let cachedPlace = readCachedPlace();
   const liveCoords = $derived(
     livePosition.current &&
     Number.isFinite(livePosition.current.latitude) &&
@@ -96,6 +103,15 @@
       ? [livePosition.current.latitude, livePosition.current.longitude]
       : null,
   );
+  const liveAccuracy = $derived(livePosition.current?.accuracy ?? null);
+  const liveHeading = $derived(livePosition.current?.heading ?? null);
+  const mapCenter = $derived.by(() => {
+    if (liveCoords) return liveCoords;
+    if (cachedPlace && Number.isFinite(cachedPlace.latitude) && Number.isFinite(cachedPlace.longitude)) {
+      return [cachedPlace.latitude, cachedPlace.longitude];
+    }
+    return [14.676, 121.0437];
+  });
 
   const lastActivityWithRoute = $derived($activities.find((a) => Array.isArray(a.route) && a.route.length >= 2) ?? null);
   const routeClosed = $derived(isClosedLoop(form.route));
@@ -104,10 +120,12 @@
   // it (sync onMount → client-only; top-level onDestroy breaks this SSR
   // harness because ssr_context is already torn down at registration).
   onMount(() => {
+    if (cachedPlace) seedLivePosition(cachedPlace);
     acquireLivePosition();
     void (async () => {
       model = await loadModel();
-      // hydrate from the dashboard shortcut (?type=run&distance=5&elevation=45&plan=12)
+      // hydrate from a saved plan link (?plan=12) or profile defaults;
+      // predictions start only after a route is added on the map.
       const params = $query;
       const planId = params.get('plan');
       const requestedPlan = planId ? $plans.find((p) => String(p.id) === String(planId)) : null;
@@ -116,17 +134,12 @@
         loadSavedPlan(requestedPlan);
       } else {
         if (params.get('type')) form.activity_type = params.get('type');
-        if (params.get('distance')) form.distance_km = Number(params.get('distance'));
-        if (params.get('elevation')) {
-          form.elevation_gain_m = Number(params.get('elevation'));
-          customElevation = true;
-        }
         form.temperature_c = $profile?.typical_temperature_c ?? 26;
         form.sweat_profile = $profile?.sweat_profile ?? 'normal';
       }
-      await run();
     })();
     return () => {
+      clearTimeout(timer);
       clearTimeout(snapTimer);
       snapAbort?.abort();
       searchAbort?.abort();
@@ -145,20 +158,38 @@
   const plannedRoute = $derived(
     routePath.length > 1 ? routePath : form.route.length > 1 ? form.route : null,
   );
+  const plannedGeoJson = $derived(
+    plannedRoute?.length >= 2 ? pathToGeoJson(plannedRoute, form.activity_type) : null,
+  );
 
   // Navigation-app behaviour: while a route exists, the distance field itself
-  // shows the measured (road-following) route length — not the typed value.
+  // shows the measured (road-following) route length — otherwise stays 0.
   $effect(() => {
+    if (loadedFromSaved) return;
     if (routeKm > 0.05) {
       form.distance_km = Number(routeKm.toFixed(2));
       if (!customElevation) {
         form.elevation_gain_m = suggestElevation(routeKm, form.activity_type);
       }
+    } else {
+      form.distance_km = 0;
+      if (!customElevation) {
+        form.elevation_gain_m = 0;
+      }
     }
   });
 
+  function markEdited() {
+    saved = null;
+    loadedFromSaved = false;
+  }
+
   async function run() {
     if (!$profile || !model) return;
+    if (!Array.isArray(plannedRoute) || plannedRoute.length < 2 || routeKm <= 0.05) {
+      computing = false;
+      return;
+    }
     computing = true;
     try {
       prediction = await predictPlan({
@@ -177,9 +208,11 @@
     }
   }
 
-  // Recompute whenever a relevant input changes (debounced).
+  // Recompute whenever a valid route is plotted on the map (debounced).
   let timer;
   $effect(() => {
+    void model;
+    void $profile;
     void form.activity_type;
     void form.distance_km;
     void form.elevation_gain_m;
@@ -188,38 +221,58 @@
     void form.planned_for;
     void form.route.length;
     void routePath;
+    void routing;
+    void routeMode;
     void $activities.length;
-    saved = null;
+
     clearTimeout(timer);
+    if (loadedFromSaved) return;
+
+    const hasPlottedRoute = Array.isArray(plannedRoute) && plannedRoute.length >= 2 && routeKm > 0.05;
+    if (!hasPlottedRoute) {
+      computing = false;
+      prediction = null;
+      return;
+    }
+    if (routeMode === 'roads' && routing) return;
+
     timer = setTimeout(run, 160);
   });
 
   function startOver() {
+    clearTimeout(timer);
+    resetSnap();
+    customElevation = false;
+    saved = null;
+    loadedFromSaved = false;
+    prediction = null;
+    computing = false;
+    drawing = true;
+    placeQuery = '';
+    placeResults = [];
+    searchError = '';
     form = {
       activity_type: 'run',
-      distance_km: 5,
-      elevation_gain_m: 45,
+      distance_km: 0,
+      elevation_gain_m: 0,
       temperature_c: $profile?.typical_temperature_c ?? 26,
       route: [],
       sweat_profile: $profile?.sweat_profile ?? 'normal',
       planned_for: '',
     };
-    customElevation = false;
-    resetSnap();
-    saved = null;
-    prediction = null;
-    drawing = true;
   }
 
   function pickType(id) {
+    markEdited();
     form.activity_type = id;
-    if (!customElevation) {
-      form.elevation_gain_m = suggestElevation(effectiveDistance || Number(form.distance_km) || 0, id);
+    if (!customElevation && routeKm > 0.05) {
+      form.elevation_gain_m = suggestElevation(effectiveDistance, id);
     }
     scheduleSnap({ immediate: true }); // routing profile follows the activity type
   }
 
   function setRouteMode(mode) {
+    markEdited();
     routeMode = mode;
     if (mode === 'straight') {
       resetSnap();
@@ -276,7 +329,7 @@
       routePath = result.path;
       routeProvider = result.provider;
       routeProviderLabel = result.providerLabel || 'OpenStreetMap';
-      if (fitAfter) queueMicrotask(() => routeMap?.fitRouteBounds?.());
+      if (fitAfter) void tick().then(() => routeMap?.fitRouteBounds?.());
     } else {
       routePath = [];
       routeProvider = 'fallback';
@@ -286,6 +339,7 @@
   }
 
   function clearRoute() {
+    markEdited();
     form.route = [];
     resetSnap();
   }
@@ -293,16 +347,19 @@
   /** Remove only the last stop — keeps the rest of the drawn route. */
   function undoPoint() {
     if (!form.route.length) return;
+    markEdited();
     form.route = form.route.slice(0, -1);
     scheduleSnap({ immediate: true });
   }
 
   function startFromGps() {
     if (!liveCoords) return;
+    markEdited();
+    following = false;
     const pt = [Number(liveCoords[0].toFixed(5)), Number(liveCoords[1].toFixed(5))];
     if (!form.route.length) {
       form.route = [pt];
-      routeMap?.focusPoint?.(pt, 16);
+      void tick().then(() => routeMap?.focusPoint?.(pt, 16));
       notify('Start set to your GPS location — tap your destination on the map.', 'info');
       return;
     }
@@ -312,38 +369,45 @@
 
   function makeOutAndBack() {
     if (form.route.length < 2 || routeClosed) return;
+    markEdited();
+    following = false;
     form.route = outAndBackWaypoints(form.route);
     scheduleSnap({ immediate: true, fitAfter: true });
   }
 
   function makeLoop() {
     if (form.route.length < 2 || routeClosed) return;
+    markEdited();
+    following = false;
     form.route = closeLoopWaypoints(form.route);
     scheduleSnap({ immediate: true, fitAfter: true });
   }
 
   function reverseRoute() {
     if (form.route.length < 2) return;
+    markEdited();
     form.route = reverseWaypoints(form.route);
     scheduleSnap({ immediate: true });
   }
 
   function loadLastActivity() {
     if (!lastActivityWithRoute) return;
+    markEdited();
+    following = false;
     form.activity_type = lastActivityWithRoute.activity_type || form.activity_type;
     form.route = waypointsFromPath(lastActivityWithRoute.route);
     if (lastActivityWithRoute.route.length > 2) {
       routePath = [...lastActivityWithRoute.route];
       routeProvider = 'saved';
       routeProviderLabel = 'Saved activity';
-      queueMicrotask(() => routeMap?.fitRouteBounds?.());
+      void tick().then(() => routeMap?.fitRouteBounds?.());
     } else if (routeMode === 'roads') {
       scheduleSnap({ immediate: true, fitAfter: true });
     } else {
       routePath = [];
       routeProvider = null;
       routeProviderLabel = '';
-      queueMicrotask(() => routeMap?.fitRouteBounds?.());
+      void tick().then(() => routeMap?.fitRouteBounds?.());
     }
   }
 
@@ -352,8 +416,10 @@
     clearTimeout(timer);
     clearTimeout(snapTimer);
     snapAbort?.abort();
+    loadedFromSaved = true;
+    following = false;
     form.activity_type = plan.activity_type || 'run';
-    form.distance_km = Number(plan.distance_km) || 5;
+    form.distance_km = Number(plan.distance_km) || 0;
     form.elevation_gain_m = Number(plan.elevation_gain_m) || 0;
     customElevation = true;
     form.temperature_c = Number(plan.temperature_c ?? ($profile?.typical_temperature_c ?? 26));
@@ -364,14 +430,14 @@
         routePath = [...plan.route];
         routeProvider = 'saved';
         routeProviderLabel = 'Saved plan';
-        queueMicrotask(() => routeMap?.fitRouteBounds?.());
+        void tick().then(() => routeMap?.fitRouteBounds?.());
       } else if (routeMode === 'roads') {
         scheduleSnap({ immediate: true, fitAfter: true });
       } else {
         routePath = [];
         routeProvider = null;
         routeProviderLabel = '';
-        queueMicrotask(() => routeMap?.fitRouteBounds?.());
+        void tick().then(() => routeMap?.fitRouteBounds?.());
       }
     } else {
       form.route = [];
@@ -383,6 +449,8 @@
 
   function onPick(mode, index, latlng) {
     if (!latlng) return;
+    markEdited();
+    following = false;
     const point = [Number(latlng.lat.toFixed(5)), Number(latlng.lng.toFixed(5))];
     if (mode === 'remove') {
       form.route = form.route.filter((_, i) => i !== index);
@@ -427,6 +495,8 @@
   }
 
   function addPlaceAsStop(place) {
+    markEdited();
+    following = false;
     const pt = [place.latitude, place.longitude];
     form.route = [...form.route, pt];
     placeQuery = '';
@@ -435,7 +505,7 @@
     drawing = true;
 
     if (form.route.length === 1) {
-      routeMap?.focusPoint?.(pt, 16);
+      void tick().then(() => routeMap?.focusPoint?.(pt, 16));
     } else {
       scheduleSnap({ immediate: true, fitAfter: true });
     }
@@ -532,21 +602,24 @@
 
         <div class="mt-4 grid gap-3 sm:grid-cols-2">
           <div>
-            <span class="label">Distance {routeKm > 0 ? '(from route)' : ''}</span>
+            <span class="label">Distance {routeKm > 0 ? '(from route)' : '(from map)'}</span>
             <div class="flex gap-2">
               <input
                 class="input"
                 type="number"
-                min="0.5"
-                step="0.5"
-                bind:value={form.distance_km}
-                disabled={routeKm > 0}
+                min="0"
+                step="0.1"
+                value={form.distance_km > 0 ? form.distance_km : ''}
+                placeholder="Add route on map"
+                disabled
                 class:bg-brand-50={routeKm > 0}
               />
               <span class="grid w-14 shrink-0 place-items-center rounded-2xl border border-brand-100 bg-brand-50 text-xs font-extrabold text-ink-500">km</span>
             </div>
             {#if routeKm > 0}
               <p class="mt-1 text-[10px] font-bold text-brand-600">Measured along your planned route</p>
+            {:else}
+              <p class="mt-1 text-[10px] font-semibold text-ink-400">Plot Start & Destination on the map below</p>
             {/if}
           </div>
 
@@ -559,7 +632,7 @@
                 min="0"
                 step="10"
                 bind:value={form.elevation_gain_m}
-                oninput={() => (customElevation = true)}
+                oninput={() => { customElevation = true; markEdited(); }}
               />
               <span class="grid w-14 shrink-0 place-items-center rounded-2xl border border-brand-100 bg-brand-50 text-xs font-extrabold text-ink-500">m</span>
             </div>
@@ -568,14 +641,14 @@
           <div>
             <span class="label"><Thermometer size={11} class="mr-1 inline" /> Expected temperature</span>
             <div class="flex gap-2">
-              <input class="input" type="number" min="-5" max="45" bind:value={form.temperature_c} />
+              <input class="input" type="number" min="-5" max="45" bind:value={form.temperature_c} oninput={markEdited} />
               <span class="grid w-14 shrink-0 place-items-center rounded-2xl border border-brand-100 bg-brand-50 text-xs font-extrabold text-ink-500">°C</span>
             </div>
           </div>
 
           <div>
             <span class="label">When</span>
-            <input class="input" type="datetime-local" bind:value={form.planned_for} />
+            <input class="input" type="datetime-local" bind:value={form.planned_for} oninput={markEdited} />
           </div>
         </div>
 
@@ -588,7 +661,7 @@
               { id: 'high', label: 'Heavy sweater' },
             ]}
             value={form.sweat_profile}
-            onSelect={(v) => (form.sweat_profile = v)}
+            onSelect={(v) => { markEdited(); form.sweat_profile = v; }}
           />
         </div>
       </Card>
@@ -603,7 +676,11 @@
                 : 'Straight-line mode — plot manual direct segments.'}
             </p>
           </div>
-          <div class="flex flex-wrap items-center gap-1.5">
+          <div class="flex flex-wrap items-center gap-2.5">
+            <label class="inline-flex items-center gap-1.5 text-xs font-bold text-ink-700 cursor-pointer select-none">
+              <input type="checkbox" bind:checked={showRoads} class="accent-brand-600 rounded" />
+              <span>Show roads</span>
+            </label>
             <button
               type="button"
               class="btn-chip"
@@ -679,18 +756,23 @@
           </div>
         {/if}
 
-        <div class="mt-3">
-          <RouteMap
+        <div class="mt-3 relative h-[320px] sm:h-[380px] w-full">
+          <TranaMap
             bind:this={routeMap}
-            points={form.route}
-            path={routePath}
-            height={280}
-            interactive={drawing}
-            autoFit={false}
-            {routing}
+            plannedRoute={plannedGeoJson}
+            plannedWaypoints={form.route}
+            interactiveRoute={drawing}
             {routeMode}
-            userLocation={liveCoords}
-            onPick={onPick}
+            {routing}
+            onRoutePick={onPick}
+            fitRoute={false}
+            center={mapCenter}
+            currentPosition={liveCoords}
+            accuracyM={liveAccuracy}
+            heading={liveHeading}
+            bind:following
+            autoCenter={true}
+            {showRoads}
           />
         </div>
 
@@ -718,6 +800,9 @@
             <button type="button" class="btn-chip" onclick={reverseRoute} title="Swap Start and Destination">
               <RotateCcw size={12} /> Reverse
             </button>
+            <button type="button" class="btn-chip" onclick={() => { following = false; routeMap?.fitRouteBounds?.(); }}>
+              <Maximize2 size={12} /> Fit route
+            </button>
           {/if}
           {#if form.route.length}
             <button type="button" class="btn-chip" onclick={undoPoint}><Undo2 size={12} /> Undo</button>
@@ -738,6 +823,10 @@
           <span class="pill"><Ruler size={12} /> {routeKm > 0 ? `${nf(routeKm, 2)} km` : '—'}</span>
           {#if routing}
             <span class="pill"><LoaderCircle size={12} class="animate-spin" /> Routing along roads…</span>
+          {:else if form.route.length >= 2 && routeKm <= 0.05}
+            <span class="pill !bg-amber-50 !text-amber-700">
+              Stops must be more than 50 m apart to predict
+            </span>
           {:else if routeMode === 'straight' && form.route.length >= 2}
             <span class="pill">Straight-line mode</span>
           {:else if routePath.length > 1}
@@ -771,7 +860,19 @@
       {#if computing && !prediction}
         <Card class="grid place-items-center !py-16">
           <LoaderCircle size={26} class="animate-spin text-brand-400" />
-          <p class="mt-3 text-sm font-bold text-ink-400">Reading your history…</p>
+          <p class="mt-3 text-sm font-bold text-ink-400">Predicting duration and fueling…</p>
+        </Card>
+      {:else if !prediction}
+        <Card class="grid place-items-center text-center !py-14 px-6 border-dashed border-brand-200 bg-brand-50/40">
+          <div class="grid h-12 w-12 place-items-center rounded-2xl bg-white text-brand-500 shadow-soft">
+            <MapPin size={22} />
+          </div>
+          <h3 class="mt-4 font-display text-lg font-extrabold text-ink-900">
+            Add a route on the map to start predicting
+          </h3>
+          <p class="mt-1.5 max-w-sm text-xs font-semibold text-ink-500">
+            Tap <strong>Start</strong> and <strong>Destination</strong> on the Route planner map (or search a street/place, use GPS, or load your last activity route). TRANA will calculate your distance, duration, and fueling plan automatically.
+          </p>
         </Card>
       {:else if prediction}
         <Card class="!p-4 sm:!p-5">
