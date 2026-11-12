@@ -59,6 +59,9 @@
   let saving = $state(false);
   let saved = $state(null);
   let loadedFromSaved = $state(false);
+  let confirmDeletePlanId = $state(null);
+  let deletingPlanId = $state(null);
+  let showAllPlans = $state(false);
   let drawing = $state(true);
   let showRoads = $state(true);
   let following = $state(true);
@@ -115,6 +118,7 @@
 
   const lastActivityWithRoute = $derived($activities.find((a) => Array.isArray(a.route) && a.route.length >= 2) ?? null);
   const routeClosed = $derived(isClosedLoop(form.route));
+  const visiblePlans = $derived(showAllPlans ? $plans : $plans.slice(0, 4));
 
   // Blue dot: join the shared follow-me watch; the returned cleanup releases
   // it (sync onMount → client-only; top-level onDestroy breaks this SSR
@@ -248,6 +252,7 @@
     customElevation = false;
     saved = null;
     loadedFromSaved = false;
+    confirmDeletePlanId = null;
     prediction = null;
     computing = false;
     drawing = true;
@@ -419,6 +424,7 @@
     clearTimeout(timer);
     clearTimeout(snapTimer);
     snapAbort?.abort();
+    confirmDeletePlanId = null;
     loadedFromSaved = true;
     following = false;
     form.activity_type = plan.activity_type || 'run';
@@ -561,6 +567,43 @@
       notify(written ? 'Plan saved, but the view could not refresh. Reload when connected.' : (error.message || 'Could not save the plan'), 'error');
     } finally {
       saving = false;
+    }
+  }
+
+  async function deleteSavedPlan(plan) {
+    if (!plan || deletingPlanId) return;
+    deletingPlanId = plan.id;
+    let deleted = false;
+    try {
+      await api.predictions.remove(plan.id);
+      deleted = true;
+      confirmDeletePlanId = null;
+
+      plans.update((rows) => rows.filter((row) => String(row.id) !== String(plan.id)));
+      if ($plans.length <= 4) showAllPlans = false;
+
+      if (saved && String(saved.id) === String(plan.id)) {
+        if (loadedFromSaved) {
+          startOver();
+        } else {
+          saved = null;
+          if (prediction && String(prediction.id) === String(plan.id)) {
+            prediction = { ...prediction, id: undefined };
+          }
+        }
+      }
+
+      await refresh();
+      notify('Saved plan deleted.', 'info');
+    } catch (error) {
+      notify(
+        deleted
+          ? 'Plan deleted, but the view could not refresh. Reload when connected.'
+          : (error.message || 'Could not delete the saved plan'),
+        'error',
+      );
+    } finally {
+      deletingPlanId = null;
     }
   }
 </script>
@@ -927,9 +970,25 @@
 
       {#if $plans.length > 0}
         <Card>
-          <h2 class="text-base">Saved plans</h2>
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <h2 class="text-base">Saved plans</h2>
+              <span class="rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-bold text-ink-500">
+                {$plans.length}
+              </span>
+            </div>
+            {#if $plans.length > 4}
+              <button
+                type="button"
+                class="text-[11px] font-extrabold text-brand-600 hover:underline"
+                onclick={() => (showAllPlans = !showAllPlans)}
+              >
+                {showAllPlans ? 'Show recent (4)' : `Show all (${$plans.length})`}
+              </button>
+            {/if}
+          </div>
           <div class="mt-2 divide-y divide-brand-100/70">
-            {#each $plans.slice(0, 4) as plan (plan.id)}
+            {#each visiblePlans as plan (plan.id)}
               <div class="flex items-center gap-2 py-2.5">
                 <button
                   type="button"
@@ -945,21 +1004,57 @@
                       {/if}
                     </p>
                     <p class="text-[10px] font-semibold text-ink-400">
-                      ~{Math.round(plan.duration.minutes)} min · {plan.fueling.carbs.perHourG} g carbs/h
+                      ~{Math.round(plan.duration?.minutes ?? 0)} min · {plan.fueling?.carbs?.perHourG ?? 0} g carbs/h
                     </p>
                   </div>
                   <span class="shrink-0 text-[10px] font-bold text-ink-400">
                     {new Date(plan.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                   </span>
                 </button>
-                {#if plan.route?.length >= 2}
+                {#if confirmDeletePlanId === plan.id}
+                  <div class="flex shrink-0 items-center gap-1.5">
+                    <button
+                      type="button"
+                      class="btn-chip !border-rose-200 !bg-rose-50 !text-rose-600 hover:!bg-rose-100"
+                      disabled={deletingPlanId === plan.id}
+                      onclick={() => deleteSavedPlan(plan)}
+                    >
+                      {#if deletingPlanId === plan.id}
+                        <LoaderCircle size={11} class="animate-spin" /> Deleting…
+                      {:else}
+                        Delete
+                      {/if}
+                    </button>
+                    <button
+                      type="button"
+                      class="btn-chip"
+                      disabled={deletingPlanId === plan.id}
+                      onclick={() => (confirmDeletePlanId = null)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                {:else}
+                  {#if plan.route?.length >= 2}
+                    <button
+                      type="button"
+                      class="btn-chip shrink-0"
+                      title="Follow this planned route on live tracking"
+                      disabled={Boolean(deletingPlanId)}
+                      onclick={() => followOnTrack(plan.id)}
+                    >
+                      <Navigation size={11} /> Track
+                    </button>
+                  {/if}
                   <button
                     type="button"
-                    class="btn-chip shrink-0"
-                    title="Follow this planned route on live tracking"
-                    onclick={() => followOnTrack(plan.id)}
+                    class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-brand-100 bg-white/80 text-ink-400 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
+                    title="Delete saved plan"
+                    aria-label="Delete saved plan {plan.distance_km} km {plan.activity_type}"
+                    disabled={Boolean(deletingPlanId)}
+                    onclick={() => (confirmDeletePlanId = plan.id)}
                   >
-                    <Navigation size={11} /> Track
+                    <Trash2 size={13} />
                   </button>
                 {/if}
               </div>
