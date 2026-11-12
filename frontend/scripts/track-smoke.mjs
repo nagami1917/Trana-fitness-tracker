@@ -107,11 +107,33 @@ try {
   assert.equal(elevationGainM([{ altitudeM: 10 }, { altitudeM: 24 }, { altitudeM: 19 }, { altitudeM: 29 }]), 24);
 
   const { trackPoint } = await vite.ssrLoadModule('/src/services/gpsService.js');
+  const { createGpsSmoother, computeBearingDeg } = await vite.ssrLoadModule('/src/services/gpsFilter.js');
   const { validateTrackPoint, activityApi } = await vite.ssrLoadModule('/src/services/activityService.js');
-  const sample = trackPoint({ latitude: 14.676, longitude: 121.0437, altitude: 32, speed: 3.0, accuracy: 8 }, 1762872400000);
+  const sample = trackPoint({ latitude: 14.676, longitude: 121.0437, altitude: 32, speed: 3.0, accuracy: 8, heading: 92 }, 1762872400000);
   assert.equal(typeof sample.timestamp, 'string');
+  assert.equal(sample.heading, 92);
   assert.deepEqual(validateTrackPoint(sample), []);
   assert.deepEqual(validateTrackPoint({ latitude: 14.676, longitude: 121.0437, timestamp: 1762872400000 }), []);
+
+  // GPS quality filtering, drift suppression, smoothing, and bearing checks
+  const smoother = createGpsSmoother({ activityType: 'run' });
+  const f1 = smoother.push({ latitude: 14.676, longitude: 121.0437, accuracy: 8, speedKmh: 0, timestamp: 1000 });
+  assert.equal(f1.latitude, 14.676);
+  // Poor-accuracy spike (> 60 m within 30 s) must be rejected
+  assert.equal(smoother.push({ latitude: 14.682, longitude: 121.05, accuracy: 120, speedKmh: 5, timestamp: 3000 }), null);
+  // Teleportation jump (> 50 km/h on run) must be rejected
+  assert.equal(smoother.push({ latitude: 14.69, longitude: 121.06, accuracy: 10, speedKmh: 9, timestamp: 5000 }), null);
+  // Stationary wobble (< 3 m at 0 km/h) must stay pinned
+  const fDrift = smoother.push({ latitude: 14.676008, longitude: 121.043708, accuracy: 8, speedKmh: 0, timestamp: 6000 });
+  assert.equal(fDrift.suppressedDrift, true);
+  assert.equal(fDrift.latitude, 14.676);
+  // Genuine movement (~40 m north) updates smoothly and derives North heading (~0 deg)
+  const fMove = smoother.push({ latitude: 14.6764, longitude: 121.0437, accuracy: 8, speedKmh: 10, timestamp: 20000 });
+  assert.equal(fMove.suppressedDrift, false);
+  assert.ok(fMove.latitude > 14.676 && fMove.latitude <= 14.6764);
+  assert.ok(fMove.heading === 0 || fMove.heading < 10 || fMove.heading > 350);
+  assert.equal(computeBearingDeg([14.676, 121.0437], [14.677, 121.0437]), 0);
+  assert.equal(computeBearingDeg([14.676, 121.0437], [14.676, 121.0447]), 90);
 
   // Verify activityApi paths never double-prefix /api/api/... and create returns data once
   const created = await activityApi.create({ activity_type: 'run', distance_km: 3.1, duration_min: 18, started_at: new Date().toISOString() });

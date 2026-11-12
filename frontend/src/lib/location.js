@@ -1,3 +1,5 @@
+import { createGpsSmoother } from '../services/gpsFilter.js';
+
 /**
  * Optional, user-initiated city/region detection. Coordinates are sent directly
  * from the browser to BigDataCloud's client-side reverse-geocoding service;
@@ -181,16 +183,33 @@ export function watchPosition({
   }
   const opts = {
     enableHighAccuracy: options.enableHighAccuracy ?? true,
-    timeout: options.timeout ?? 25000,
-    maximumAge: options.maximumAge ?? 5000,
+    timeout: options.timeout ?? 15000,
+    maximumAge: options.maximumAge ?? 0,
   };
+  const smoother = createGpsSmoother({ activityType: 'default' });
   let id;
   try {
     id = geolocation.watchPosition(
       (pos) => {
-        const { latitude, longitude, accuracy } = pos?.coords ?? {};
+        const { latitude, longitude, accuracy, speed, heading } = pos?.coords ?? {};
         if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
-        onUpdate?.({ latitude, longitude, accuracy });
+        const filtered = smoother.push({
+          latitude,
+          longitude,
+          accuracy,
+          speed,
+          heading,
+          timestamp: pos?.timestamp,
+        });
+        if (!filtered) return;
+        onUpdate?.({
+          latitude: filtered.latitude,
+          longitude: filtered.longitude,
+          accuracy: filtered.accuracy,
+          speed: filtered.speedKmh,
+          heading: filtered.heading,
+          timestamp: filtered.timestampMs,
+        });
       },
       (err) => onError?.(toLocationError(err)),
       opts,

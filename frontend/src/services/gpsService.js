@@ -8,6 +8,7 @@
  */
 
 import { snapToRoad } from './roadSnappingService.js';
+import { createGpsSmoother } from './gpsFilter.js';
 
 const DEFAULT_OPTIONS = {
   enableHighAccuracy: true,
@@ -59,13 +60,16 @@ export function trackPoint(coords, timestamp) {
       ? Math.round(coords.speed * 3.6 * 10) / 10 // m/s → km/h
       : null,
     accuracyM: Number.isFinite(coords.accuracy) ? coords.accuracy : null,
+    heading: Number.isFinite(coords.heading) && coords.heading >= 0 && coords.heading <= 360
+      ? Math.round(coords.heading) % 360
+      : null,
     timestamp: isoTimestamp,
   };
 }
 
 /**
- * Start live tracking. Calls onPoint({ point }) for every device report and
- * onError({ error }) when the device cannot locate the user.
+ * Start live tracking. Calls onPoint(point) for every filtered/smoothed
+ * device report and onError(error) when the device cannot locate the user.
  *
  * Returns { stop: () => void }. The returned watch id is cleared on stop.
  *
@@ -73,22 +77,38 @@ export function trackPoint(coords, timestamp) {
  * @param {Function} [params.onPoint] - Called with each track point
  * @param {Function} [params.onError] - Called on GPS errors
  * @param {Object} [params.options] - Geolocation watchPosition options
- * @param {boolean} [params.snapToRoad=false] - Snap points to nearest road
+ * @param {boolean} [params.snapToRoadEnabled=false] - Snap points to nearest road
+ * @param {string} [params.activityType='run'] - Activity type for speed-spike rejection
  */
-export function watch({ onPoint, onError, options = {}, snapToRoadEnabled = false } = {}) {
+export function watch({ onPoint, onError, options = {}, snapToRoadEnabled = false, activityType = 'run' } = {}) {
   const geolocation = typeof navigator !== 'undefined' ? navigator.geolocation : null;
   if (!geolocation || typeof geolocation.watchPosition !== 'function') {
     onError?.(new GpsError('unsupported'));
     return { stop: () => {} };
   }
 
+  const smoother = createGpsSmoother({ activityType });
+
   const watchId = geolocation.watchPosition(
     async (position) => {
       try {
-        const point = trackPoint(position.coords, position.timestamp);
+        const rawPoint = trackPoint(position.coords, position.timestamp);
+        const filtered = smoother.push(rawPoint);
+        if (!filtered) return;
 
-        // Optionally snap to nearest road (Overpass API)
-        if (snapToRoadEnabled) {
+        const point = {
+          latitude: filtered.latitude,
+          longitude: filtered.longitude,
+          altitudeM: filtered.altitudeM ?? rawPoint.altitudeM,
+          speedKmh: filtered.speedKmh ?? rawPoint.speedKmh,
+          accuracyM: filtered.accuracyM ?? rawPoint.accuracyM,
+          heading: filtered.heading ?? rawPoint.heading,
+          timestamp: rawPoint.timestamp,
+          suppressedDrift: Boolean(filtered.suppressedDrift),
+        };
+
+        // Optionally snap to nearest road (Overpass API) when actually moving
+        if (snapToRoadEnabled && !point.suppressedDrift) {
           try {
             const snapped = await snapToRoad(point.latitude, point.longitude);
             if (snapped) {
@@ -97,7 +117,7 @@ export function watch({ onPoint, onError, options = {}, snapToRoadEnabled = fals
               point.snappedToRoad = snapped.snapped;
             }
           } catch {
-            // Silently keep raw point if snapping fails
+            // Silently keep smoothed point if snapping fails
           }
         }
 

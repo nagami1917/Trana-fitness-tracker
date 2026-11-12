@@ -223,12 +223,21 @@
         .addTo(map);
 
       if (interactive) {
+        let justDragged = false;
+        marker.on?.('dragstart', () => {
+          justDragged = false;
+        });
         marker.on?.('dragend', () => {
+          justDragged = true;
+          setTimeout(() => {
+            justDragged = false;
+          }, 80);
           const lngLat = marker.getLngLat?.();
           if (lngLat) onPick?.('move', index, { lat: lngLat.lat, lng: lngLat.lng });
         });
         el.addEventListener('click', (event) => {
           event.stopPropagation();
+          if (justDragged) return;
           onPick?.('remove', index, { lat, lng });
         });
       }
