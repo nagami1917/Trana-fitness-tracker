@@ -251,6 +251,17 @@ try {
     console.error(`✘ App: ${error.message}`);
   }
 
+  // AppShell renders the Guide replay button cleanly without auto-opening a modal on SSR
+  try {
+    const mod = await vite.ssrLoadModule('/src/components/common/AppShell.svelte');
+    const html = render(mod.default).body;
+    assert.match(html, /Open cat mascot guide/);
+    assert.doesNotMatch(html, /role="dialog"/);
+  } catch (error) {
+    failures += 1;
+    console.error(`✘ AppShell: ${error.message}`);
+  }
+
   // Onboarding wizard
   try {
     const mod = await vite.ssrLoadModule('/src/pages/Onboarding/Onboarding.svelte');

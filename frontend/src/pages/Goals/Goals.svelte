@@ -143,7 +143,7 @@
 </script>
 
 <div class="space-y-5">
-  <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between" data-tour="goals-header">
     <div>
       <span class="pill mb-2"><Target size={12} /> Goals</span>
       <h1 class="font-display text-2xl sm:text-3xl">What you’re aiming for</h1>

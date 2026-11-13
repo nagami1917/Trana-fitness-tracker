@@ -252,47 +252,49 @@
     </div>
   </div>
 
-  <!-- live / latest track activity prompt -->
-  <TrackActivityPrompt fallbackCenter={livePlace ? [livePlace.latitude, livePlace.longitude] : [14.676, 121.0437]} />
+  <div class="space-y-5" data-tour="dashboard-overview">
+    <!-- live / latest track activity prompt -->
+    <TrackActivityPrompt fallbackCenter={livePlace ? [livePlace.latitude, livePlace.longitude] : [14.676, 121.0437]} />
 
-  <!-- stat cards -->
-  <div class="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-    <StatCard
-      label="Calories burned"
-      value={kcal($todayStats.calories)}
-      unit="kcal"
-      delta={$trends.calories}
-      icon={Flame}
-      tone="rose"
-      spark={spark}
-    />
-    <StatCard
-      label="Distance"
-      value={km($todayStats.distance)}
-      unit="km"
-      delta={$trends.distance}
-      icon={Footprints}
-      tone="brand"
-      spark={spark.map((v) => v * 0.02)}
-    />
-    <StatCard
-      label="Active time"
-      value={Math.round($todayStats.minutes)}
-      unit="min"
-      delta={$trends.minutes}
-      icon={Timer}
-      tone="sky"
-      spark={spark.map((v) => v * 0.015)}
-    />
-    <StatCard
-      label="This week"
-      value={kcal($weekStats.calories)}
-      unit="kcal"
-      hint={`${$weekStats.count} session${$weekStats.count === 1 ? '' : 's'}`}
-      icon={ChartColumn}
-      tone="amber"
-      spark={spark}
-    />
+    <!-- stat cards -->
+    <div class="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+      <StatCard
+        label="Calories burned"
+        value={kcal($todayStats.calories)}
+        unit="kcal"
+        delta={$trends.calories}
+        icon={Flame}
+        tone="rose"
+        spark={spark}
+      />
+      <StatCard
+        label="Distance"
+        value={km($todayStats.distance)}
+        unit="km"
+        delta={$trends.distance}
+        icon={Footprints}
+        tone="brand"
+        spark={spark.map((v) => v * 0.02)}
+      />
+      <StatCard
+        label="Active time"
+        value={Math.round($todayStats.minutes)}
+        unit="min"
+        delta={$trends.minutes}
+        icon={Timer}
+        tone="sky"
+        spark={spark.map((v) => v * 0.015)}
+      />
+      <StatCard
+        label="This week"
+        value={kcal($weekStats.calories)}
+        unit="kcal"
+        hint={`${$weekStats.count} session${$weekStats.count === 1 ? '' : 's'}`}
+        icon={ChartColumn}
+        tone="amber"
+        spark={spark}
+      />
+    </div>
   </div>
 
   <div class="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">

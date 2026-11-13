@@ -395,7 +395,7 @@
 </script>
 
 <div class="space-y-5">
-  <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between" data-tour="activities-header">
     <div>
       <span class="pill mb-2"><RouteIcon size={12} /> Your history</span>
       <h1 class="font-display text-2xl sm:text-3xl">Activities</h1>

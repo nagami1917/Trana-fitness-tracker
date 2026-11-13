@@ -646,6 +646,7 @@
   <div class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
     <!-- input -->
     <div class="space-y-4">
+      <div data-tour="plan-activity-card">
       <Card>
         <h2 class="text-lg">Activity</h2>
         <div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -736,6 +737,7 @@
           />
         </div>
       </Card>
+      </div>
 
       <Card>
         <div class="flex flex-wrap items-start justify-between gap-3">
