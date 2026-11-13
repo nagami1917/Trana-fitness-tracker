@@ -130,27 +130,27 @@
   <!-- output -->
   <div class="flex min-w-0 flex-col gap-5">
     <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
-      <Card class="p-4">
+      <Card flat class="p-4">
         <Flame size={18} class="text-brand-500" />
-        <p class="mt-2 text-xl font-extrabold text-ink-900">{plan.calories.total}</p>
-        <p class="text-[10px] font-bold uppercase tracking-wider text-ink-400">kcal total</p>
+        <p class="num-tabular mt-2 text-xl font-extrabold text-ink-900">{plan.calories.total}</p>
+        <p class="text-[11px] font-bold uppercase tracking-wider text-ink-400">kcal total</p>
       </Card>
-      <Card class="p-4">
+      <Card flat class="p-4">
         <Wheat size={18} class="text-amber-500" />
-        <p class="mt-2 text-xl font-extrabold text-ink-900">{plan.carbs.perHourG} g</p>
-        <p class="text-[10px] font-bold uppercase tracking-wider text-ink-400">carbs / h</p>
+        <p class="num-tabular mt-2 text-xl font-extrabold text-ink-900">{plan.carbs.perHourG} g</p>
+        <p class="text-[11px] font-bold uppercase tracking-wider text-ink-400">carbs / h</p>
       </Card>
-      <Card class="p-4">
+      <Card flat class="p-4">
         <Soup size={18} class="text-sky-500" />
-        <p class="mt-2 text-xl font-extrabold text-ink-900">{plan.sodium.perHourMg}</p>
-        <p class="text-[10px] font-bold uppercase tracking-wider text-ink-400">mg sodium / h</p>
+        <p class="num-tabular mt-2 text-xl font-extrabold text-ink-900">{plan.sodium.perHourMg}</p>
+        <p class="text-[11px] font-bold uppercase tracking-wider text-ink-400">mg sodium / h</p>
       </Card>
-      <Card class="p-4">
+      <Card flat class="p-4">
         <Droplets size={18} class="text-blue-500" />
-        <p class="mt-2 text-xl font-extrabold text-ink-900">
+        <p class="num-tabular mt-2 text-xl font-extrabold text-ink-900">
           {$unitSystem === 'imperial' ? Math.round(toDisplayFluid(plan.fluid.perHourMl, 'imperial')) : plan.fluid.perHourMl}
         </p>
-        <p class="text-[10px] font-bold uppercase tracking-wider text-ink-400">{fluidUnit($unitSystem)} fluid / h</p>
+        <p class="text-[11px] font-bold uppercase tracking-wider text-ink-400">{fluidUnit($unitSystem)} fluid / h</p>
       </Card>
     </div>
 
@@ -178,7 +178,7 @@
       <ol class="mt-3 space-y-3">
         {#each plan.timeline as step}
           <li class="flex items-start gap-3">
-            <div class="w-28 shrink-0 rounded-xl bg-brand-50 px-2.5 py-1.5 text-center text-[10px] font-extrabold uppercase leading-tight text-brand-700">
+            <div class="w-28 shrink-0 rounded-xl bg-brand-50 px-2.5 py-1.5 text-center text-[11px] font-extrabold uppercase leading-tight text-brand-700">
               {step.window}
             </div>
             <div class="min-w-0">
@@ -186,7 +186,7 @@
               <p class="text-xs font-semibold text-ink-500">{step.detail}</p>
             </div>
             {#if step.carbsG > 0}
-              <span class="ml-auto shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold text-amber-700">
+              <span class="num-tabular ml-auto shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-extrabold text-amber-700">
                 {step.carbsG} g
               </span>
             {/if}

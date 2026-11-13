@@ -1,7 +1,7 @@
 <script>
-  let { class: cls = '', padded = true, soft = false, children } = $props();
+  let { class: cls = '', padded = true, soft = false, flat = false, children } = $props();
 </script>
 
-<div class="{soft ? 'card-soft' : 'card'} {padded ? 'p-4 sm:p-6' : ''} {cls}">
+<div class="{flat ? 'card-flat' : soft ? 'card-soft' : 'card'} {padded ? 'p-4 sm:p-6' : ''} {cls}">
   {@render children?.()}
 </div>

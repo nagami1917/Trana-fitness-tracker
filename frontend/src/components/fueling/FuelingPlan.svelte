@@ -58,15 +58,15 @@
     <div class="relative">
       <div class="flex items-center justify-between gap-3">
         <p class="text-[11px] font-extrabold uppercase tracking-[0.14em] text-white/80">Predicted duration</p>
-        <span class="rounded-full bg-white/15 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide backdrop-blur">
+        <span class="rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide backdrop-blur">
           {INTENSITY_COPY[f.intensity]?.label ?? f.intensity}
         </span>
       </div>
       <div class="mt-1 flex flex-wrap items-end gap-x-3 gap-y-1">
-        <p class="font-display text-[40px] font-extrabold leading-none">{fmtDuration(d.minutes)}</p>
-        <p class="pb-1 text-sm font-bold text-white/80">{Math.round(d.low)}–{Math.round(d.high)} min range</p>
+        <p class="num-tabular font-display text-[40px] font-extrabold leading-none">{fmtDuration(d.minutes)}</p>
+        <p class="num-tabular pb-1 text-sm font-bold text-white/80">{Math.round(d.low)}–{Math.round(d.high)} min range</p>
       </div>
-      <div class="mt-3 flex flex-wrap items-center gap-2 text-[11px] font-bold text-white/85">
+      <div class="num-tabular mt-3 flex flex-wrap items-center gap-2 text-[11px] font-bold text-white/85">
         <span class="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1">
           <Gauge size={12} /> {d.paceMinPerKm ? pace(d.paceMinPerKm, $unitSystem) : speed(d.speedKmh, $unitSystem)}
         </span>
@@ -83,25 +83,25 @@
   <!-- numbers -->
   <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
     {#each tiles as tile (tile.label)}
-      <div class="rounded-2xl border border-brand-100/80 bg-white p-3 shadow-soft">
+      <div class="card-flat p-3">
         <span class="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br shadow-inset {tile.tone}">
           <tile.Icon size={17} />
         </span>
-        <p class="mt-2 text-[10px] font-extrabold uppercase tracking-[0.08em] text-ink-400">{tile.label}</p>
-        <p class="font-display text-lg font-extrabold leading-tight text-ink-900">
+        <p class="mt-2 text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400">{tile.label}</p>
+        <p class="num-tabular font-display text-lg font-extrabold leading-tight text-ink-900">
           {tile.value}<span class="ml-0.5 text-[11px] font-bold text-ink-400">{tile.unit}</span>
         </p>
-        <p class="text-[10px] font-bold text-brand-500">{tile.sub}</p>
+        <p class="num-tabular text-[11px] font-bold text-brand-500">{tile.sub}</p>
       </div>
     {/each}
   </div>
 
   {#if !compact}
     <!-- timeline -->
-    <div class="rounded-3xl border border-brand-100 bg-white p-4 shadow-soft">
+    <div class="rounded-3xl border border-brand-100 bg-white p-4">
       <div class="flex items-center justify-between gap-2">
         <h3 class="text-sm">Fueling timeline</h3>
-        <span class="pill">{f.carbs.dailyTargetG} g carbs today</span>
+        <span class="pill num-tabular">{f.carbs.dailyTargetG} g carbs today</span>
       </div>
       <ol class="mt-3 space-y-0">
         {#each f.timeline as step, index (step.label + step.window)}
@@ -116,12 +116,12 @@
             <div class="min-w-0 flex-1 pt-0.5">
               <div class="flex flex-wrap items-baseline gap-x-2">
                 <p class="text-xs font-extrabold text-ink-900">{step.label}</p>
-                <span class="text-[10px] font-bold uppercase tracking-wide text-brand-500">{step.window}</span>
+                <span class="text-[11px] font-bold uppercase tracking-wide text-brand-500">{step.window}</span>
               </div>
               <p class="text-[11px] font-semibold text-ink-400">{step.detail}</p>
             </div>
             {#if step.carbsG > 0}
-              <span class="shrink-0 self-start rounded-lg bg-brand-50 px-2 py-1 text-[10px] font-extrabold text-brand-600">+{step.carbsG} g</span>
+              <span class="num-tabular shrink-0 self-start rounded-lg bg-brand-50 px-2 py-1 text-[11px] font-extrabold text-brand-600">+{step.carbsG} g</span>
             {/if}
           </li>
         {/each}
@@ -142,7 +142,7 @@
         {/each}
       </ul>
       {#if plan.history_used !== undefined}
-        <p class="mt-3 border-t border-brand-100 pt-2 text-[10px] font-bold uppercase tracking-wide text-ink-400">
+        <p class="mt-3 border-t border-brand-100 pt-2 text-[11px] font-bold uppercase tracking-wide text-ink-400">
           Personalised from {plan.history_used} past {plan.activity_type} session{plan.history_used === 1 ? '' : 's'}
           {#if d.referenceSpeedKmh}· base pace {speed(d.referenceSpeedKmh, $unitSystem)}{/if}
         </p>

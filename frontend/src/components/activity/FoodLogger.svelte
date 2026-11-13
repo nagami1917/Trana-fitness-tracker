@@ -25,10 +25,10 @@
   let editForm = $state(null);
 
   const MEALS = [
-    { id: 'breakfast', label: 'Breakfast', icon: '☀️' },
-    { id: 'lunch', label: 'Lunch', icon: '🌞' },
-    { id: 'dinner', label: 'Dinner', icon: '🌙' },
-    { id: 'snack', label: 'Snack', icon: '🍎' },
+    { id: 'breakfast', label: 'Breakfast' },
+    { id: 'lunch', label: 'Lunch' },
+    { id: 'dinner', label: 'Dinner' },
+    { id: 'snack', label: 'Snack' },
   ];
 
   const ATHLETE_PRESETS = [
@@ -128,7 +128,18 @@
       const data = await dailySessionApi.addFood(targetSession.id, payload);
       if (data?.session) updateSession(data.session);
       rememberFood(payload);
-      notify(`Logged ${item.food_name}`, 'success');
+
+      const createdFoodId = data?.data?.id ?? data?.session?.foods?.at?.(-1)?.id;
+      const targetSessionId = targetSession.id;
+      notify(`Logged ${item.food_name}`, {
+        tone: 'success',
+        onUndo: createdFoodId
+          ? async () => {
+              const res = await dailySessionApi.removeFood(targetSessionId, createdFoodId);
+              if (res?.session) updateSession(res.session);
+            }
+          : null,
+      });
     } catch (error) {
       notify(error.message || 'Failed to add food', 'error');
     } finally {
@@ -255,10 +266,10 @@
   }
 </script>
 
-<div class="rounded-2xl border border-brand-100 bg-white shadow-card p-4 sm:p-6">
+<div class="card p-4 sm:p-6">
   <div class="flex items-center justify-between gap-2 mb-4">
     <div>
-      <p class="text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400">Food Log</p>
+      <p class="text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink-400">Food Log</p>
       <p class="text-lg font-display font-extrabold text-ink-900">What did you eat today?</p>
     </div>
     {#if session}
@@ -278,12 +289,12 @@
   {#if session}
     <div class="grid grid-cols-2 gap-3 mb-4">
       {#each Object.entries(meals) as [mealType, mealFoods] (mealType)}
-        <div class="rounded-xl border border-brand-100 bg-white p-3 shadow-sm">
+        <div class="card-flat p-3">
           <div class="flex items-center justify-between mb-1">
             <span class="text-xs font-bold text-ink-700 capitalize">{mealType}</span>
-            <span class="text-[10px] font-bold text-ink-400">{mealFoods.length}</span>
+            <span class="num-tabular text-[11px] font-bold text-ink-400">{mealFoods.length}</span>
           </div>
-          <div class="flex items-baseline gap-1">
+          <div class="num-tabular flex items-baseline gap-1">
             <span class="text-lg font-extrabold text-ink-900">{mealFoods.reduce((s, f) => s + Number(f.calories || 0), 0)}</span>
             <span class="text-xs font-bold text-ink-400">kcal</span>
           </div>
@@ -293,12 +304,12 @@
                 <li class="flex items-center gap-1">
                   <button
                     type="button"
-                    class="flex-1 min-w-0 flex items-center justify-between px-2 py-1 rounded-lg hover:bg-brand-50 cursor-pointer text-left"
+                    class="flex-1 min-w-0 flex items-center justify-between px-2 py-1 rounded-lg hover:bg-white cursor-pointer text-left"
                     onclick={() => startEdit(food)}
                     title="Edit {food.food_name}"
                   >
                     <span class="text-xs text-ink-700 truncate">{food.food_name}</span>
-                    <span class="text-[11px] font-bold text-ink-400 shrink-0 ml-1">{food.calories}</span>
+                    <span class="num-tabular text-[11px] font-bold text-ink-400 shrink-0 ml-1">{food.calories}</span>
                   </button>
                   <button
                     type="button"
@@ -317,24 +328,24 @@
       {/each}
     </div>
 
-    <div class="rounded-xl border border-brand-100 bg-white p-3.5 shadow-sm mb-4">
-      <p class="text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-2">Daily Totals</p>
-      <div class="grid grid-cols-4 gap-2 text-center">
+    <div class="card-flat p-3.5 mb-4">
+      <p class="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400 mb-2">Daily Totals</p>
+      <div class="num-tabular grid grid-cols-4 gap-2 text-center">
         <div>
           <div class="text-lg font-extrabold text-ink-900">{totals.calories}</div>
-          <div class="text-[10px] font-bold text-ink-400">kcal</div>
+          <div class="text-[11px] font-bold text-ink-400">kcal</div>
         </div>
         <div>
           <div class="text-lg font-extrabold text-emerald-600">{totals.carbs}</div>
-          <div class="text-[10px] font-bold text-ink-400">carbs</div>
+          <div class="text-[11px] font-bold text-ink-400">carbs</div>
         </div>
         <div>
           <div class="text-lg font-extrabold text-rose-500">{totals.protein}</div>
-          <div class="text-[10px] font-bold text-ink-400">protein</div>
+          <div class="text-[11px] font-bold text-ink-400">protein</div>
         </div>
         <div>
           <div class="text-lg font-extrabold text-amber-500">{totals.fat}</div>
-          <div class="text-[10px] font-bold text-ink-400">fat</div>
+          <div class="text-[11px] font-bold text-ink-400">fat</div>
         </div>
       </div>
     </div>
@@ -342,7 +353,7 @@
     {#if adding}
       <form class="rounded-xl border border-brand-100 bg-brand-50/30 p-4 shadow-sm space-y-3" onsubmit={(event) => { event.preventDefault(); addFood(); }}>
         <div>
-          <p class="text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1.5">1-tap athlete quick-add</p>
+          <p class="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400 mb-1.5">1-tap athlete quick-add</p>
           <div class="flex flex-wrap gap-1.5">
             {#each (recentFoods.length ? recentFoods.concat(ATHLETE_PRESETS.filter((p) => !recentFoods.some((r) => r.food_name === p.food_name))).slice(0, 6) : ATHLETE_PRESETS) as preset (preset.food_name)}
               <button
@@ -351,14 +362,14 @@
                 onclick={() => quickLogFood(preset)}
                 class="rounded-full border border-brand-100 bg-white px-2.5 py-1 text-[11px] font-bold text-ink-700 hover:border-brand-300 hover:bg-brand-50 transition cursor-pointer disabled:opacity-50"
               >
-                + {preset.food_name} <span class="text-ink-400">({preset.calories})</span>
+                + {preset.food_name} <span class="num-tabular text-ink-400">({preset.calories})</span>
               </button>
             {/each}
           </div>
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div class="col-span-2">
-            <label for="food-name" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Food Name</label>
+            <label for="food-name" class="block text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400 mb-1">Food Name</label>
             <input
               id="food-name"
               bind:value={form.food_name}
@@ -367,38 +378,38 @@
             />
           </div>
           <div>
-            <label for="food-meal" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Meal</label>
+            <label for="food-meal" class="block text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400 mb-1">Meal</label>
             <select id="food-meal" bind:value={form.meal_type} class="w-full px-3 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none">
               {#each MEALS as meal (meal.id)}
-                <option value={meal.id}>{meal.icon} {meal.label}</option>
+                <option value={meal.id}>{meal.label}</option>
               {/each}
             </select>
           </div>
           <div>
-            <label for="food-calories" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Calories</label>
-            <input id="food-calories" type="number" min="0" bind:value={form.calories} class="w-full px-3 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" placeholder="0" />
+            <label for="food-calories" class="block text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400 mb-1">Calories</label>
+            <input id="food-calories" type="number" min="0" bind:value={form.calories} class="num-tabular w-full px-3 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" placeholder="0" />
           </div>
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
           <div>
-            <label for="food-carbs" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Carbs (g)</label>
-            <input id="food-carbs" type="number" min="0" bind:value={form.carbs_g} class="w-full px-2.5 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" placeholder="0" />
+            <label for="food-carbs" class="block text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400 mb-1">Carbs (g)</label>
+            <input id="food-carbs" type="number" min="0" bind:value={form.carbs_g} class="num-tabular w-full px-2.5 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" placeholder="0" />
           </div>
           <div>
-            <label for="food-protein" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Protein (g)</label>
-            <input id="food-protein" type="number" min="0" bind:value={form.protein_g} class="w-full px-2.5 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" placeholder="0" />
+            <label for="food-protein" class="block text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400 mb-1">Protein (g)</label>
+            <input id="food-protein" type="number" min="0" bind:value={form.protein_g} class="num-tabular w-full px-2.5 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" placeholder="0" />
           </div>
           <div>
-            <label for="food-fat" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Fat (g)</label>
-            <input id="food-fat" type="number" min="0" bind:value={form.fat_g} class="w-full px-2.5 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" placeholder="0" />
+            <label for="food-fat" class="block text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400 mb-1">Fat (g)</label>
+            <input id="food-fat" type="number" min="0" bind:value={form.fat_g} class="num-tabular w-full px-2.5 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" placeholder="0" />
           </div>
           <div>
-            <label for="food-qty" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Qty</label>
-            <input id="food-qty" type="number" min="1" bind:value={form.quantity} class="w-full px-2.5 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" placeholder="1" />
+            <label for="food-qty" class="block text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400 mb-1">Qty</label>
+            <input id="food-qty" type="number" min="1" bind:value={form.quantity} class="num-tabular w-full px-2.5 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" placeholder="1" />
           </div>
         </div>
         <div>
-          <label for="food-notes" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Notes</label>
+          <label for="food-notes" class="block text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400 mb-1">Notes</label>
           <textarea
             id="food-notes"
             bind:value={form.notes}
@@ -410,7 +421,7 @@
         <button
           type="submit"
           disabled={busy}
-          class="w-full rounded-xl py-2.5 border border-transparent bg-brand-gradient text-white text-sm font-bold shadow-glow hover:scale-[1.01] transition disabled:opacity-60 cursor-pointer"
+          class="btn-primary w-full"
         >
           Add Food
         </button>
@@ -422,7 +433,7 @@
         <h4 class="text-xs font-extrabold text-brand-700 uppercase tracking-[0.1em]">Edit Food</h4>
         <div class="grid grid-cols-2 gap-3">
           <div class="col-span-2">
-            <label for="edit-food-name" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Food Name</label>
+            <label for="edit-food-name" class="block text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400 mb-1">Food Name</label>
             <input
               id="edit-food-name"
               bind:value={editForm.food_name}
@@ -430,7 +441,7 @@
             />
           </div>
           <div>
-            <label for="edit-food-meal" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Meal</label>
+            <label for="edit-food-meal" class="block text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400 mb-1">Meal</label>
             <select id="edit-food-meal" bind:value={editForm.meal_type} class="w-full px-3 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none">
               {#each MEALS as meal (meal.id)}
                 <option value={meal.id}>{meal.label}</option>
@@ -438,36 +449,36 @@
             </select>
           </div>
           <div>
-            <label for="edit-food-calories" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Calories</label>
-            <input id="edit-food-calories" type="number" min="0" bind:value={editForm.calories} class="w-full px-3 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" />
+            <label for="edit-food-calories" class="block text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400 mb-1">Calories</label>
+            <input id="edit-food-calories" type="number" min="0" bind:value={editForm.calories} class="num-tabular w-full px-3 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" />
           </div>
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
           <div>
-            <label for="edit-food-carbs" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Carbs (g)</label>
-            <input id="edit-food-carbs" type="number" min="0" bind:value={editForm.carbs_g} class="w-full px-2.5 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" />
+            <label for="edit-food-carbs" class="block text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400 mb-1">Carbs (g)</label>
+            <input id="edit-food-carbs" type="number" min="0" bind:value={editForm.carbs_g} class="num-tabular w-full px-2.5 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" />
           </div>
           <div>
-            <label for="edit-food-protein" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Protein (g)</label>
-            <input id="edit-food-protein" type="number" min="0" bind:value={editForm.protein_g} class="w-full px-2.5 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" />
+            <label for="edit-food-protein" class="block text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400 mb-1">Protein (g)</label>
+            <input id="edit-food-protein" type="number" min="0" bind:value={editForm.protein_g} class="num-tabular w-full px-2.5 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" />
           </div>
           <div>
-            <label for="edit-food-fat" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Fat (g)</label>
-            <input id="edit-food-fat" type="number" min="0" bind:value={editForm.fat_g} class="w-full px-2.5 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" />
+            <label for="edit-food-fat" class="block text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400 mb-1">Fat (g)</label>
+            <input id="edit-food-fat" type="number" min="0" bind:value={editForm.fat_g} class="num-tabular w-full px-2.5 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" />
           </div>
           <div>
-            <label for="edit-food-qty" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Qty</label>
-            <input id="edit-food-qty" type="number" min="1" bind:value={editForm.quantity} class="w-full px-2.5 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" />
+            <label for="edit-food-qty" class="block text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400 mb-1">Qty</label>
+            <input id="edit-food-qty" type="number" min="1" bind:value={editForm.quantity} class="num-tabular w-full px-2.5 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" />
           </div>
         </div>
         <div>
-          <label for="edit-food-notes" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Notes</label>
+          <label for="edit-food-notes" class="block text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400 mb-1">Notes</label>
           <input id="edit-food-notes" bind:value={editForm.notes} class="w-full px-3 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" placeholder="Optional note" />
         </div>
         <div class="flex flex-wrap gap-2">
-          <button type="submit" disabled={busy} class="flex-1 rounded-xl py-2.5 border border-transparent bg-brand-gradient text-white text-xs font-bold cursor-pointer disabled:opacity-60">Save</button>
-          <button type="button" onclick={cancelEdit} class="flex-1 rounded-xl py-2.5 border border-brand-100 bg-white text-ink-700 text-xs font-bold cursor-pointer">Cancel</button>
-          <button type="button" disabled={busy} onclick={() => deleteFood(editingFoodId)} class="rounded-xl px-3 py-2.5 border border-rose-200 bg-rose-50 text-rose-600 text-xs font-bold cursor-pointer disabled:opacity-60">Delete</button>
+          <button type="submit" disabled={busy} class="btn-primary flex-1 !py-2 !text-xs">Save</button>
+          <button type="button" onclick={cancelEdit} class="btn-ghost flex-1 !py-2 !text-xs">Cancel</button>
+          <button type="button" disabled={busy} onclick={() => deleteFood(editingFoodId)} class="rounded-xl px-3 py-2 border border-rose-200 bg-rose-50 text-rose-600 text-xs font-bold cursor-pointer disabled:opacity-60">Delete</button>
         </div>
       </form>
     {/if}

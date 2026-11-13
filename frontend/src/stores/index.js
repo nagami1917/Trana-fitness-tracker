@@ -25,10 +25,28 @@ const BOOT_CACHE_KEY = 'trana:boot_cache:v1';
 const BOOT_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 let toastTimer;
-export function notify(message, tone = 'success') {
-  toast.set({ id: Date.now(), message, tone });
+export function notify(message, toneOrOptions = 'success', maybeOptions = {}) {
+  const opts = typeof toneOrOptions === 'string'
+    ? { tone: toneOrOptions, ...maybeOptions }
+    : { tone: 'success', ...(toneOrOptions || {}) };
+  const durationMs = opts.durationMs ?? (typeof opts.onUndo === 'function' ? 5000 : 3600);
+  const id = Date.now() + Math.random();
+  toast.set({
+    id,
+    message,
+    tone: opts.tone ?? 'success',
+    onUndo: typeof opts.onUndo === 'function' ? opts.onUndo : null,
+    undoLabel: opts.undoLabel || 'Undo',
+  });
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.set(null), 3600);
+  toastTimer = setTimeout(() => {
+    toast.update((current) => (current?.id === id ? null : current));
+  }, durationMs);
+}
+
+export function dismissToast() {
+  clearTimeout(toastTimer);
+  toast.set(null);
 }
 
 function readBootCache() {

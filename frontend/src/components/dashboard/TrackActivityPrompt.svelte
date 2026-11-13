@@ -3,6 +3,8 @@
     Activity,
     ArrowRight,
     CheckCircle2,
+    ChevronDown,
+    ChevronUp,
     LoaderCircle,
     MapPin,
     Pause,
@@ -35,6 +37,8 @@
   import { distanceUnit, paceUnit, speedUnit } from '../../lib/units.js';
 
   let { fallbackCenter = [14.676, 121.0437] } = $props();
+
+  let historyMapExpanded = $state(false);
 
   const liveUserPos = $derived(
     liveTracker.currentPosition ??
@@ -180,32 +184,72 @@
 </script>
 
 {#if !view}
-  <Card class="!p-4 sm:!p-5">
+  <!-- Compact Tier-1 idle banner -->
+  <Card flat class="!p-3.5 sm:!p-4">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div class="flex items-start gap-3">
-        <span class="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-brand-50 text-brand-500">
-          <MapPin size={20} />
+      <div class="flex items-center gap-3">
+        <span class="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-brand-100/70 text-brand-600">
+          <MapPin size={19} />
         </span>
-        <div>
+        <div class="min-w-0">
           <div class="flex flex-wrap items-center gap-2">
-            <h2 class="text-base font-extrabold text-ink-900">Track Activity</h2>
-            <span class="rounded-full bg-brand-50 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-brand-600">
+            <h2 class="text-sm sm:text-base font-extrabold text-ink-900">Track Activity</h2>
+            <span class="rounded-full bg-brand-100/80 px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wide text-brand-700">
               Ready
             </span>
           </div>
-          <p class="mt-0.5 text-xs font-semibold text-ink-400">
-            Start a workout in Track Activity to see your live status, recorded map, time, km, pace, and calories update right here.
+          <p class="mt-0.5 truncate text-xs font-semibold text-ink-400">
+            Live GPS map, timer, distance, pace, and fueling checkpoints sync automatically here.
           </p>
         </div>
       </div>
 
       <button
         type="button"
-        class="btn-primary w-full shrink-0 !py-2.5 !text-xs sm:w-auto"
+        class="btn-ghost w-full shrink-0 !py-2 !px-3.5 !text-xs font-extrabold text-brand-600 sm:w-auto"
         onclick={() => navigate('/track')}
       >
-        <Play size={14} fill="currentColor" /> Start in Track Activity
+        <Play size={13} fill="currentColor" /> Start in Track Activity
       </button>
+    </div>
+  </Card>
+{:else if view.fromHistory && !historyMapExpanded}
+  <!-- Compact Tier-1 summary bar when returning to Dashboard with a past GPS session (avoids dual maps above the fold) -->
+  <Card flat class="!p-3.5 sm:!p-4">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div class="flex items-center gap-3 min-w-0">
+        <ActivityIcon type={view.activity_type} size="md" />
+        <div class="min-w-0">
+          <div class="flex flex-wrap items-center gap-2">
+            <h2 class="text-sm sm:text-base font-extrabold text-ink-900">
+              Last GPS Track · {activityLabel(view.activity_type)}
+            </h2>
+            <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-extrabold text-emerald-700">
+              <CheckCircle2 size={11} /> {view.statusLabel}
+            </span>
+          </div>
+          <p class="num-tabular mt-0.5 truncate text-xs font-semibold text-ink-400">
+            {formatDistance(view.distance_km, $unitSystem)} {distanceUnit($unitSystem)} · {fmtDuration(view.duration_min)} · {kcal(view.calories)} kcal{#if whenSummary} · {whenSummary}{/if}
+          </p>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2 shrink-0">
+        <button
+          type="button"
+          class="btn-ghost !py-2 !px-3 !text-xs"
+          onclick={() => (historyMapExpanded = true)}
+        >
+          <ChevronDown size={13} /> Map preview
+        </button>
+        <button
+          type="button"
+          class="btn-ghost !py-2 !px-3 !text-xs font-extrabold text-brand-600"
+          onclick={() => navigate('/track')}
+        >
+          <Activity size={13} /> Track new activity
+        </button>
+      </div>
     </div>
   </Card>
 {:else}
@@ -259,6 +303,15 @@
       </div>
 
       <div class="flex flex-wrap items-center gap-2">
+        {#if view.fromHistory}
+          <button
+            type="button"
+            class="btn-ghost !py-2 !px-3 !text-xs"
+            onclick={() => (historyMapExpanded = false)}
+          >
+            <ChevronUp size={13} /> Collapse
+          </button>
+        {/if}
         {#if view.isLive}
           <button
             type="button"
@@ -315,7 +368,7 @@
           showAttribution={false}
           class="!rounded-2xl"
         >
-          <div class="pointer-events-none absolute left-3 top-3 z-10 rounded-xl bg-white/90 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-brand-600 shadow-soft">
+          <div class="pointer-events-none absolute left-3 top-3 z-10 rounded-xl bg-white/90 px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide text-brand-600 shadow-soft">
             {mapBadge}
           </div>
           {#if !view.isLive && view.route.length < 2 && view.plannedPath.length < 2}
@@ -330,8 +383,8 @@
         <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
           {#each metricTiles as tile (tile.label)}
             <div class="rounded-2xl border border-brand-100 bg-brand-50/40 px-3.5 py-2.5">
-              <p class="text-[10px] font-extrabold uppercase tracking-[0.08em] text-ink-400">{tile.label}</p>
-              <p class="mt-0.5 font-display text-base sm:text-lg font-extrabold text-ink-900 tabular-nums">
+              <p class="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400">{tile.label}</p>
+              <p class="num-tabular mt-0.5 font-display text-base sm:text-lg font-extrabold text-ink-900">
                 {tile.value}
               </p>
             </div>

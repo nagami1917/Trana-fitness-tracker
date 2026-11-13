@@ -26,6 +26,7 @@
     Upload,
   } from 'lucide-svelte';
   import Card from '../../components/common/Card.svelte';
+  import Skeleton from '../../components/common/Skeleton.svelte';
   import BusyOverlay from '../../components/common/BusyOverlay.svelte';
   import ActivityIcon from '../../components/activities/ActivityIcon.svelte';
   import TranaMap from '../../components/map/TranaMap.svelte';
@@ -777,22 +778,22 @@
   </div>
 
   <div class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
-    <!-- input -->
-    <div class="space-y-4 min-w-0">
+    <!-- input (map-first on mobile via flex-col-reverse) -->
+    <div class="flex flex-col-reverse gap-4 min-w-0 xl:flex-col">
       <div class="scroll-mt-20" data-tour="plan-activity-card">
-      <Card>
-        <h2 class="text-lg">Activity</h2>
+      <Card flat>
+        <h2 class="text-lg">Activity & conditions</h2>
         <div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {#each TYPES as type (type.id)}
             <button
               class="flex flex-col items-start gap-2 rounded-2xl border p-3 text-left transition {form.activity_type === type.id
                 ? 'border-transparent bg-brand-gradient text-white shadow-glow'
-                : 'border-brand-100 bg-white/70 text-ink-500 hover:border-brand-200'}"
+                : 'border-brand-100 bg-white/80 text-ink-500 hover:border-brand-200'}"
               onclick={() => pickType(type.id)}
             >
               <ActivityIcon type={type.id} size="sm" tone={form.activity_type === type.id ? 'solid' : 'brand'} />
               <span class="text-sm font-extrabold">{type.label}</span>
-              <span class="text-[10px] font-semibold leading-tight {form.activity_type === type.id ? 'text-white/80' : 'text-ink-400'}">
+              <span class="text-[11px] font-semibold leading-tight {form.activity_type === type.id ? 'text-white/80' : 'text-ink-400'}">
                 {type.hint}
               </span>
             </button>
@@ -804,7 +805,7 @@
             <span class="label">Distance {routeKm > 0 ? '(from route)' : '(from map)'}</span>
             <div class="flex gap-2">
               <input
-                class="input"
+                class="input num-tabular"
                 type="number"
                 min="0"
                 step="0.1"
@@ -816,9 +817,9 @@
               <span class="grid w-14 shrink-0 place-items-center rounded-2xl border border-brand-100 bg-brand-50 text-xs font-extrabold text-ink-500">{distanceUnit($unitSystem)}</span>
             </div>
             {#if routeKm > 0}
-              <p class="mt-1 text-[10px] font-bold text-brand-600">Measured along your planned route</p>
+              <p class="mt-1 text-[11px] font-bold text-brand-600">Measured along your planned route</p>
             {:else}
-              <p class="mt-1 text-[10px] font-semibold text-ink-400">Plot Start & Destination on the map below</p>
+              <p class="mt-1 text-[11px] font-semibold text-ink-400">Plot Start & Destination on the map</p>
             {/if}
           </div>
 
@@ -826,7 +827,7 @@
             <span class="label">Elevation gain {elevationSource === 'dem' ? '· DEM terrain' : ''}</span>
             <div class="flex gap-2">
               <input
-                class="input"
+                class="input num-tabular"
                 type="number"
                 min="0"
                 step="10"
@@ -846,7 +847,7 @@
             <span class="label"><Thermometer size={11} class="mr-1 inline" /> Expected temperature</span>
             <div class="flex gap-2">
               <input
-                class="input"
+                class="input num-tabular"
                 type="number"
                 min="-15"
                 max="120"
@@ -860,14 +861,14 @@
               <span class="grid w-14 shrink-0 place-items-center rounded-2xl border border-brand-100 bg-brand-50 text-xs font-extrabold text-ink-500">{tempUnit($unitSystem)}</span>
             </div>
             {#if routeWeather}
-              <div class="mt-1 flex items-center gap-1.5 text-[10px] font-bold text-brand-600">
-                <span>
+              <div class="mt-1 flex items-center gap-1.5 text-[11px] font-bold text-brand-600">
+                <span class="num-tabular">
                   Forecast ({routeWeather.hourLabel}): {Math.round(toDisplayTemp(routeWeather.tempC, $unitSystem))}{tempUnit($unitSystem)}
                   {#if routeWeather.humidityPct != null} · {routeWeather.humidityPct}% RH{/if}
                 </span>
                 <button
                   type="button"
-                  class="rounded-md bg-brand-50 px-1.5 py-0.5 text-[10px] font-extrabold text-brand-700 hover:bg-brand-100"
+                  class="rounded-md bg-brand-50 px-1.5 py-0.5 text-[11px] font-extrabold text-brand-700 hover:bg-brand-100"
                   onclick={() => { markEdited(); form.temperature_c = routeWeather.tempC; }}
                 >
                   Apply
@@ -1011,7 +1012,27 @@
             bind:following
             autoCenter={true}
             {showRoads}
-          />
+          >
+            {#snippet overlay()}
+              {#if form.route.length > 0}
+                <div class="pointer-events-none absolute bottom-3 left-3 right-3 z-20 flex flex-wrap items-end justify-between gap-2">
+                  <div class="pointer-events-auto inline-flex items-center gap-2 rounded-2xl border border-white/70 bg-white/90 px-3 py-1.5 text-[11px] font-extrabold text-ink-900 shadow-soft backdrop-blur-md num-tabular">
+                    <Ruler size={13} class="text-brand-600" />
+                    <span>{routeKm > 0 ? `${nf(toDisplayDistance(routeKm, $unitSystem), 2)} ${distanceUnit($unitSystem)}` : 'Start set'}</span>
+                    <span class="text-ink-400">·</span>
+                    <span>{form.route.length} {form.route.length === 1 ? 'stop' : 'stops'}</span>
+                  </div>
+                  <button
+                    type="button"
+                    class="pointer-events-auto inline-flex items-center gap-1 rounded-xl border border-white/70 bg-white/90 px-2.5 py-1.5 text-[11px] font-extrabold text-ink-700 shadow-soft backdrop-blur-md hover:text-brand-600"
+                    onclick={undoPoint}
+                  >
+                    <Undo2 size={12} /> Undo
+                  </button>
+                </div>
+              {/if}
+            {/snippet}
+          </TranaMap>
         </div>
 
         <!-- Route quick helpers -->
@@ -1097,13 +1118,14 @@
           {/if}
         </div>
 
-        {#if elevationProfile.length >= 2}
+        {#if elevationProfile.length >= 2 || loadingElevation}
           <div class="mt-3">
             <ElevationProfile
               profile={elevationProfile}
               gainM={form.elevation_gain_m}
               lossM={elevationLossM}
               source={elevationSource}
+              loading={loadingElevation}
             />
           </div>
         {/if}
@@ -1119,9 +1141,10 @@
     <!-- result -->
     <div class="space-y-4">
       {#if computing && !prediction}
-        <Card class="grid place-items-center !py-16">
-          <LoaderCircle size={26} class="animate-spin text-brand-400" />
-          <p class="mt-3 text-sm font-bold text-ink-400">Predicting duration and fueling…</p>
+        <Card class="space-y-4 p-5">
+          <Skeleton variant="chart" height={120} />
+          <Skeleton variant="cards" count={4} />
+          <Skeleton variant="rows" count={3} />
         </Card>
       {:else if !prediction}
         <Card class="grid place-items-center text-center !py-14 px-6 border-dashed border-brand-200 bg-brand-50/40">

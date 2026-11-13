@@ -3,6 +3,7 @@
   import { link } from '../../lib/router.js';
   import { dailySessionApi } from '../../services/dailySessionService.js';
   import SessionCard from './SessionCard.svelte';
+  import Skeleton from '../common/Skeleton.svelte';
   import { notify } from '../../stores/index.js';
 
   let sessions = $state([]);
@@ -34,7 +35,7 @@
 <div class="space-y-6">
   <div class="flex flex-wrap items-center justify-between gap-3">
     <div>
-      <p class="text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400">Session History</p>
+      <p class="text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink-400">Session History</p>
       <h1 class="font-display text-2xl sm:text-3xl font-extrabold text-ink-900">Your Tracking Days</h1>
     </div>
     <a href="/track" use:link class="btn-ghost text-xs">
@@ -42,9 +43,12 @@
     </a>
   </div>
 
-  <div class="rounded-2xl border border-brand-100 bg-white shadow-card p-4 sm:p-6">
+  <div class="card p-4 sm:p-6">
     {#if loading}
-      <div class="flex items-center justify-center py-8 text-ink-400 text-sm">Loading sessions…</div>
+      <div class="space-y-4">
+        <Skeleton variant="cards" count={4} />
+        <Skeleton variant="rows" count={3} />
+      </div>
     {:else if sessions.length === 0}
       <div class="text-center py-12">
         <p class="text-ink-600 text-sm font-semibold">No sessions yet.</p>
@@ -52,27 +56,27 @@
         <a
           href="/track"
           use:link
-          class="mt-4 inline-flex items-center justify-center rounded-xl px-5 py-2.5 bg-brand-gradient text-white text-xs font-bold shadow-glow"
+          class="btn-primary mt-4 !text-xs"
         >
           Go to Track Activity
         </a>
       </div>
     {:else}
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div class="rounded-xl border border-brand-100 bg-white p-4 shadow-sm">
-          <p class="text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400">Days Tracked</p>
+      <div class="num-tabular grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        <div class="card-flat p-4">
+          <p class="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400">Days Tracked</p>
           <div class="text-2xl font-display font-extrabold text-ink-900 mt-1">{totalDays}</div>
         </div>
-        <div class="rounded-xl border border-brand-100 bg-white p-4 shadow-sm">
-          <p class="text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400">Total Burned</p>
+        <div class="card-flat p-4">
+          <p class="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400">Total Burned</p>
           <div class="text-2xl font-display font-extrabold text-emerald-600 mt-1">{totalBurned} kcal</div>
         </div>
-        <div class="rounded-xl border border-brand-100 bg-white p-4 shadow-sm">
-          <p class="text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400">Total Eaten</p>
+        <div class="card-flat p-4">
+          <p class="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400">Total Eaten</p>
           <div class="text-2xl font-display font-extrabold text-rose-500 mt-1">{totalEaten} kcal</div>
         </div>
-        <div class="rounded-xl border border-brand-100 bg-white p-4 shadow-sm">
-          <p class="text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400">Avg Net/Day</p>
+        <div class="card-flat p-4">
+          <p class="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400">Avg Net/Day</p>
           <div class="text-2xl font-display font-extrabold {avgNet > 0 ? 'text-rose-500' : avgNet < 0 ? 'text-emerald-600' : 'text-ink-500'} mt-1">
             {avgNet > 0 ? `+${avgNet}` : avgNet} kcal
           </div>

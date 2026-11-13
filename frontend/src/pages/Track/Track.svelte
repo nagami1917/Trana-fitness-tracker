@@ -21,6 +21,8 @@
     Volume2,
     VolumeX,
     ShieldCheck,
+    ChevronDown,
+    ChevronUp,
   } from 'lucide-svelte';
   import TranaMap from '../../components/map/TranaMap.svelte';
   import GPSStatus from '../../components/activity/GPSStatus.svelte';
@@ -97,6 +99,7 @@
   // ── path selection: 'none' | 'create' | 'plan' ──────────────────────
   let tranaMap = $state(null);
   let pathSource = $state('none');
+  let routeToolsExpanded = $state(false);
 
   // Plan Activity route selection state
   let activePlan = $state(null);
@@ -278,6 +281,7 @@
   function selectPathSource(mode) {
     if (tracking) return;
     pathSource = mode;
+    if (mode !== 'none') routeToolsExpanded = true;
     if (mode === 'none') {
       resetPlanSnap();
       activePlan = null;
@@ -686,8 +690,8 @@
     </a>
   </div>
 
-  <!-- Sport selector + GPS status + Map options -->
-  <div class="rounded-3xl border border-brand-100 bg-white shadow-card p-4 sm:p-6 space-y-4">
+  <!-- Primary Map-First Outdoor Card -->
+  <div class="card p-4 sm:p-6 space-y-4">
     <div class="flex flex-wrap items-center justify-between gap-3 scroll-mt-20" data-tour="track-controls-header">
       <div class="flex flex-wrap items-center gap-2" role="group" aria-label="Activity type">
         {#each SPORTS as sport (sport.id)}
@@ -728,8 +732,167 @@
       </div>
     </div>
 
-    <!-- Path selection: Free GPS vs Create path vs From Plan Activity -->
-    <div class="rounded-2xl border border-brand-100 bg-brand-50/50 p-3 space-y-3">
+    <!-- Map-first canvas with translucent floating HUD overlay -->
+    <div class="relative h-[340px] sm:h-[400px] lg:h-[430px] w-full">
+      <TranaMap
+        bind:this={tranaMap}
+        {points}
+        {plannedRoute}
+        plannedWaypoints={mapPlannedWaypoints}
+        {interactiveRoute}
+        routeMode={customRouteMode}
+        {routeDashed}
+        routing={mapRouting}
+        onRoutePick={onCustomRoutePick}
+        fitRoute={!tracking && pathSource === 'plan' && Boolean(plannedRoute)}
+        center={mapCenter}
+        currentPosition={displayPosition}
+        accuracyM={displayAccuracyM}
+        heading={displayHeading}
+        {startPosition}
+        {finishPosition}
+        bind:following
+        autoCenter={true}
+        {roadSnapping}
+        {showRoads}
+      >
+        {#snippet overlay()}
+          <div class="pointer-events-none absolute bottom-3 left-3 right-3 z-20 flex flex-wrap items-end justify-between gap-2">
+            <div class="pointer-events-auto inline-flex items-center gap-2 rounded-2xl border border-white/70 bg-white/85 px-3 py-1.5 text-[11px] font-extrabold text-ink-900 shadow-soft backdrop-blur-md">
+              <MapPin size={13} class="text-brand-600" />
+              <span class="num-tabular">{selectedPathLabel}</span>
+            </div>
+            {#if tracking}
+              <div class="pointer-events-auto inline-flex items-center gap-2.5 rounded-2xl border border-white/70 bg-white/85 px-3 py-1.5 text-xs font-extrabold text-ink-900 shadow-soft backdrop-blur-md num-tabular">
+                <span class="h-2 w-2 rounded-full {paused ? 'bg-amber-400' : 'bg-emerald-500 animate-pulse'}"></span>
+                <span>{clock(durationSec)}</span>
+                <span class="text-ink-400">·</span>
+                <span>{nf(toDisplayDistance(distanceKm, $unitSystem), 2)} {distanceUnit($unitSystem)}</span>
+              </div>
+            {:else if pathSource === 'create' && customWaypoints.length > 0}
+              <div class="pointer-events-auto flex items-center gap-1.5">
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1 rounded-xl border border-white/70 bg-white/90 px-2.5 py-1.5 text-[11px] font-extrabold text-ink-700 shadow-soft backdrop-blur-md hover:text-brand-600"
+                  onclick={undoCustomPoint}
+                >
+                  <Undo2 size={12} /> Undo
+                </button>
+                {#if customWaypoints.length >= 2}
+                  <button
+                    type="button"
+                    class="inline-flex items-center gap-1 rounded-xl border border-white/70 bg-white/90 px-2.5 py-1.5 text-[11px] font-extrabold text-ink-700 shadow-soft backdrop-blur-md hover:text-brand-600"
+                    onclick={() => { following = false; tranaMap?.fitRouteBounds?.(); }}
+                  >
+                    <Maximize2 size={12} /> Fit
+                  </button>
+                {/if}
+              </div>
+            {/if}
+          </div>
+        {/snippet}
+      </TranaMap>
+    </div>
+
+    <!-- Live Metrics -->
+    <ActivityStats
+      {distanceKm}
+      {durationMin}
+      durationSec={tracking ? durationSec : null}
+      {avgSpeedKmh}
+      {avgPaceMinKm}
+      elevationGainM={elevationM}
+      calories={estimatedCalories}
+    />
+
+    {#if tracking}
+      <!-- Live Fueling & Voice Coaching Bar -->
+      <div class="rounded-2xl border p-3.5 transition {liveTracker.hydrateDue || liveTracker.fuelDue
+        ? 'border-amber-300 bg-amber-50/70'
+        : 'border-brand-100 bg-brand-50/40'}">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="num-tabular flex flex-wrap items-center gap-2 text-xs">
+            <span class="pill !bg-white text-brand-700 border border-brand-100">
+              <Droplets size={12} />
+              Target {ml(liveTracker.activeFuelTargets.fluidPerHourMl, $unitSystem)}/h · Logged {ml(liveTracker.fluidLoggedMl, $unitSystem)}
+            </span>
+            {#if liveTracker.activeFuelTargets.carbsPerHourG > 0 || durationMin >= 45}
+              <span class="pill !bg-white text-amber-700 border border-amber-200">
+                <Flame size={12} />
+                Target {liveTracker.activeFuelTargets.carbsPerHourG || 30} g/h · Logged {liveTracker.carbsLoggedG} g
+              </span>
+            {/if}
+            {#if liveTracker.wakeLockActive}
+              <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-extrabold text-emerald-700">
+                <ShieldCheck size={11} /> Screen awake
+              </span>
+            {/if}
+          </div>
+
+          <div class="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              class="btn-chip !py-1.5 {liveTracker.hydrateDue ? '!border-amber-300 !bg-amber-100 !text-amber-900' : ''}"
+              onclick={() => liveTracker.logHydration(200)}
+            >
+              <Droplets size={12} />
+              <span class="num-tabular">{liveTracker.hydrateDue ? 'Drink now (+200ml)' : `Sip +200ml · ${clock(liveTracker.nextHydrateInSec).slice(3)}`}</span>
+            </button>
+            <button
+              type="button"
+              class="btn-chip !py-1.5 {liveTracker.fuelDue ? '!border-amber-300 !bg-amber-100 !text-amber-900' : ''}"
+              onclick={() => liveTracker.logFuel(25)}
+            >
+              <Flame size={12} />
+              {liveTracker.fuelDue ? 'Fuel now (+25g)' : '+25g carbs'}
+            </button>
+            <button
+              type="button"
+              class="btn-chip !py-1.5"
+              class:btn-chip-active={liveTracker.voiceCues}
+              onclick={() => liveTracker.toggleVoiceCues()}
+              aria-label="Toggle voice pace and hydration cues"
+            >
+              {#if liveTracker.voiceCues}
+                <Volume2 size={12} /> Voice ON
+              {:else}
+                <VolumeX size={12} /> Voice OFF
+              {/if}
+            </button>
+          </div>
+        </div>
+      </div>
+    {/if}
+
+    {#if liveTracker.statusNote}
+      <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-center text-xs font-bold text-amber-800 space-y-2">
+        <p>{liveTracker.statusNote}</p>
+        {#if liveTracker.canSaveStationary}
+          <button
+            type="button"
+            class="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-[11px] font-extrabold text-amber-900 hover:bg-amber-100 transition cursor-pointer"
+            onclick={saveStationary}
+          >
+            Save as indoor / stationary session ({Math.round(durationMin)} min)
+          </button>
+        {/if}
+      </div>
+    {/if}
+
+    <!-- Action Buttons -->
+    <ActivityControls
+      {tracking}
+      {paused}
+      {saving}
+      onStart={startActivity}
+      onPause={pauseActivity}
+      onResume={resumeActivity}
+      onStop={stopActivity}
+      onDiscard={discardActivity}
+    />
+
+    <!-- Collapsible Path / Route Builder Panel (sits cleanly beneath primary controls) -->
+    <div class="card-flat p-3 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           <span class="text-[11px] font-extrabold uppercase tracking-wide text-ink-500">Path</span>
@@ -768,7 +931,7 @@
             >
               <Sparkles size={13} /> From Plan Activity
               {#if plansWithRoutes.length}
-                <span class="rounded-full px-1.5 py-0.5 text-[10px] leading-none {pathSource === 'plan' ? 'bg-white/25 text-white' : 'bg-brand-100 text-brand-700'}">
+                <span class="num-tabular rounded-full px-1.5 py-0.5 text-[11px] leading-none {pathSource === 'plan' ? 'bg-white/25 text-white' : 'bg-brand-100 text-brand-700'}">
                   {plansWithRoutes.length}
                 </span>
               {/if}
@@ -776,18 +939,29 @@
           </div>
         </div>
 
-        {#if pathSource !== 'none' && !tracking}
-          <button
-            type="button"
-            class="text-xs font-extrabold text-ink-500 hover:text-brand-600 cursor-pointer"
-            onclick={clearPath}
-          >
-            Clear path
-          </button>
-        {/if}
+        <div class="flex items-center gap-2">
+          {#if pathSource !== 'none' && !tracking}
+            <button
+              type="button"
+              class="text-xs font-extrabold text-ink-500 hover:text-brand-600 cursor-pointer"
+              onclick={clearPath}
+            >
+              Clear path
+            </button>
+          {/if}
+          {#if pathSource !== 'none'}
+            <button
+              type="button"
+              class="btn-chip !py-1"
+              onclick={() => (routeToolsExpanded = !routeToolsExpanded)}
+            >
+              {#if routeToolsExpanded}<ChevronUp size={12} /> Hide tools{:else}<ChevronDown size={12} /> Route tools{/if}
+            </button>
+          {/if}
+        </div>
       </div>
 
-      {#if pathSource === 'create'}
+      {#if pathSource === 'create' && routeToolsExpanded}
         <div class="space-y-2.5 border-t border-brand-100/80 pt-2.5">
           <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div class="flex flex-wrap items-center gap-1.5">
@@ -857,9 +1031,9 @@
                   <MapPin size={13} class="shrink-0 text-brand-500" />
                   <div class="min-w-0 flex-1">
                     <p class="truncate font-extrabold text-ink-900">{place.shortName}</p>
-                    <p class="truncate text-[10px] font-semibold text-ink-400">{place.label}</p>
+                    <p class="truncate text-[11px] font-semibold text-ink-400">{place.label}</p>
                   </div>
-                  <span class="shrink-0 text-[10px] font-extrabold text-brand-600">
+                  <span class="shrink-0 text-[11px] font-extrabold text-brand-600">
                     {customWaypoints.length ? '+ Add stop' : 'Set Start'}
                   </span>
                 </button>
@@ -908,7 +1082,7 @@
                   ? 'Start set — tap End on the map'
                   : `${customWaypoints.length} stops (Start → End)`}
             </span>
-            <span class="pill"><Ruler size={12} /> {customRouteKm > 0 ? `${nf(toDisplayDistance(customRouteKm, $unitSystem), 2)} ${distanceUnit($unitSystem)}` : '—'}</span>
+            <span class="pill num-tabular"><Ruler size={12} /> {customRouteKm > 0 ? `${nf(toDisplayDistance(customRouteKm, $unitSystem), 2)} ${distanceUnit($unitSystem)}` : '—'}</span>
             {#if customRouting}
               <span class="pill"><LoaderCircle size={12} class="animate-spin" /> Routing along roads…</span>
             {:else if customRouteMode === 'straight' && customWaypoints.length >= 2}
@@ -927,25 +1101,25 @@
             {/if}
           </div>
         </div>
-      {:else if pathSource === 'plan'}
+      {:else if pathSource === 'plan' && routeToolsExpanded}
         <div class="space-y-2.5 border-t border-brand-100/80 pt-2.5">
           {#if activePlan}
             <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-brand-200 bg-white px-3 py-2 text-xs">
               <div class="flex flex-wrap items-center gap-2">
                 <span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
-                <span class="font-extrabold capitalize text-ink-900">
+                <span class="num-tabular font-extrabold capitalize text-ink-900">
                   {activePlan.isDraft ? 'Draft from Plan Activity:' : 'Plan selected:'}
                   {nf(activePlanKm, 2)} km {activePlan.activity_type}
                 </span>
                 {#if activePlan.duration?.minutes}
-                  <span class="text-ink-500 font-semibold">· ~{Math.round(activePlan.duration.minutes)} min</span>
+                  <span class="num-tabular text-ink-500 font-semibold">· ~{Math.round(activePlan.duration.minutes)} min</span>
                 {/if}
                 {#if planSnapping}
                   <span class="inline-flex items-center gap-1 text-brand-600 font-bold">
                     <LoaderCircle size={12} class="animate-spin" /> Routing Start → End along roads…
                   </span>
                 {:else if activePlanPath.length >= 2}
-                  <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-extrabold text-emerald-700">
+                  <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-extrabold text-emerald-700">
                     Start & End displayed
                   </span>
                 {/if}
@@ -983,19 +1157,19 @@
                   >
                     <ActivityIcon type={plan.activity_type || 'run'} size="sm" />
                     <div class="min-w-0 flex-1">
-                      <p class="truncate text-xs font-extrabold capitalize text-ink-900">
+                      <p class="num-tabular truncate text-xs font-extrabold capitalize text-ink-900">
                         {nf(toDisplayDistance(plan.distance_km, $unitSystem), 2)} {distanceUnit($unitSystem)} {plan.activity_type}
                         {#if plan.isDraft}
-                          <span class="ml-1 text-[10px] font-bold text-brand-600">(Draft)</span>
+                          <span class="ml-1 text-[11px] font-bold text-brand-600">(Draft)</span>
                         {/if}
                       </p>
-                      <p class="truncate text-[10px] font-semibold text-ink-400">
+                      <p class="num-tabular truncate text-[11px] font-semibold text-ink-400">
                         {#if plan.duration?.minutes}~{Math.round(plan.duration.minutes)} min · {/if}
                         {#if plan.created_at}{shortDate(plan.created_at)} · {/if}
                         {hasRoute ? 'Start → End path' : 'Distance only'}
                       </p>
                     </div>
-                    <span class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-extrabold {hasRoute ? 'bg-brand-50 text-brand-600' : 'bg-ink-100 text-ink-500'}">
+                    <span class="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-extrabold {hasRoute ? 'bg-brand-50 text-brand-600' : 'bg-ink-100 text-ink-500'}">
                       {isSelected ? 'Shown' : hasRoute ? 'Load' : 'Set path'}
                     </span>
                   </button>
@@ -1020,129 +1194,6 @@
         </div>
       {/if}
     </div>
-
-    <!-- Live Map (explicit height so MapLibre never collapses to 0px) -->
-    <div class="relative h-[320px] sm:h-[380px] lg:h-[410px] w-full">
-      <TranaMap
-        bind:this={tranaMap}
-        {points}
-        {plannedRoute}
-        plannedWaypoints={mapPlannedWaypoints}
-        {interactiveRoute}
-        routeMode={customRouteMode}
-        {routeDashed}
-        routing={mapRouting}
-        onRoutePick={onCustomRoutePick}
-        fitRoute={!tracking && pathSource === 'plan' && Boolean(plannedRoute)}
-        center={mapCenter}
-        currentPosition={displayPosition}
-        accuracyM={displayAccuracyM}
-        heading={displayHeading}
-        {startPosition}
-        {finishPosition}
-        bind:following
-        autoCenter={true}
-        {roadSnapping}
-        {showRoads}
-      />
-    </div>
-
-    <!-- Live Metrics -->
-    <ActivityStats
-      {distanceKm}
-      {durationMin}
-      durationSec={tracking ? durationSec : null}
-      {avgSpeedKmh}
-      {avgPaceMinKm}
-      elevationGainM={elevationM}
-      calories={estimatedCalories}
-    />
-
-    {#if tracking}
-      <!-- Live Fueling & Voice Coaching Bar -->
-      <div class="rounded-2xl border p-3.5 transition {liveTracker.hydrateDue || liveTracker.fuelDue
-        ? 'border-amber-300 bg-amber-50/70'
-        : 'border-brand-100 bg-brand-50/40'}">
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <div class="flex flex-wrap items-center gap-2 text-xs">
-            <span class="pill !bg-white text-brand-700 border border-brand-100">
-              <Droplets size={12} />
-              Target {ml(liveTracker.activeFuelTargets.fluidPerHourMl, $unitSystem)}/h · Logged {ml(liveTracker.fluidLoggedMl, $unitSystem)}
-            </span>
-            {#if liveTracker.activeFuelTargets.carbsPerHourG > 0 || durationMin >= 45}
-              <span class="pill !bg-white text-amber-700 border border-amber-200">
-                <Flame size={12} />
-                Target {liveTracker.activeFuelTargets.carbsPerHourG || 30} g/h · Logged {liveTracker.carbsLoggedG} g
-              </span>
-            {/if}
-            {#if liveTracker.wakeLockActive}
-              <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-extrabold text-emerald-700">
-                <ShieldCheck size={11} /> Screen awake
-              </span>
-            {/if}
-          </div>
-
-          <div class="flex flex-wrap items-center gap-1.5">
-            <button
-              type="button"
-              class="btn-chip !py-1 {liveTracker.hydrateDue ? '!border-amber-300 !bg-amber-100 !text-amber-900' : ''}"
-              onclick={() => liveTracker.logHydration(200)}
-            >
-              <Droplets size={12} />
-              {liveTracker.hydrateDue ? 'Drink now (+200ml)' : `Sip +200ml · ${clock(liveTracker.nextHydrateInSec).slice(3)}`}
-            </button>
-            <button
-              type="button"
-              class="btn-chip !py-1 {liveTracker.fuelDue ? '!border-amber-300 !bg-amber-100 !text-amber-900' : ''}"
-              onclick={() => liveTracker.logFuel(25)}
-            >
-              <Flame size={12} />
-              {liveTracker.fuelDue ? 'Fuel now (+25g)' : '+25g carbs'}
-            </button>
-            <button
-              type="button"
-              class="btn-chip !py-1"
-              class:btn-chip-active={liveTracker.voiceCues}
-              onclick={() => liveTracker.toggleVoiceCues()}
-              aria-label="Toggle voice pace and hydration cues"
-            >
-              {#if liveTracker.voiceCues}
-                <Volume2 size={12} /> Voice ON
-              {:else}
-                <VolumeX size={12} /> Voice OFF
-              {/if}
-            </button>
-          </div>
-        </div>
-      </div>
-    {/if}
-
-    {#if liveTracker.statusNote}
-      <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-center text-xs font-bold text-amber-800 space-y-2">
-        <p>{liveTracker.statusNote}</p>
-        {#if liveTracker.canSaveStationary}
-          <button
-            type="button"
-            class="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-[11px] font-extrabold text-amber-900 hover:bg-amber-100 transition cursor-pointer"
-            onclick={saveStationary}
-          >
-            Save as indoor / stationary session ({Math.round(durationMin)} min)
-          </button>
-        {/if}
-      </div>
-    {/if}
-
-    <!-- Action Buttons -->
-    <ActivityControls
-      {tracking}
-      {paused}
-      {saving}
-      onStart={startActivity}
-      onPause={pauseActivity}
-      onResume={resumeActivity}
-      onStop={stopActivity}
-      onDiscard={discardActivity}
-    />
   </div>
 
   <!-- Daily Session & Food Log -->
