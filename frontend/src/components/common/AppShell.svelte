@@ -19,6 +19,7 @@
   import { onMount } from 'svelte';
   import { route, navigate, link, isActive } from '../../lib/router.js';
   import { profile, session, logout, plans, todayStats } from '../../stores/index.js';
+  import { liveTracker } from '../../lib/liveTracker.svelte.js';
   import { api } from '../../services/client.js';
   import { nf } from '../../lib/format.js';
   import Logo from './Logo.svelte';
@@ -167,6 +168,11 @@
           >
             <item.Icon size={19} strokeWidth={2.2} />
             <span>{item.label}</span>
+            {#if item.href === '/track' && liveTracker.tracking}
+              <span class="ml-auto rounded-full px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide {liveTracker.paused ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-700'}">
+                {liveTracker.paused ? 'Paused' : 'Live'}
+              </span>
+            {/if}
           </a>
         {/each}
       </nav>

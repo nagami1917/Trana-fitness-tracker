@@ -152,7 +152,11 @@ try {
         assert.match(html, /coordinates and IP/);
         assert.ok(html.indexOf('coordinates and IP') < html.indexOf('Use current location'));
       }
-      if (name === 'Dashboard') assert.match(html, /Test City/);
+      if (name === 'Dashboard') {
+        assert.match(html, /Test City/);
+        assert.match(html, /Track Activity/);
+        assert.match(html, /Quick Plan/);
+      }
       if (name === 'PlanActivity') {
         assert.match(html, /Route planner/);
         assert.match(html, /Follow roads/);

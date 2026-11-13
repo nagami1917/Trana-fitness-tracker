@@ -14,12 +14,13 @@ export function formatDuration(minutes) {
   return h > 0 ? `${h}:${String(m).padStart(2, '0')}` : `${m}:00`;
 }
 
-/** 6.15 min/km → "6:09/km" */
+/** 6.15 min/km → "6:09" */
 export function formatPace(minPerKm) {
   const n = Number(minPerKm ?? 0);
   if (!n || !Number.isFinite(n)) return '—:—';
-  const m = Math.floor(n);
-  const s = Math.round((n - m) * 60);
+  const totalSec = Math.round(n * 60);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
@@ -53,8 +54,9 @@ export function duration(minutes) {
 /** 5.5 min/km → "5:30 /km" */
 export function pace(minPerKm) {
   if (!minPerKm || !Number.isFinite(minPerKm)) return '—';
-  const m = Math.floor(minPerKm);
-  const s = Math.round((minPerKm - m) * 60);
+  const totalSec = Math.round(minPerKm * 60);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
   return `${m}:${String(s).padStart(2, '0')} /km`;
 }
 

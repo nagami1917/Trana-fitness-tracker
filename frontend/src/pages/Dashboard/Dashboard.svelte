@@ -16,6 +16,7 @@
     MoreHorizontal,
   } from 'lucide-svelte';
   import StatCard from '../../components/dashboard/StatCard.svelte';
+  import TrackActivityPrompt from '../../components/dashboard/TrackActivityPrompt.svelte';
   import Card from '../../components/common/Card.svelte';
   import ActivityIcon from '../../components/activities/ActivityIcon.svelte';
   import RouteMap from '../../components/route/RouteMap.svelte';
@@ -251,6 +252,9 @@
     </div>
   </div>
 
+  <!-- live / latest track activity prompt -->
+  <TrackActivityPrompt fallbackCenter={livePlace ? [livePlace.latitude, livePlace.longitude] : [14.676, 121.0437]} />
+
   <!-- stat cards -->
   <div class="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
     <StatCard
@@ -300,11 +304,11 @@
           <div class="flex items-start gap-3">
             <ActivityIcon type={draft.type} size="md" />
             <div>
-              <h2 class="text-lg leading-tight">Track Activity</h2>
-              <p class="text-xs font-semibold text-ink-400">Pick a sport like Strava and see your predicted effort</p>
+              <h2 class="text-lg leading-tight">Quick Plan</h2>
+              <p class="text-xs font-semibold text-ink-400">Pick a sport and preview your predicted effort</p>
             </div>
           </div>
-          <button class="pill bg-rose-50 text-rose-500" onclick={() => navigate('/plan')}>
+          <button class="pill bg-rose-50 text-rose-500" onclick={() => navigate('/track')}>
             <span class="h-1.5 w-1.5 rounded-full bg-rose-400"></span> Live tracking
           </button>
         </div>
