@@ -3,8 +3,9 @@
   import Card from '../../components/common/Card.svelte';
   import EmptyState from '../../components/common/EmptyState.svelte';
   import ActivityIcon from '../../components/activities/ActivityIcon.svelte';
-  import { activities, plans } from '../../stores/index.js';
+  import { activities, plans, unitSystem } from '../../stores/index.js';
   import { navigate } from '../../lib/router.js';
+  import { distanceUnit } from '../../lib/units.js';
   import {
     startOfWeek,
     isSameDay,
@@ -15,15 +16,19 @@
     timeLabel,
   } from '../../lib/format.js';
 
-  // The project trains on three types — run, ride, walk — so the calendar
-  // shows exactly those (hike and anything else stays out by design).
-  const TYPES = ['run', 'ride', 'walk'];
+  const TYPES = ['run', 'ride', 'walk', 'hike'];
+  let sportFilter = $state('all');
 
   let weekStart = $state(startOfWeek(new Date()));
 
   const weekDays = $derived(
     [...Array(7)].map((_, i) => new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + i)),
   );
+
+  function isoDay(day) {
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}`;
+  }
 
   const rangeLabel = $derived(
     `${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${weekDays[6].toLocaleDateString('en-US', {
@@ -41,8 +46,9 @@
     weekStart = startOfWeek(new Date());
   }
 
-  const weekPlans = $derived($plans.filter((p) => TYPES.includes(p.activity_type) && p.status === 'planned' && p.planned_for));
-  const weekActivities = $derived($activities.filter((a) => TYPES.includes(a.activity_type) && a.started_at));
+  const activeTypes = $derived(sportFilter === 'all' ? TYPES : [sportFilter]);
+  const weekPlans = $derived($plans.filter((p) => activeTypes.includes(p.activity_type) && p.status === 'planned' && p.planned_for));
+  const weekActivities = $derived($activities.filter((a) => activeTypes.includes(a.activity_type) && a.started_at));
 
   function plansFor(day) {
     return weekPlans
@@ -67,7 +73,7 @@
       </span>
       <div>
         <h1 class="text-lg font-extrabold text-ink-900">Week calendar</h1>
-        <p class="text-[11px] font-semibold text-ink-400">Runs, rides & walks — planned vs done</p>
+        <p class="text-[11px] font-semibold text-ink-400">Runs, rides, walks & hikes — planned vs done</p>
       </div>
     </div>
 
@@ -92,11 +98,25 @@
     </div>
   </div>
 
-  <p class="text-sm font-extrabold tracking-tight text-ink-500">{rangeLabel}</p>
+  <div class="flex flex-wrap items-center justify-between gap-2">
+    <p class="text-sm font-extrabold tracking-tight text-ink-500">{rangeLabel}</p>
+    <div class="flex flex-wrap gap-1.5">
+      {#each ['all', 'run', 'ride', 'walk', 'hike'] as s (s)}
+        <button
+          type="button"
+          class="btn-chip !py-1"
+          class:btn-chip-active={sportFilter === s}
+          onclick={() => (sportFilter = s)}
+        >
+          {s === 'all' ? 'All sports' : activityLabel(s)}
+        </button>
+      {/each}
+    </div>
+  </div>
 
   {#if weekEmpty}
     <EmptyState
-      title="No runs, rides, or walks this week"
+      title="No workouts scheduled this week"
       description="Plan one and it shows up here next to everything you've already logged."
     >
       <button type="button" class="btn-primary" onclick={() => navigate('/plan')}>Plan a workout</button>
@@ -113,12 +133,17 @@
             : 'border-brand-100 bg-white'}"
         >
           <div class="flex items-start justify-between">
-            <div class="leading-tight">
+            <button
+              type="button"
+              class="leading-tight text-left transition hover:opacity-75"
+              title="Schedule for {isoDay(day)}"
+              onclick={() => navigate(`/plan?date=${isoDay(day)}`)}
+            >
               <p class="text-[10px] font-extrabold uppercase tracking-wider {today ? 'text-brand-500' : 'text-ink-400'}">
                 {weekdayShort[day.getDay()]}
               </p>
               <p class="text-lg font-extrabold {today ? 'text-brand-700' : 'text-ink-900'}">{day.getDate()}</p>
-            </div>
+            </button>
             <button
               type="button"
               class="rounded-lg p-1.5 text-ink-400 transition hover:bg-brand-50 hover:text-brand-600"
@@ -131,27 +156,39 @@
 
           <div class="mt-2 space-y-1.5">
             {#each dayPlans as plan (plan.id)}
-              <div class="flex items-center gap-1.5 rounded-xl border border-dashed border-brand-300 bg-white/80 px-2 py-1.5">
+              {@const matchedDone = dayActs.some((a) => a.activity_type === plan.activity_type)}
+              <button
+                type="button"
+                class="flex w-full items-center gap-1.5 rounded-xl border border-dashed border-brand-300 bg-white/80 px-2 py-1.5 text-left transition hover:border-brand-500 hover:bg-brand-50/50"
+                onclick={() => navigate(`/plan?plan=${plan.id}`)}
+              >
                 <ActivityIcon type={plan.activity_type} size="xs" />
-                <div class="min-w-0 leading-tight">
-                  <p class="truncate text-[11px] font-extrabold text-ink-900">{activityLabel(plan.activity_type)}</p>
+                <div class="min-w-0 flex-1 leading-tight">
+                  <p class="truncate text-[11px] font-extrabold text-ink-900">
+                    {activityLabel(plan.activity_type)}
+                    {#if matchedDone}<span class="ml-1 text-[9px] text-emerald-600">· Done</span>{/if}
+                  </p>
                   <p class="truncate text-[10px] font-semibold text-ink-400">
-                    {timeLabel(plan.planned_for)} · {formatDistance(plan.distance_km)} km · {duration(plan.duration_min)}
+                    {timeLabel(plan.planned_for)} · {formatDistance(plan.distance_km, $unitSystem)} {distanceUnit($unitSystem)} · {duration(plan.duration_min ?? plan.duration?.minutes)}
                   </p>
                 </div>
-              </div>
+              </button>
             {/each}
 
             {#each dayActs as act (act.id)}
-              <div class="flex items-center gap-1.5 rounded-xl bg-brand-50 px-2 py-1.5">
+              <button
+                type="button"
+                class="flex w-full items-center gap-1.5 rounded-xl bg-brand-50 px-2 py-1.5 text-left transition hover:bg-brand-100/80"
+                onclick={() => navigate(`/activities?id=${act.id}`)}
+              >
                 <ActivityIcon type={act.activity_type} size="xs" />
-                <div class="min-w-0 leading-tight">
+                <div class="min-w-0 flex-1 leading-tight">
                   <p class="truncate text-[11px] font-extrabold text-brand-700">{activityLabel(act.activity_type)}</p>
                   <p class="truncate text-[10px] font-semibold text-ink-400">
-                    ✓ {formatDistance(act.distance_km)} km · {duration(act.duration_min)}
+                    ✓ {formatDistance(act.distance_km, $unitSystem)} {distanceUnit($unitSystem)} · {duration(act.duration_min)}
                   </p>
                 </div>
-              </div>
+              </button>
             {/each}
 
             {#if dayPlans.length === 0 && dayActs.length === 0}
@@ -167,13 +204,13 @@
     <div class="flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] font-semibold text-ink-400">
       <span class="flex items-center gap-1.5">
         <span class="h-3 w-5 rounded border border-dashed border-brand-300 bg-white/80"></span>
-        Planned
+        Planned (tap to open)
       </span>
       <span class="flex items-center gap-1.5">
         <span class="h-3 w-5 rounded bg-brand-100"></span>
-        Done ✓
+        Done ✓ (tap for splits & details)
       </span>
-      <span>Only run, ride and walk — the three types TRANA predicts.</span>
+      <span>Tap a day number to schedule for that date.</span>
     </div>
   </Card>
 </div>

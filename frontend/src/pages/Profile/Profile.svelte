@@ -1,11 +1,22 @@
 <script>
   import { onMount } from 'svelte';
-  import { CircleUserRound, Save, LoaderCircle, Flame, Footprints, CalendarDays, Activity, Scale } from 'lucide-svelte';
+  import { CircleUserRound, Save, LoaderCircle, Flame, Footprints, CalendarDays, Activity, Scale, SlidersHorizontal } from 'lucide-svelte';
   import Card from '../../components/common/Card.svelte';
   import Segmented from '../../components/common/Segmented.svelte';
   import CityRegionInput from '../../components/common/CityRegionInput.svelte';
   import { api } from '../../services/client.js';
   import { profile, session, notify } from '../../stores/index.js';
+  import {
+    fromDisplayHeight,
+    fromDisplayTemp,
+    fromDisplayWeight,
+    heightUnit,
+    tempUnit,
+    toDisplayHeight,
+    toDisplayTemp,
+    toDisplayWeight,
+    weightUnit,
+  } from '../../lib/units.js';
 
   // Step 4 — the fitness profile feeds every prediction. `age` and
   // `fitness_level` are the spec's names; the API maps them onto the stored
@@ -117,12 +128,15 @@
   <title>TRANA — Profile</title>
 </svelte:head>
 
-<header class="mb-6 flex flex-col gap-1">
-  <span class="pill w-fit bg-brand-50 text-brand-600"><CircleUserRound size={12} /> Profile</span>
-  <h1 class="font-display text-2xl font-extrabold tracking-tight text-ink-900">Your athlete profile</h1>
-  <p class="max-w-lg text-sm font-semibold text-ink-400">
-    Everything on this page feeds the prediction model and the fueling math — keep it current.
-  </p>
+<header class="mb-6 flex flex-wrap items-end justify-between gap-3">
+  <div>
+    <span class="pill w-fit bg-brand-50 text-brand-600"><CircleUserRound size={12} /> Profile</span>
+    <h1 class="mt-2 font-display text-2xl font-extrabold tracking-tight text-ink-900">Your athlete profile</h1>
+    <p class="max-w-lg text-sm font-semibold text-ink-400">
+      Everything on this page feeds the prediction model and the fueling math — keep it current.
+    </p>
+  </div>
+  <a href="/settings" class="btn-ghost text-xs"><SlidersHorizontal size={14} /> Theme, devices & data</a>
 </header>
 
 <div class="grid gap-5 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
@@ -179,16 +193,20 @@
       </div>
 
       <div>
-        <label class="label" for="quick-weight">Body mass (kg)</label>
+        <label class="label" for="quick-weight">Body mass ({weightUnit(form.units)})</label>
         <div class="flex gap-2">
           <input
             id="quick-weight"
             type="number"
             min="25"
-            max="250"
+            max="550"
             step="0.5"
             class="input"
-            bind:value={quick.weight_kg}
+            value={Math.round(toDisplayWeight(quick.weight_kg, form.units) * 10) / 10}
+            oninput={(e) => {
+              const v = Number(e.currentTarget.value);
+              if (Number.isFinite(v)) quick.weight_kg = Math.round(fromDisplayWeight(v, form.units) * 10) / 10;
+            }}
             disabled={quick.busy !== ''}
           />
           <button type="button" class="btn-primary shrink-0 !px-4" onclick={saveWeight} disabled={quick.busy !== ''}>
@@ -231,12 +249,43 @@
       <CityRegionInput id="profile-city" bind:value={form.city} bind:busy={locating} disabled={loading} />
 
       <div>
-        <label class="label" for="weight">Weight (kg)</label>
-        <input id="weight" type="number" min="25" max="250" step="0.5" class="input" bind:value={form.weight_kg} required />
+        <label class="label" for="weight">Weight ({weightUnit(form.units)})</label>
+        <input
+          id="weight"
+          type="number"
+          min="25"
+          max="550"
+          step="0.5"
+          class="input"
+          value={Math.round(toDisplayWeight(form.weight_kg, form.units) * 10) / 10}
+          oninput={(e) => {
+            const v = Number(e.currentTarget.value);
+            if (Number.isFinite(v)) form.weight_kg = Math.round(fromDisplayWeight(v, form.units) * 10) / 10;
+          }}
+          required
+        />
       </div>
       <div>
-        <label class="label" for="height">Height (cm)</label>
-        <input id="height" type="number" min="100" max="250" step="0.5" class="input" bind:value={form.height_cm} placeholder="optional" />
+        <label class="label" for="height">Height ({heightUnit(form.units)})</label>
+        <input
+          id="height"
+          type="number"
+          min="36"
+          max="250"
+          step="0.5"
+          class="input"
+          value={form.height_cm === '' || form.height_cm == null ? '' : Math.round(toDisplayHeight(form.height_cm, form.units) * 10) / 10}
+          oninput={(e) => {
+            const raw = e.currentTarget.value;
+            if (raw === '') {
+              form.height_cm = '';
+              return;
+            }
+            const v = Number(raw);
+            if (Number.isFinite(v)) form.height_cm = Math.round(fromDisplayHeight(v, form.units) * 10) / 10;
+          }}
+          placeholder="optional"
+        />
       </div>
 
       <div>
@@ -301,7 +350,7 @@
       <div class="sm:col-span-2">
         <div class="flex items-baseline justify-between">
           <label class="label" for="temp">Typical training temperature</label>
-          <p class="text-sm font-extrabold text-brand-700">{form.typical_temperature_c}°C</p>
+          <p class="text-sm font-extrabold text-brand-700">{Math.round(toDisplayTemp(form.typical_temperature_c, form.units))}{tempUnit(form.units)}</p>
         </div>
         <input id="temp" type="range" min="-10" max="50" step="1" bind:value={form.typical_temperature_c} class="mt-2 w-full accent-brand-500" />
       </div>

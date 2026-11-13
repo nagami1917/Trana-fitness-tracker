@@ -16,6 +16,11 @@
     Maximize2,
     MapPin,
     Ruler,
+    Droplets,
+    Flame,
+    Volume2,
+    VolumeX,
+    ShieldCheck,
   } from 'lucide-svelte';
   import TranaMap from '../../components/map/TranaMap.svelte';
   import GPSStatus from '../../components/activity/GPSStatus.svelte';
@@ -25,7 +30,8 @@
   import FoodLogger from '../../components/activity/FoodLogger.svelte';
   import ActivityIcon from '../../components/activities/ActivityIcon.svelte';
   import { link, navigate, query } from '../../lib/router.js';
-  import { plans, notify } from '../../stores/index.js';
+  import { plans, notify, unitSystem } from '../../stores/index.js';
+  import { distanceUnit, toDisplayDistance } from '../../lib/units.js';
   import { dailySessionApi } from '../../services/dailySessionService.js';
   import { readCachedPlace } from '../../lib/location.js';
   import { acquireLivePosition, releaseLivePosition, seedLivePosition, livePosition } from '../../lib/liveLocation.svelte.js';
@@ -41,7 +47,7 @@
     searchPlaces,
   } from '../../services/roadRoutingService.js';
   import { polylineLengthKm } from '../../services/mapService.js';
-  import { nf, shortDate } from '../../lib/format.js';
+  import { clock, ml, nf, shortDate } from '../../lib/format.js';
 
   const SPORTS = [
     { id: 'run', label: 'Run' },
@@ -226,6 +232,7 @@
       path: selectedPlannedPath,
       label: selectedPathLabel,
       planKey: selectedPlanKey,
+      fueling: activePlan?.fueling ?? null,
     });
   });
 
@@ -557,6 +564,7 @@
       plannedPath: selectedPlannedPath,
       plannedLabel: selectedPathLabel,
       plannedPlanKey: selectedPlanKey,
+      plannedFueling: activePlan?.fueling ?? null,
     });
   }
 
@@ -574,6 +582,13 @@
 
   async function stopActivity() {
     const result = await liveTracker.stopActivity({ currentTodaySession: todaySession });
+    if (result?.dailySession) {
+      todaySession = result.dailySession;
+    }
+  }
+
+  async function saveStationary() {
+    const result = await liveTracker.stopActivity({ currentTodaySession: todaySession, allowStationary: true });
     if (result?.dailySession) {
       todaySession = result.dailySession;
     }
@@ -893,7 +908,7 @@
                   ? 'Start set — tap End on the map'
                   : `${customWaypoints.length} stops (Start → End)`}
             </span>
-            <span class="pill"><Ruler size={12} /> {customRouteKm > 0 ? `${nf(customRouteKm, 2)} km` : '—'}</span>
+            <span class="pill"><Ruler size={12} /> {customRouteKm > 0 ? `${nf(toDisplayDistance(customRouteKm, $unitSystem), 2)} ${distanceUnit($unitSystem)}` : '—'}</span>
             {#if customRouting}
               <span class="pill"><LoaderCircle size={12} class="animate-spin" /> Routing along roads…</span>
             {:else if customRouteMode === 'straight' && customWaypoints.length >= 2}
@@ -969,7 +984,7 @@
                     <ActivityIcon type={plan.activity_type || 'run'} size="sm" />
                     <div class="min-w-0 flex-1">
                       <p class="truncate text-xs font-extrabold capitalize text-ink-900">
-                        {plan.distance_km} km {plan.activity_type}
+                        {nf(toDisplayDistance(plan.distance_km, $unitSystem), 2)} {distanceUnit($unitSystem)} {plan.activity_type}
                         {#if plan.isDraft}
                           <span class="ml-1 text-[10px] font-bold text-brand-600">(Draft)</span>
                         {/if}
@@ -1043,10 +1058,78 @@
       calories={estimatedCalories}
     />
 
+    {#if tracking}
+      <!-- Live Fueling & Voice Coaching Bar -->
+      <div class="rounded-2xl border p-3.5 transition {liveTracker.hydrateDue || liveTracker.fuelDue
+        ? 'border-amber-300 bg-amber-50/70'
+        : 'border-brand-100 bg-brand-50/40'}">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex flex-wrap items-center gap-2 text-xs">
+            <span class="pill !bg-white text-brand-700 border border-brand-100">
+              <Droplets size={12} />
+              Target {ml(liveTracker.activeFuelTargets.fluidPerHourMl, $unitSystem)}/h · Logged {ml(liveTracker.fluidLoggedMl, $unitSystem)}
+            </span>
+            {#if liveTracker.activeFuelTargets.carbsPerHourG > 0 || durationMin >= 45}
+              <span class="pill !bg-white text-amber-700 border border-amber-200">
+                <Flame size={12} />
+                Target {liveTracker.activeFuelTargets.carbsPerHourG || 30} g/h · Logged {liveTracker.carbsLoggedG} g
+              </span>
+            {/if}
+            {#if liveTracker.wakeLockActive}
+              <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-extrabold text-emerald-700">
+                <ShieldCheck size={11} /> Screen awake
+              </span>
+            {/if}
+          </div>
+
+          <div class="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              class="btn-chip !py-1 {liveTracker.hydrateDue ? '!border-amber-300 !bg-amber-100 !text-amber-900' : ''}"
+              onclick={() => liveTracker.logHydration(200)}
+            >
+              <Droplets size={12} />
+              {liveTracker.hydrateDue ? 'Drink now (+200ml)' : `Sip +200ml · ${clock(liveTracker.nextHydrateInSec).slice(3)}`}
+            </button>
+            <button
+              type="button"
+              class="btn-chip !py-1 {liveTracker.fuelDue ? '!border-amber-300 !bg-amber-100 !text-amber-900' : ''}"
+              onclick={() => liveTracker.logFuel(25)}
+            >
+              <Flame size={12} />
+              {liveTracker.fuelDue ? 'Fuel now (+25g)' : '+25g carbs'}
+            </button>
+            <button
+              type="button"
+              class="btn-chip !py-1"
+              class:btn-chip-active={liveTracker.voiceCues}
+              onclick={() => liveTracker.toggleVoiceCues()}
+              aria-label="Toggle voice pace and hydration cues"
+            >
+              {#if liveTracker.voiceCues}
+                <Volume2 size={12} /> Voice ON
+              {:else}
+                <VolumeX size={12} /> Voice OFF
+              {/if}
+            </button>
+          </div>
+        </div>
+      </div>
+    {/if}
+
     {#if liveTracker.statusNote}
-      <p class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-center text-xs font-bold text-amber-800">
-        {liveTracker.statusNote}
-      </p>
+      <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-center text-xs font-bold text-amber-800 space-y-2">
+        <p>{liveTracker.statusNote}</p>
+        {#if liveTracker.canSaveStationary}
+          <button
+            type="button"
+            class="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-[11px] font-extrabold text-amber-900 hover:bg-amber-100 transition cursor-pointer"
+            onclick={saveStationary}
+          >
+            Save as indoor / stationary session ({Math.round(durationMin)} min)
+          </button>
+        {/if}
+      </div>
     {/if}
 
     <!-- Action Buttons -->

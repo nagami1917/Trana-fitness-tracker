@@ -1,11 +1,23 @@
 <script>
-  import { Settings as SettingsIcon, Save, LoaderCircle, LogOut, Info, Brain, Smartphone, ShieldCheck, User, HeartPulse, Flame, Upload, Trash2, TriangleAlert, Download } from 'lucide-svelte';
+  import { Settings as SettingsIcon, Save, LoaderCircle, LogOut, Info, Brain, Smartphone, ShieldCheck, User, HeartPulse, Flame, Upload, Trash2, TriangleAlert, Download, Sun, Moon, CircleUserRound } from 'lucide-svelte';
   import Card from '../../components/common/Card.svelte';
   import Segmented from '../../components/common/Segmented.svelte';
   import CityRegionInput from '../../components/common/CityRegionInput.svelte';
   import { profile, session, logout, notify, modelCard, activities } from '../../stores/index.js';
   import { api } from '../../services/client.js';
   import { energyApi, importBatch, parseCsv, CSV_COLUMNS } from '../../services/energyService.js';
+  import { theme, setTheme } from '../../lib/theme.js';
+  import {
+    fromDisplayHeight,
+    fromDisplayTemp,
+    fromDisplayWeight,
+    heightUnit,
+    tempUnit,
+    toDisplayHeight,
+    toDisplayTemp,
+    toDisplayWeight,
+    weightUnit,
+  } from '../../lib/units.js';
   import { navigate } from '../../lib/router.js';
   import { nf } from '../../lib/format.js';
   import { onMount } from 'svelte';
@@ -169,12 +181,15 @@
   <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
     <div>
       <span class="pill mb-2"><SettingsIcon size={12} /> Settings</span>
-      <h1 class="font-display text-2xl sm:text-3xl">Profile & preferences</h1>
-      <p class="mt-1 text-sm font-semibold text-ink-400">Body mass, sweat profile and experience all feed the model.</p>
+      <h1 class="font-display text-2xl sm:text-3xl">Preferences, devices & data</h1>
+      <p class="mt-1 text-sm font-semibold text-ink-400">Body mass, sweat profile, display theme, and wearable imports.</p>
     </div>
-    <button class="btn-primary self-start" onclick={save} disabled={saving || locating}>
-      {#if saving}<LoaderCircle size={15} class="animate-spin" /> Saving…{:else}<Save size={15} /> Save changes{/if}
-    </button>
+    <div class="flex flex-wrap items-center gap-2 self-start">
+      <a href="/profile" class="btn-ghost text-xs"><CircleUserRound size={14} /> Athlete profile</a>
+      <button class="btn-primary" onclick={save} disabled={saving || locating}>
+        {#if saving}<LoaderCircle size={15} class="animate-spin" /> Saving…{:else}<Save size={15} /> Save changes{/if}
+      </button>
+    </div>
   </div>
 
   <div class="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
@@ -195,12 +210,37 @@
             <input class="input" type="email" bind:value={form.email} disabled class:bg-brand-50={true} />
           </div>
           <div>
-            <span class="label">Body mass (kg)</span>
-            <input class="input" type="number" step="0.5" min="30" bind:value={form.weight_kg} />
+            <span class="label">Body mass ({weightUnit(form.units)})</span>
+            <input
+              class="input"
+              type="number"
+              step="0.5"
+              min="30"
+              value={Math.round(toDisplayWeight(form.weight_kg, form.units) * 10) / 10}
+              oninput={(e) => {
+                const v = Number(e.currentTarget.value);
+                if (Number.isFinite(v)) form.weight_kg = Math.round(fromDisplayWeight(v, form.units) * 10) / 10;
+              }}
+            />
           </div>
           <div>
-            <span class="label">Height (cm, optional)</span>
-            <input class="input" type="number" step="1" min="120" bind:value={form.height_cm} />
+            <span class="label">Height ({heightUnit(form.units)}, optional)</span>
+            <input
+              class="input"
+              type="number"
+              step="1"
+              min="36"
+              value={form.height_cm === '' || form.height_cm == null ? '' : Math.round(toDisplayHeight(form.height_cm, form.units) * 10) / 10}
+              oninput={(e) => {
+                const raw = e.currentTarget.value;
+                if (raw === '') {
+                  form.height_cm = '';
+                  return;
+                }
+                const v = Number(raw);
+                if (Number.isFinite(v)) form.height_cm = Math.round(fromDisplayHeight(v, form.units) * 10) / 10;
+              }}
+            />
           </div>
           <div>
             <span class="label">Birth year (optional)</span>
@@ -256,20 +296,57 @@
 
           <div class="grid gap-3 sm:grid-cols-2">
             <div>
-              <span class="label">Typical temperature (°C)</span>
-              <input class="input" type="number" min="0" max="45" bind:value={form.typical_temperature_c} />
+              <span class="label">Typical temperature ({tempUnit(form.units)})</span>
+              <input
+                class="input"
+                type="number"
+                min="-20"
+                max="130"
+                value={Math.round(toDisplayTemp(form.typical_temperature_c, form.units))}
+                oninput={(e) => {
+                  const v = Number(e.currentTarget.value);
+                  if (Number.isFinite(v)) form.typical_temperature_c = Math.round(fromDisplayTemp(v, form.units));
+                }}
+              />
             </div>
             <div>
               <span class="label">Units</span>
               <Segmented
                 options={[
-                  { id: 'metric', label: 'Metric' },
-                  { id: 'imperial', label: 'Imperial' },
+                  { id: 'metric', label: 'Metric (km, kg)' },
+                  { id: 'imperial', label: 'Imperial (mi, lb)' },
                 ]}
                 value={form.units}
                 onSelect={(v) => (form.units = v)}
               />
             </div>
+          </div>
+
+          <div class="pt-1">
+            <span class="label">Outdoor & display theme</span>
+            <div class="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                class="flex items-center justify-center gap-2 rounded-2xl border px-3 py-2.5 text-xs font-extrabold transition {$theme === 'light'
+                  ? 'border-brand-400 bg-brand-50 text-brand-700 shadow-soft'
+                  : 'border-brand-100 bg-white text-ink-500 hover:border-brand-200'}"
+                onclick={() => setTheme('light')}
+              >
+                <Sun size={14} /> Daylight (Blossom)
+              </button>
+              <button
+                type="button"
+                class="flex items-center justify-center gap-2 rounded-2xl border px-3 py-2.5 text-xs font-extrabold transition {$theme === 'dark'
+                  ? 'border-brand-400 bg-brand-50 text-brand-700 shadow-soft'
+                  : 'border-brand-100 bg-white text-ink-500 hover:border-brand-200'}"
+                onclick={() => setTheme('dark')}
+              >
+                <Moon size={14} /> Dark Outdoor (OLED)
+              </button>
+            </div>
+            <p class="mt-1 text-[10px] font-semibold text-ink-400">
+              High-contrast OLED dark mode reduces glare and saves battery on long outdoor runs.
+            </p>
           </div>
         </div>
       </Card>

@@ -147,6 +147,13 @@
         </button>
       </p>
 
+      <p class="mt-2.5 text-center text-xs font-semibold text-ink-400">
+        Curious first?
+        <a href="/preview" use:link class="font-extrabold text-brand-600 transition hover:text-brand-700">
+          Preview duration & fueling calculator
+        </a>
+      </p>
+
       <p class="mt-6 text-center text-[11px] font-semibold leading-relaxed text-ink-400">
         Your account data is stored through the TRANA API.
       </p>

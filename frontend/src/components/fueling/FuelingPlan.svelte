@@ -1,7 +1,9 @@
 <script>
   import { Flame, Salad, Droplets, Waves, Clock, Gauge, Utensils, Candy, CupSoda, Check, Sparkles, Info } from 'lucide-svelte';
-  import { duration as fmtDuration, pace, kcal, nf, ml } from '../../lib/format.js';
+  import { duration as fmtDuration, pace, speed, kcal, nf, ml } from '../../lib/format.js';
   import { INTENSITY_COPY } from '../../lib/ml/fueling.js';
+  import { unitSystem } from '../../stores/index.js';
+  import { fluidUnit, toDisplayFluid } from '../../lib/units.js';
 
   let { plan, compact = false } = $props();
 
@@ -37,9 +39,11 @@
     },
     {
       label: 'Fluid',
-      value: ml(f.fluid.totalMl),
+      value: ml(f.fluid.totalMl, $unitSystem),
       unit: '',
-      sub: `${nf(f.fluid.perHourMl)} ml/h`,
+      sub: $unitSystem === 'imperial'
+        ? `${nf(Math.round(toDisplayFluid(f.fluid.perHourMl, 'imperial')))} ${fluidUnit('imperial')}/h`
+        : `${nf(f.fluid.perHourMl)} ml/h`,
       Icon: Droplets,
       tone: 'from-cyan-100 to-cyan-200/60 text-cyan-600',
     },
@@ -64,7 +68,7 @@
       </div>
       <div class="mt-3 flex flex-wrap items-center gap-2 text-[11px] font-bold text-white/85">
         <span class="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1">
-          <Gauge size={12} /> {d.paceMinPerKm ? pace(d.paceMinPerKm) : `${nf(d.speedKmh, 1)} km/h`}
+          <Gauge size={12} /> {d.paceMinPerKm ? pace(d.paceMinPerKm, $unitSystem) : speed(d.speedKmh, $unitSystem)}
         </span>
         <span class="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1">
           <Clock size={12} /> Estimate only
@@ -140,7 +144,7 @@
       {#if plan.history_used !== undefined}
         <p class="mt-3 border-t border-brand-100 pt-2 text-[10px] font-bold uppercase tracking-wide text-ink-400">
           Personalised from {plan.history_used} past {plan.activity_type} session{plan.history_used === 1 ? '' : 's'}
-          {#if d.referenceSpeedKmh}· base pace {nf(d.referenceSpeedKmh, 1)} km/h{/if}
+          {#if d.referenceSpeedKmh}· base pace {speed(d.referenceSpeedKmh, $unitSystem)}{/if}
         </p>
       {/if}
     </div>

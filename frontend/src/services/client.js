@@ -208,6 +208,7 @@ export const api = {
   activities: {
     list: () => listAll('/activities', 500),
     create: (payload) => request('/activities', { method: 'POST', body: payload }).then((d) => d.data),
+    update: (id, payload) => request(`/activities/${id}`, { method: 'PATCH', body: payload }).then((d) => d.data),
     remove: (id) => request(`/activities/${id}`, { method: 'DELETE' }),
     exportCsv: () => downloadFile('/activities/export', 'trana-activities.csv'),
   },

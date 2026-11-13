@@ -17,6 +17,7 @@ const PAGE_LOADERS = {
   '/profile': () => import('../pages/Profile/Profile.svelte'),
   '/settings': () => import('../pages/Settings/Settings.svelte'),
   '/admin': () => import('../pages/Admin/Admin.svelte'),
+  '/preview': () => import('../pages/Preview/Preview.svelte'),
   '/privacy': () => import('../pages/Legal/Privacy.svelte'),
   '/terms': () => import('../pages/Legal/Terms.svelte'),
   '/forgot-password': () => import('../pages/Auth/ForgotPassword.svelte'),
