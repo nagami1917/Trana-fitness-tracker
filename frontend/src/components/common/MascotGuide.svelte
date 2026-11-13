@@ -4,6 +4,7 @@
   import { mascotTour, TOUR_STEPS } from '../../lib/mascotTour.svelte.js';
   import { profile, session } from '../../stores/index.js';
   import { route } from '../../lib/router.js';
+  import { prefetchRoute } from '../../routes/index.js';
 
   let spotRect = $state(null);
 
@@ -85,6 +86,12 @@
     let firstTimer = null;
     let settleTimer = null;
     let rafId = null;
+    let observer = null;
+
+    const nextRoute = TOUR_STEPS[idx + 1]?.route;
+    if (nextRoute && !globalThis.navigator?.connection?.saveData) {
+      prefetchRoute(nextRoute);
+    }
 
     const handleViewport = () => {
       if (!cancelled) measureTarget({ scroll: false });
@@ -96,6 +103,17 @@
     void tick().then(() => {
       if (cancelled) return;
       measureTarget({ scroll: false });
+      if (!spotRect && step?.selector && typeof MutationObserver === 'function' && document.body) {
+        observer = new MutationObserver(() => {
+          if (cancelled) return;
+          if (document.querySelector(step.selector)) {
+            measureTarget({ scroll: true });
+            observer?.disconnect();
+            observer = null;
+          }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+      }
       if (typeof requestAnimationFrame === 'function') {
         rafId = requestAnimationFrame(() => {
           if (!cancelled) measureTarget({ scroll: true });
@@ -111,6 +129,7 @@
 
     return () => {
       cancelled = true;
+      observer?.disconnect();
       clearTimeout(firstTimer);
       clearTimeout(settleTimer);
       if (rafId != null && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(rafId);

@@ -3,7 +3,7 @@
   import Card from '../../components/common/Card.svelte';
   import Segmented from '../../components/common/Segmented.svelte';
   import CityRegionInput from '../../components/common/CityRegionInput.svelte';
-  import { profile, session, logout, notify, refresh, modelCard, activities } from '../../stores/index.js';
+  import { profile, session, logout, notify, modelCard, activities } from '../../stores/index.js';
   import { api } from '../../services/client.js';
   import { energyApi, importBatch, parseCsv, CSV_COLUMNS } from '../../services/energyService.js';
   import { navigate } from '../../lib/router.js';
@@ -99,7 +99,7 @@
     saving = true;
     let written = false;
     try {
-      await api.profile.update({
+      const updated = await api.profile.update({
         name: form.name,
         weight_kg: Number(form.weight_kg),
         height_cm: form.height_cm == null || form.height_cm === '' ? null : Number(form.height_cm),
@@ -112,7 +112,8 @@
         units: form.units,
       });
       written = true;
-      await refresh();
+      profile.set(updated);
+      if (updated?.name) session.update((s) => (s ? { ...s, name: updated.name } : s));
       notify('Profile saved — predictions will use your new numbers.');
     } catch (error) {
       notify(written ? 'Profile saved, but the view could not refresh. Reload when connected.' : (error.message || 'Could not save profile'), 'error');

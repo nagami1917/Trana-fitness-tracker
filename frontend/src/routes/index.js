@@ -1,44 +1,86 @@
 /**
- * Central route table — the single place mapping URL paths to pages.
- * App.svelte renders ROUTES[$route] inside the shell; public routes
- * (login/register/onboarding) are handled separately.
+ * Central lazy route table — each page compiles into its own code-split chunk so
+ * initial loads never download heavy map/chart engines (MapLibre, Leaflet, Chart.js)
+ * until the route actually needs them. Resolved components stay cached in memory.
  */
-import Dashboard from '../pages/Dashboard/Dashboard.svelte';
-import PlanActivity from '../pages/PlanActivity/PlanActivity.svelte';
-import Calendar from '../pages/Calendar/Calendar.svelte';
-import Track from '../pages/Track/Track.svelte';
-import TrackHistory from '../pages/Track/History.svelte';
-import TrackSession from '../pages/Track/SessionDetail.svelte';
-import Activities from '../pages/Activities/Activities.svelte';
-import Analytics from '../pages/Analytics/Analytics.svelte';
-import Fueling from '../pages/Fueling/Fueling.svelte';
-import Goals from '../pages/Goals/Goals.svelte';
-import Profile from '../pages/Profile/Profile.svelte';
-import Settings from '../pages/Settings/Settings.svelte';
-import Admin from '../pages/Admin/Admin.svelte';
-import Privacy from '../pages/Legal/Privacy.svelte';
-import Terms from '../pages/Legal/Terms.svelte';
-import ForgotPassword from '../pages/Auth/ForgotPassword.svelte';
-import ResetPassword from '../pages/Auth/ResetPassword.svelte';
-import VerifyEmail from '../pages/Auth/VerifyEmail.svelte';
-
-export const ROUTES = {
-  '/': Dashboard,
-  '/plan': PlanActivity,
-  '/calendar': Calendar,
-  '/track': Track,
-  '/track/history': TrackHistory,
-  '/track/session': TrackSession,
-  '/activities': Activities,
-  '/analytics': Analytics,
-  '/fueling': Fueling,
-  '/goals': Goals,
-  '/profile': Profile,
-  '/settings': Settings,
-  '/admin': Admin,
-  '/privacy': Privacy,
-  '/terms': Terms,
-  '/forgot-password': ForgotPassword,
-  '/reset-password': ResetPassword,
-  '/verify-email': VerifyEmail,
+const PAGE_LOADERS = {
+  '/': () => import('../pages/Dashboard/Dashboard.svelte'),
+  '/plan': () => import('../pages/PlanActivity/PlanActivity.svelte'),
+  '/calendar': () => import('../pages/Calendar/Calendar.svelte'),
+  '/track': () => import('../pages/Track/Track.svelte'),
+  '/track/history': () => import('../pages/Track/History.svelte'),
+  '/track/session': () => import('../pages/Track/SessionDetail.svelte'),
+  '/activities': () => import('../pages/Activities/Activities.svelte'),
+  '/analytics': () => import('../pages/Analytics/Analytics.svelte'),
+  '/fueling': () => import('../pages/Fueling/Fueling.svelte'),
+  '/goals': () => import('../pages/Goals/Goals.svelte'),
+  '/profile': () => import('../pages/Profile/Profile.svelte'),
+  '/settings': () => import('../pages/Settings/Settings.svelte'),
+  '/admin': () => import('../pages/Admin/Admin.svelte'),
+  '/privacy': () => import('../pages/Legal/Privacy.svelte'),
+  '/terms': () => import('../pages/Legal/Terms.svelte'),
+  '/forgot-password': () => import('../pages/Auth/ForgotPassword.svelte'),
+  '/reset-password': () => import('../pages/Auth/ResetPassword.svelte'),
+  '/verify-email': () => import('../pages/Auth/VerifyEmail.svelte'),
 };
+
+const VIEW_LOADERS = {
+  login: () => import('../pages/Login/Login.svelte'),
+  register: () => import('../pages/Register/Register.svelte'),
+  onboarding: () => import('../pages/Onboarding/Onboarding.svelte'),
+  'verify-email': () => import('../pages/Auth/VerifyEmail.svelte'),
+  'not-found': () => import('../pages/NotFound/NotFound.svelte'),
+};
+
+const componentCache = new Map();
+const pendingLoads = new Map();
+
+function normalizePath(path) {
+  return (path || '/').split('?')[0].replace(/\/+$/, '') || '/';
+}
+
+function loadWithCache(key, loader) {
+  if (componentCache.has(key)) return Promise.resolve(componentCache.get(key));
+  if (pendingLoads.has(key)) return pendingLoads.get(key);
+  const promise = loader()
+    .then((mod) => {
+      const component = mod?.default ?? mod;
+      componentCache.set(key, component);
+      return component;
+    })
+    .finally(() => {
+      pendingLoads.delete(key);
+    });
+  pendingLoads.set(key, promise);
+  return promise;
+}
+
+export function getCachedViewComponent(name) {
+  const key = VIEW_LOADERS[name] ? `view:${name}` : 'view:not-found';
+  return componentCache.get(key) ?? null;
+}
+
+export function loadViewComponent(name) {
+  const validName = VIEW_LOADERS[name] ? name : 'not-found';
+  return loadWithCache(`view:${validName}`, VIEW_LOADERS[validName]);
+}
+
+export function getCachedRouteComponent(path) {
+  const clean = normalizePath(path);
+  const key = PAGE_LOADERS[clean] ? `route:${clean}` : 'view:not-found';
+  return componentCache.get(key) ?? null;
+}
+
+export function loadRouteComponent(path) {
+  const clean = normalizePath(path);
+  if (PAGE_LOADERS[clean]) return loadWithCache(`route:${clean}`, PAGE_LOADERS[clean]);
+  return loadViewComponent('not-found');
+}
+
+export function prefetchRoute(to) {
+  if (typeof to !== 'string' || !to.startsWith('/')) return;
+  const clean = normalizePath(to);
+  if (PAGE_LOADERS[clean] && !componentCache.has(`route:${clean}`)) {
+    void loadRouteComponent(clean).catch(() => {});
+  }
+}

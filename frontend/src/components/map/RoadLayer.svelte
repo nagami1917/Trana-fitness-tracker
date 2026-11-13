@@ -6,9 +6,17 @@
 
   const SOURCE_ID = 'trana-road-source';
   const LAYER_ID = 'trana-road-layer';
+  const roadCache = globalThis.__tranaRoadCache ?? (globalThis.__tranaRoadCache = new Map());
   let queryTimer = null;
   let lastFetchKey = '';
+  let abortCtrl = null;
   let styleReady = $state(false);
+
+  function applyFeatures(features) {
+    if (map?.getSource?.(SOURCE_ID)) {
+      map.getSource(SOURCE_ID).setData({ type: 'FeatureCollection', features });
+    }
+  }
 
   $effect(() => {
     const target = map;
@@ -34,8 +42,16 @@
     };
   });
 
-  async function fetchRoads(lat, lng, radius) {
+  async function fetchRoads(lat, lng, radius, key) {
     if (!map || !isStyleInitialized(map)) return;
+
+    if (roadCache.has(key)) {
+      applyFeatures(roadCache.get(key));
+      return;
+    }
+
+    abortCtrl?.abort();
+    abortCtrl = new AbortController();
 
     const query = `
       [out:json][timeout:15];
@@ -53,6 +69,7 @@
           Accept: 'application/json',
         },
         body: new URLSearchParams({ data: query }),
+        signal: abortCtrl.signal,
       });
 
       if (!response.ok) return;
@@ -69,9 +86,12 @@
           },
         }));
 
-      if (map?.getSource?.(SOURCE_ID)) {
-        map.getSource(SOURCE_ID).setData({ type: 'FeatureCollection', features });
+      if (roadCache.size >= 16) {
+        const oldestKey = roadCache.keys().next().value;
+        roadCache.delete(oldestKey);
       }
+      roadCache.set(key, features);
+      applyFeatures(features);
     } catch {
       // Silently fail — roads are an optional visual aid.
     }
@@ -112,17 +132,23 @@
     const coords = toLatLng(center);
     if (!coords) return;
     const key = `${coords[0].toFixed(3)},${coords[1].toFixed(3)},${radiusM}`;
+    if (roadCache.has(key)) {
+      lastFetchKey = key;
+      applyFeatures(roadCache.get(key));
+      return;
+    }
     if (key === lastFetchKey) return;
 
     clearTimeout(queryTimer);
     queryTimer = setTimeout(() => {
       lastFetchKey = key;
-      fetchRoads(coords[0], coords[1], radiusM);
+      fetchRoads(coords[0], coords[1], radiusM, key);
     }, 600);
   });
 
   onDestroy(() => {
     clearTimeout(queryTimer);
+    abortCtrl?.abort();
     if (!map) return;
     try {
       if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);

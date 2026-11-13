@@ -75,8 +75,10 @@ class ProfileController extends Controller
 
     public function show(Request $request): JsonResponse
     {
+        $user = $request->user()->loadMissing(['fitnessProfile', 'goal'])->loadCount('activities');
+
         return response()->json([
-            'data' => (new ProfileResource($request->user()->fresh() ?? $request->user()))->toArray($request),
+            'data' => (new ProfileResource($user))->toArray($request),
         ]);
     }
 

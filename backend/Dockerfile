@@ -19,20 +19,27 @@ RUN composer install \
     --optimize-autoloader \
     --prefer-dist
 
-# Copy the application, then run dump-autoload so Laravel's
-# post-autoload-dump hooks (package discovery) build bootstrap/cache.
+# Copy the application, then build authoritative autoloader and precompile
+# routes/views/events (config stays dynamic so Vercel runtime env vars apply).
 COPY . .
 RUN mkdir -p \
         storage/framework/cache \
         storage/framework/sessions \
         storage/framework/views \
         bootstrap/cache \
-    && composer dump-autoload --no-dev --classmap-authoritative
+    && composer dump-autoload --no-dev --classmap-authoritative \
+    && APP_ENV=production APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
+       php artisan route:cache \
+    && APP_ENV=production APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
+       php artisan view:cache \
+    && APP_ENV=production APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
+       php artisan event:cache
 
 FROM base AS runtime
 
 COPY --from=dependencies --chown=www-data:www-data /app /app
 COPY --chown=www-data:www-data Caddyfile /etc/frankenphp/Caddyfile
+COPY docker/opcache.ini /usr/local/etc/php/conf.d/opcache-trana.ini
 
 RUN setcap CAP_NET_BIND_SERVICE=+eip /usr/local/bin/frankenphp \
     && chown -R www-data:www-data /config/caddy /data/caddy

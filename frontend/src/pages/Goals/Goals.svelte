@@ -4,7 +4,7 @@
   import Card from '../../components/common/Card.svelte';
   import DonutRing from '../../components/common/DonutRing.svelte';
   import ProgressBar from '../../components/common/ProgressBar.svelte';
-  import { activities, goals, todayStats, weekStats, profile, notify, refresh } from '../../stores/index.js';
+  import { activities, goals, todayStats, weekStats, profile, notify } from '../../stores/index.js';
   import { api } from '../../services/client.js';
   import { nf, km, duration as fmtDuration, pct, startOfWeek, weekdayShort, kcal } from '../../lib/format.js';
 
@@ -92,8 +92,16 @@
 
   const overall = $derived(pct($todayStats.calories, form.daily_calories));
 
-  /** Last 12 weeks of consistency, Monday-first grid. */
+  /** Last 12 weeks of consistency, Monday-first grid (O(N + 84) indexed). */
   const heatmap = $derived.by(() => {
+    const minutesByDay = new Map();
+    for (const a of $activities) {
+      const dt = new Date(a.started_at);
+      if (Number.isNaN(dt.getTime())) continue;
+      const key = `${dt.getFullYear()}-${dt.getMonth()}-${dt.getDate()}`;
+      minutesByDay.set(key, (minutesByDay.get(key) ?? 0) + (Number(a.duration_min) || 0));
+    }
+
     const weeks = [];
     const today = new Date();
     const start = startOfWeek(new Date(today.getTime() - 11 * 7 * 86400000));
@@ -101,10 +109,8 @@
       const days = [];
       for (let d = 0; d < 7; d += 1) {
         const day = new Date(start.getTime() + (w * 7 + d) * 86400000);
-        const load = $activities
-          .filter((a) => new Date(a.started_at).toDateString() === day.toDateString())
-          .reduce((s, a) => s + a.duration_min, 0);
-        days.push({ date: day, minutes: load, future: day > today });
+        const key = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
+        days.push({ date: day, minutes: minutesByDay.get(key) ?? 0, future: day > today });
       }
       weeks.push(days);
     }
@@ -123,7 +129,7 @@
     saving = true;
     let written = false;
     try {
-      await api.goals.update({
+      const updated = await api.goals.update({
         daily_calories: Number(form.daily_calories),
         daily_distance_km: Number(form.daily_distance_km),
         daily_active_min: Number(form.daily_active_min),
@@ -131,7 +137,7 @@
         weekly_distance_km: Number(form.weekly_distance_km),
       });
       written = true;
-      await refresh();
+      goals.set(updated);
       dirty = false;
       notify('Goals updated — TRANA will hold you to them.');
     } catch (error) {

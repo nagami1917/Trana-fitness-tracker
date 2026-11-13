@@ -6,7 +6,8 @@
  * even when the athlete switches to Dashboard or another screen — and keeps
  * Dashboard immediately updated with both live status and the latest result.
  */
-import { session, profile, refresh, notify } from '../stores/index.js';
+import { session, profile, upsertActivity, notify } from '../stores/index.js';
+import { api } from '../services/client.js';
 import { activityApi, validateTrackPoint } from '../services/activityService.js';
 import { dailySessionApi } from '../services/dailySessionService.js';
 import { watch, getCurrentPosition, trackPoint, GpsError } from '../services/gpsService.js';
@@ -574,7 +575,8 @@ async function stopActivity({ currentTodaySession = null } = {}) {
       // Activity already persisted; daily session sync is best-effort.
     }
 
-    await refresh();
+    if (savedActivity) upsertActivity(savedActivity);
+    void api.profile.get().then((p) => p && profile.set(p)).catch(() => {});
 
     const completedSnapshot = {
       status: 'completed',

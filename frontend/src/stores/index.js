@@ -4,10 +4,10 @@
  * every screen shows the same truth.
  */
 
-import { derived, writable } from 'svelte/store';
+import { derived, get, writable } from 'svelte/store';
 import { api, onUnauthorized } from '../services/client.js';
 import { loadModelCard } from '../lib/ml/index.js';
-import { isSameDay, startOfWeek, weekdayShort } from '../lib/format.js';
+import { startOfWeek, weekdayShort } from '../lib/format.js';
 
 export const session = writable(null);
 export const profile = writable(null);
@@ -20,6 +20,9 @@ export const booting = writable(true);
 export const bootError = writable(null);
 export const toast = writable(null);
 
+const BOOT_CACHE_KEY = 'trana:boot_cache:v1';
+const BOOT_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
 let toastTimer;
 export function notify(message, tone = 'success') {
   toast.set({ id: Date.now(), message, tone });
@@ -27,7 +30,48 @@ export function notify(message, tone = 'success') {
   toastTimer = setTimeout(() => toast.set(null), 3600);
 }
 
+function readBootCache() {
+  try {
+    const raw = globalThis.localStorage?.getItem(BOOT_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.session?.id || !parsed?.profile) return null;
+    if (Date.now() - Number(parsed.ts || 0) > BOOT_CACHE_MAX_AGE_MS) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeBootCache() {
+  try {
+    const currentSession = get(session);
+    const currentProfile = get(profile);
+    if (!currentSession?.id || !currentProfile) return;
+    const payload = {
+      ts: Date.now(),
+      session: currentSession,
+      profile: currentProfile,
+      activities: get(activities).slice(0, 250),
+      plans: get(plans).slice(0, 60),
+      goals: get(goals),
+    };
+    globalThis.localStorage?.setItem(BOOT_CACHE_KEY, JSON.stringify(payload));
+  } catch {
+    // Ignore storage quota / private-mode failures.
+  }
+}
+
+function clearBootCache() {
+  try {
+    globalThis.localStorage?.removeItem(BOOT_CACHE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 function clearUserData() {
+  clearBootCache();
   session.set(null);
   profile.set(null);
   activities.set([]);
@@ -41,24 +85,49 @@ onUnauthorized(() => {
 });
 
 export async function bootstrap() {
-  booting.set(true);
-  ready.set(false);
   bootError.set(null);
+
+  if (!api.auth.hasToken()) {
+    clearUserData();
+    ready.set(true);
+    booting.set(false);
+    return;
+  }
+
+  // Hydrate immediately from the cached account snapshot when available so
+  // returning athletes skip the cold-start splash while syncing in background.
+  const cached = readBootCache();
+  const hadCache = Boolean(cached);
+  if (cached) {
+    session.set(cached.session);
+    profile.set(cached.profile);
+    activities.set(Array.isArray(cached.activities) ? cached.activities : []);
+    plans.set(Array.isArray(cached.plans) ? cached.plans : []);
+    goals.set(cached.goals ?? null);
+    ready.set(true);
+    booting.set(false);
+  } else {
+    booting.set(true);
+    ready.set(false);
+  }
+
   try {
-    // A healthy response confirms the API can reach its configured database.
-    await api.health();
-    const user = await api.auth.user();
+    // Run DB health and token validation concurrently (1 parallel RTT instead of 2 serial RTTs).
+    const [, user] = await Promise.all([api.health(), api.auth.user()]);
     if (user) {
       await refresh();
       session.set(user);
+      writeBootCache();
     } else {
       clearUserData();
     }
     loadModelCard().then((card) => modelCard.set(card));
   } catch (error) {
-    clearUserData();
-    // A 401 means the token was rejected; other failures keep it for a retry.
-    if (error.status !== 401) bootError.set(error.message || 'Could not reach the server.');
+    if (!hadCache) {
+      clearUserData();
+      // A 401 means the token was rejected; other failures keep it for a retry.
+      if (error.status !== 401) bootError.set(error.message || 'Could not reach the server.');
+    }
   } finally {
     ready.set(true);
     booting.set(false);
@@ -76,6 +145,32 @@ export async function refresh() {
   activities.set(a);
   plans.set(pl);
   goals.set(g);
+  if (get(session)?.id) writeBootCache();
+}
+
+export function upsertActivity(saved) {
+  if (!saved) return;
+  activities.update((rows) => {
+    const filtered = rows.filter((row) => String(row.id) !== String(saved.id));
+    return [saved, ...filtered].sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime());
+  });
+  writeBootCache();
+}
+
+export function removeActivityById(id) {
+  activities.update((rows) => rows.filter((row) => String(row.id) !== String(id)));
+  writeBootCache();
+}
+
+export function upsertPlan(saved) {
+  if (!saved) return;
+  plans.update((rows) => [saved, ...rows.filter((row) => String(row.id) !== String(saved.id))]);
+  writeBootCache();
+}
+
+export function removePlanById(id) {
+  plans.update((rows) => rows.filter((row) => String(row.id) !== String(id)));
+  writeBootCache();
 }
 
 async function finishSignIn(user) {
@@ -83,6 +178,7 @@ async function finishSignIn(user) {
     // Do not show an incomplete dashboard if any account data fails to load.
     await refresh();
     session.set(user);
+    writeBootCache();
     return user;
   } catch (error) {
     clearUserData();
@@ -117,6 +213,8 @@ export async function logout() {
 
 const DAY = 86400000;
 
+const localDayKey = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+
 export function summarize(rows = []) {
   return rows.reduce(
     (acc, row) => {
@@ -131,38 +229,69 @@ export function summarize(rows = []) {
   );
 }
 
-const within = (rows, from, to = new Date()) =>
-  rows.filter((r) => {
-    const t = new Date(r.started_at).getTime();
-    return t >= from.getTime() && t <= to.getTime();
-  });
+/**
+ * Single-pass pre-parsed index of all activities so every derived dashboard
+ * chart, streak, and breakdown avoids repeated `new Date()` allocations.
+ */
+const parsedActivities = derived(activities, ($a) => {
+  const items = [];
+  const byDay = new Map();
+  for (const row of $a) {
+    const dt = new Date(row.started_at);
+    const ts = dt.getTime();
+    if (!Number.isFinite(ts)) continue;
+    const key = localDayKey(dt);
+    const entry = { row, ts, key, weekday: dt.getDay() };
+    items.push(entry);
+    let bucket = byDay.get(key);
+    if (!bucket) {
+      bucket = [];
+      byDay.set(key, bucket);
+    }
+    bucket.push(row);
+  }
+  return { items, byDay };
+});
 
-export const todayActivities = derived(activities, ($a) => $a.filter((row) => isSameDay(row.started_at, new Date())));
+export const todayActivities = derived(parsedActivities, ($idx) => {
+  return $idx.byDay.get(localDayKey(new Date())) ?? [];
+});
+
 export const todayStats = derived(todayActivities, ($rows) => summarize($rows));
-export const weekActivities = derived(activities, ($a) => within($a, startOfWeek(new Date())));
+
+export const weekActivities = derived(parsedActivities, ($idx) => {
+  const from = startOfWeek(new Date()).getTime();
+  const to = Date.now();
+  const rows = [];
+  for (const item of $idx.items) {
+    if (item.ts >= from && item.ts <= to) rows.push(item.row);
+  }
+  return rows;
+});
+
 export const weekStats = derived(weekActivities, ($rows) => summarize($rows));
 
 export const personalBests = derived(activities, ($a) => {
-  const longest = $a.reduce((best, r) => (!best || r.distance_km > best.distance_km ? r : best), null);
-  const runs = $a.filter((r) => r.activity_type === 'run' && r.distance_km >= 4.5 && r.duration_min > 0);
-  const fastest = runs.reduce(
-    (best, r) => {
+  let longest = null;
+  let fastest = null;
+  let biggest = null;
+  for (const r of $a) {
+    if (!longest || r.distance_km > longest.distance_km) longest = r;
+    if (!biggest || r.calories > biggest.calories) biggest = r;
+    if (r.activity_type === 'run' && r.distance_km >= 4.5 && r.duration_min > 0) {
       const paceNow = r.duration_min / r.distance_km;
-      return !best || paceNow < best.pace ? { pace: paceNow, row: r } : best;
-    },
-    null,
-  );
-  const biggest = $a.reduce((best, r) => (!best || r.calories > best.calories ? r : best), null);
+      if (!fastest || paceNow < fastest.pace) fastest = { pace: paceNow, row: r };
+    }
+  }
   return { longest, fastestRun: fastest?.row ?? null, fastestPace: fastest?.pace ?? null, biggest };
 });
 
 /** Consecutive days (ending today or yesterday) that contain at least one activity. */
-export const streak = derived(activities, ($a) => {
-  const days = new Set($a.map((r) => new Date(r.started_at).toDateString()));
+export const streak = derived(parsedActivities, ($idx) => {
   let count = 0;
   const cursor = new Date();
-  if (!days.has(cursor.toDateString())) cursor.setDate(cursor.getDate() - 1);
-  while (days.has(cursor.toDateString())) {
+  if (!$idx.byDay.has(localDayKey(cursor))) cursor.setDate(cursor.getDate() - 1);
+  while ($idx.byDay.has(localDayKey(cursor))) {
     count += 1;
     cursor.setDate(cursor.getDate() - 1);
   }
@@ -170,13 +299,20 @@ export const streak = derived(activities, ($a) => {
 });
 
 /** Last 7 days vs the 7 before → percentage change per metric. */
-export const trends = derived(activities, ($a) => {
-  const now = new Date();
-  const start = new Date(now.getTime() - 6 * DAY);
+export const trends = derived(parsedActivities, ($idx) => {
+  const now = Date.now();
+  const start = new Date(now - 6 * DAY);
   start.setHours(0, 0, 0, 0);
-  const prevStart = new Date(start.getTime() - 7 * DAY);
-  const current = summarize(within($a, start));
-  const previous = summarize(within($a, prevStart, new Date(start.getTime() - 1)));
+  const startMs = start.getTime();
+  const prevStartMs = startMs - 7 * DAY;
+  const currentRows = [];
+  const previousRows = [];
+  for (const item of $idx.items) {
+    if (item.ts >= startMs && item.ts <= now) currentRows.push(item.row);
+    else if (item.ts >= prevStartMs && item.ts < startMs) previousRows.push(item.row);
+  }
+  const current = summarize(currentRows);
+  const previous = summarize(previousRows);
 
   const change = (c, p) => (p > 0 ? ((c - p) / p) * 100 : c > 0 ? 100 : 0);
   return {
@@ -189,63 +325,66 @@ export const trends = derived(activities, ($a) => {
 });
 
 /** Mon→Sun series for the current week. */
-export const weekSeries = derived(weekActivities, ($rows) => {
+export const weekSeries = derived(parsedActivities, ($idx) => {
   const start = startOfWeek(new Date());
+  const startMs = start.getTime();
   return weekdayShort
     .slice(1)
     .concat(weekdayShort[0])
     .map((label, index) => {
-      const day = new Date(start.getTime() + index * DAY);
-      const totals = summarize($rows.filter((r) => isSameDay(r.started_at, day)));
-      return { label, date: day, ...totals };
+      const day = new Date(startMs + index * DAY);
+      const rows = $idx.byDay.get(localDayKey(day)) ?? [];
+      return { label, date: day, ...summarize(rows) };
     });
 });
 
-/** Bucketed series for the chart tabs: 7 days, 30 days, 90 days. */
-export const chartSeries = derived(activities, ($a) => {
-  const build7 = () => {
-    const start = startOfWeek(new Date());
-    return Array.from({ length: 7 }, (_, i) => {
-      const day = new Date(start.getTime() + i * DAY);
-      return {
-        label: weekdayShort[day.getDay()],
-        date: day,
-        ...summarize($a.filter((r) => isSameDay(r.started_at, day))),
-      };
-    });
-  };
+/** Bucketed series for the chart tabs: 7 days, 30 days, 90 days (O(N + buckets)). */
+export const chartSeries = derived(parsedActivities, ($idx) => {
+  const now = new Date();
+  const nowMs = now.getTime();
+  const weekStartMs = startOfWeek(now).getTime();
 
-  const buildDays = (days) => {
-    const now = new Date();
-    return Array.from({ length: days }, (_, i) => {
-      const day = new Date(now.getTime() - (days - 1 - i) * DAY);
-      return {
-        label: day.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        date: day,
-        ...summarize($a.filter((r) => isSameDay(r.started_at, day))),
-      };
-    });
-  };
+  const build7 = Array.from({ length: 7 }, (_, i) => {
+    const day = new Date(weekStartMs + i * DAY);
+    const rows = $idx.byDay.get(localDayKey(day)) ?? [];
+    return { label: weekdayShort[day.getDay()], date: day, ...summarize(rows) };
+  });
 
-  const buildWeeks = (weeks) => {
-    const now = new Date();
-    return Array.from({ length: weeks }, (_, i) => {
-      const end = new Date(now.getTime() - (weeks - 1 - i) * 7 * DAY);
-      const start = new Date(end.getTime() - 6 * DAY);
-      const bucket = summarize($a.filter((r) => new Date(r.started_at) >= start && new Date(r.started_at) <= end));
-      return { label: `${start.getMonth() + 1}/${start.getDate()}`, date: start, ...bucket };
-    });
-  };
+  const buildDays = Array.from({ length: 30 }, (_, i) => {
+    const day = new Date(nowMs - (29 - i) * DAY);
+    const rows = $idx.byDay.get(localDayKey(day)) ?? [];
+    return {
+      label: day.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      date: day,
+      ...summarize(rows),
+    };
+  });
 
-  return { '7D': build7(), '1M': buildDays(30), '3M': buildWeeks(13) };
+  const weekBuckets = Array.from({ length: 13 }, () => []);
+  const oldestStartMs = nowMs - (12 * 7 + 6) * DAY;
+  for (const item of $idx.items) {
+    if (item.ts < oldestStartMs || item.ts > nowMs) continue;
+    const daysFromEnd = Math.floor((nowMs - item.ts) / DAY);
+    const bucketFromEnd = Math.floor(daysFromEnd / 7);
+    const idx = 12 - bucketFromEnd;
+    if (idx >= 0 && idx < 13) weekBuckets[idx].push(item.row);
+  }
+
+  const buildWeeks = Array.from({ length: 13 }, (_, i) => {
+    const end = new Date(nowMs - (12 - i) * 7 * DAY);
+    const start = new Date(end.getTime() - 6 * DAY);
+    return { label: `${start.getMonth() + 1}/${start.getDate()}`, date: start, ...summarize(weekBuckets[i]) };
+  });
+
+  return { '7D': build7, '1M': buildDays, '3M': buildWeeks };
 });
 
 export const typeBreakdown = derived(activities, ($a) => {
-  const types = ['run', 'ride', 'walk', 'hike'];
-  const totals = types.map((type) => {
-    const rows = $a.filter((r) => r.activity_type === type);
-    return { type, ...summarize(rows) };
-  });
+  const buckets = { run: [], ride: [], walk: [], hike: [] };
+  for (const r of $a) {
+    if (buckets[r.activity_type]) buckets[r.activity_type].push(r);
+  }
+  const totals = ['run', 'ride', 'walk', 'hike'].map((type) => ({ type, ...summarize(buckets[type]) }));
   const totalDistance = totals.reduce((s, t) => s + t.distance, 0) || 1;
   return totals.map((t) => ({ ...t, share: (t.distance / totalDistance) * 100 }));
 });
@@ -264,10 +403,14 @@ export const paceTrend = derived(activities, ($a) =>
     })),
 );
 
-/** Signed-up weekday histogram: which days this athlete actually trains. */
-export const weekdayLoad = derived(activities, ($a) =>
-  weekdayShort.slice(1).concat(weekdayShort[0]).map((label) => {
-    const rows = $a.filter((r) => weekdayShort[new Date(r.started_at).getDay()] === label);
-    return { label, ...summarize(rows) };
-  }),
-);
+/** Signed-up weekday histogram: which days this athlete actually trains (single-pass O(N)). */
+export const weekdayLoad = derived(parsedActivities, ($idx) => {
+  const buckets = Array.from({ length: 7 }, () => []);
+  for (const item of $idx.items) {
+    buckets[item.weekday].push(item.row);
+  }
+  return [1, 2, 3, 4, 5, 6, 0].map((dayIndex) => ({
+    label: weekdayShort[dayIndex],
+    ...summarize(buckets[dayIndex]),
+  }));
+});

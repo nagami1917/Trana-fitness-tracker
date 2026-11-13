@@ -51,6 +51,9 @@ const bundle = await build({
   build: {
     write: false,
     minify: false,
+    rollupOptions: {
+      output: { inlineDynamicImports: true },
+    },
     lib: {
       entry: resolve(root, 'scripts/stubs/mascot-tour-entry.js'),
       name: 'MobileResponsiveTest',

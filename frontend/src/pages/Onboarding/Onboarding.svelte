@@ -1,6 +1,6 @@
 <script>
   import { User, Target, Droplets, ArrowRight, LoaderCircle, Check, MapPin, Sparkles } from 'lucide-svelte';
-  import { profile, notify, refresh, session } from '../../stores/index.js';
+  import { profile, goals, notify, session } from '../../stores/index.js';
   import { api } from '../../services/client.js';
   import { navigate } from '../../lib/router.js';
   import { mascotTour } from '../../lib/mascotTour.svelte.js';
@@ -55,7 +55,8 @@
       written = true;
       profile.set(updated);
       mascotTour.queueForUser($session?.id);
-      await refresh();
+      const latestGoals = await api.goals.get();
+      goals.set(latestGoals);
       if (target === '/plan') notify(`All set, ${$session?.name ?? 'athlete'}! Let’s plan your first session.`);
       navigate(target, { replace: true });
     } catch (error) {

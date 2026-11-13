@@ -5,7 +5,7 @@
   import Segmented from '../../components/common/Segmented.svelte';
   import CityRegionInput from '../../components/common/CityRegionInput.svelte';
   import { api } from '../../services/client.js';
-  import { profile, session, refresh, notify } from '../../stores/index.js';
+  import { profile, session, notify } from '../../stores/index.js';
 
   // Step 4 — the fitness profile feeds every prediction. `age` and
   // `fitness_level` are the spec's names; the API maps them onto the stored
@@ -55,7 +55,7 @@
     loading = true;
     let written = false;
     try {
-      await api.profile.update({
+      const updated = await api.profile.update({
         name: form.name.trim() || undefined,
         city: form.city.trim() || null,
         weight_kg: Number(form.weight_kg),
@@ -69,8 +69,9 @@
         units: form.units,
       });
       written = true;
-      await refresh();
-      fillForm($profile);
+      profile.set(updated);
+      if (updated?.name) session.update((s) => (s ? { ...s, name: updated.name } : s));
+      fillForm(updated);
       notify('Profile saved');
     } catch (err) {
       notify(written ? 'Profile saved, but the view could not refresh. Reload when connected.' : (err.message || 'Could not save your profile'), 'error');
