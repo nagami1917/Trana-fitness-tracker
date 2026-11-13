@@ -91,10 +91,14 @@ Object.defineProperty(window.navigator, 'geolocation', {
   value: geoMock,
   configurable: true,
 });
-Object.defineProperty(globalThis.navigator, 'geolocation', {
-  value: geoMock,
-  configurable: true,
-});
+if (typeof globalThis.navigator !== 'undefined') {
+  Object.defineProperty(globalThis.navigator, 'geolocation', {
+    value: geoMock,
+    configurable: true,
+  });
+} else {
+  globalThis.navigator = { geolocation: geoMock };
+}
 
 function emitGpsFix(latitude, longitude, { altitude = 35, speed = 3.2, accuracy = 6, heading = 45 } = {}) {
   latestFix = {
