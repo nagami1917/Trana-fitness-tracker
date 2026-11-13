@@ -10,7 +10,10 @@
     lossM = 0,
     source = 'dem', // 'dem' | 'gpx' | 'estimate'
     loading = false,
+    onHover = null,
   } = $props();
+
+  let hoverIndex = $state(null);
 
   const valid = $derived(Array.isArray(profile) && profile.length >= 2);
 
@@ -25,16 +28,36 @@
     const W = 320;
     const H = 68;
     const padY = 6;
-    const coords = profile.map((p, i) => {
+    const pointsXY = profile.map((p, i) => {
       const x = profile.length > 1 ? (i / (profile.length - 1)) * W : 0;
       const y = H - padY - ((p.eleM - min) / span) * (H - padY * 2);
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
+      return { x, y, distKm: Number(p.distKm) || 0, eleM: Number(p.eleM) || 0 };
     });
+    const coords = pointsXY.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`);
     const linePath = `M${coords.join(' L')}`;
     const areaPath = `${linePath} L${W},${H} L0,${H} Z`;
 
-    return { min, max, totalKm, linePath, areaPath, W, H };
+    return { min, max, totalKm, linePath, areaPath, pointsXY, W, H };
   });
+
+  const hoveredPoint = $derived(
+    hoverIndex !== null && stats?.pointsXY?.[hoverIndex] ? stats.pointsXY[hoverIndex] : null,
+  );
+
+  function handlePointerMove(event) {
+    if (!stats?.pointsXY?.length) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (!rect.width) return;
+    const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+    const idx = Math.min(stats.pointsXY.length - 1, Math.round(ratio * (stats.pointsXY.length - 1)));
+    hoverIndex = idx;
+    onHover?.(stats.pointsXY[idx]?.distKm ?? null);
+  }
+
+  function handlePointerLeave() {
+    hoverIndex = null;
+    onHover?.(null);
+  }
 </script>
 
 {#if loading && !valid}
@@ -55,15 +78,28 @@
         </span>
       </p>
       <p class="num-tabular text-[11px] font-bold text-ink-500">
-        +{Math.round(toDisplayElevation(gainM, $unitSystem))} {elevationUnit($unitSystem)}
-        {#if lossM > 0}
-          · -{Math.round(toDisplayElevation(lossM, $unitSystem))} {elevationUnit($unitSystem)}
+        {#if hoveredPoint}
+          <span class="text-brand-600">
+            {toDisplayDistance(hoveredPoint.distKm, $unitSystem).toFixed(2)} {distanceUnit($unitSystem)} · {Math.round(toDisplayElevation(hoveredPoint.eleM, $unitSystem))} {elevationUnit($unitSystem)}
+          </span>
+        {:else}
+          +{Math.round(toDisplayElevation(gainM, $unitSystem))} {elevationUnit($unitSystem)}
+          {#if lossM > 0}
+            · -{Math.round(toDisplayElevation(lossM, $unitSystem))} {elevationUnit($unitSystem)}
+          {/if}
+          · {Math.round(toDisplayElevation(stats.min, $unitSystem))}–{Math.round(toDisplayElevation(stats.max, $unitSystem))} {elevationUnit($unitSystem)}
         {/if}
-        · {Math.round(toDisplayElevation(stats.min, $unitSystem))}–{Math.round(toDisplayElevation(stats.max, $unitSystem))} {elevationUnit($unitSystem)}
       </p>
     </div>
 
-    <svg viewBox="0 0 {stats.W} {stats.H}" class="mt-2 h-16 w-full overflow-visible" aria-label="Route elevation profile">
+    <svg
+      viewBox="0 0 {stats.W} {stats.H}"
+      class="mt-2 h-16 w-full cursor-crosshair touch-none overflow-visible"
+      aria-label="Route elevation profile"
+      role="img"
+      onpointermove={handlePointerMove}
+      onpointerleave={handlePointerLeave}
+    >
       <defs>
         <linearGradient id="trana-ele-grad" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stop-color="#f97316" stop-opacity="0.35" />
@@ -72,6 +108,10 @@
       </defs>
       <path d={stats.areaPath} fill="url(#trana-ele-grad)" />
       <path d={stats.linePath} fill="none" stroke="#ea580c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+      {#if hoveredPoint}
+        <line x1={hoveredPoint.x} y1="0" x2={hoveredPoint.x} y2={stats.H} stroke="#f9569b" stroke-width="1.5" stroke-dasharray="3 2" />
+        <circle cx={hoveredPoint.x} cy={hoveredPoint.y} r="4" fill="#f9569b" stroke="#ffffff" stroke-width="1.5" />
+      {/if}
     </svg>
 
     <div class="num-tabular mt-1 flex justify-between text-[11px] font-semibold text-ink-400">

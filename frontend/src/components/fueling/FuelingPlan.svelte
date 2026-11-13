@@ -1,5 +1,5 @@
 <script>
-  import { Flame, Salad, Droplets, Waves, Clock, Gauge, Utensils, Candy, CupSoda, Check, Sparkles, Info } from 'lucide-svelte';
+  import { Flame, Salad, Droplets, Waves, Clock, Gauge, Utensils, Candy, CupSoda, Check, Sparkles, Info, Package } from 'lucide-svelte';
   import { duration as fmtDuration, pace, speed, kcal, nf, ml } from '../../lib/format.js';
   import { INTENSITY_COPY } from '../../lib/ml/fueling.js';
   import { unitSystem } from '../../stores/index.js';
@@ -97,6 +97,37 @@
   </div>
 
   {#if !compact}
+    {#if f.kit?.items?.length}
+      <!-- race-day packing list -->
+      <div class="rounded-3xl border border-brand-100 bg-white p-4">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <h3 class="flex items-center gap-1.5 text-sm">
+            <Package size={15} class="text-brand-600" />
+            Packing kit
+          </h3>
+          {#if f.kit.cadence?.feedEveryMin}
+            <span class="pill num-tabular">Feed every ~{f.kit.cadence.feedEveryMin} min</span>
+          {/if}
+        </div>
+        <div class="mt-2.5 flex flex-wrap gap-2">
+          {#each f.kit.items as entry (entry.id || entry.name)}
+            <span class="inline-flex items-center gap-1.5 rounded-2xl border border-brand-100 bg-brand-50/70 px-3 py-1.5 text-xs font-extrabold text-ink-900">
+              <span class="num-tabular text-brand-700">{entry.quantity}×</span>
+              <span>{entry.name}</span>
+              <span class="text-[11px] font-bold text-ink-400">
+                ({entry.carbsG}g{#if entry.fluidMl > 0}, {entry.fluidMl}ml{/if})
+              </span>
+            </span>
+          {/each}
+        </div>
+        {#if f.kit.cadence?.sipEveryMin}
+          <p class="mt-2.5 text-[11px] font-bold text-ink-500 num-tabular">
+            Cadence: sip ~{f.kit.cadence.sipMl} ml every {f.kit.cadence.sipEveryMin} min · totals {f.kit.totals?.carbsG ?? 0}g carbs, {f.kit.totals?.sodiumMg ?? 0}mg Na
+          </p>
+        {/if}
+      </div>
+    {/if}
+
     <!-- timeline -->
     <div class="rounded-3xl border border-brand-100 bg-white p-4">
       <div class="flex items-center justify-between gap-2">

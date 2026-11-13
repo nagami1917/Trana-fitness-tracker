@@ -34,7 +34,7 @@ class ProfileController extends Controller
     private const PROFILE_FIELDS = [
         'weight_kg', 'height_cm', 'birth_year', 'sex', 'sweat_profile',
         'experience_level', 'activity_experience', 'typical_temperature_c',
-        'city', 'units',
+        'city', 'units', 'resting_hr', 'max_hr', 'hr_zones',
     ];
 
     public function __construct(private readonly ActivityService $activities)

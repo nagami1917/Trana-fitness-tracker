@@ -15,6 +15,8 @@
     center = [14.676, 121.0437],
     zoom = 13,
     userLocation = null, // [lat, lng] — blue-dot "you are here" indicator
+    hoverCoord = null, // [lat, lng] — route scrub marker
+    ghostPosition = null, // [lat, lng] — ghost pacer position
     routing = false,
     routeMode = 'roads', // 'roads' | 'straight'
     onPick = null,
@@ -30,6 +32,8 @@
   let casing;
   let guide;
   let locationMarker;
+  let hoverMarker;
+  let ghostMarker;
   let markers = [];
   let hasCenteredOnUser = false;
 
@@ -65,6 +69,24 @@
         '<span style="display:block;width:18px;height:18px;border-radius:9999px;background:#3b82f6;border:3.5px solid #fff;box-shadow:0 0 0 6px rgba(59,130,246,.22),0 2px 8px rgba(0,0,0,.3)"></span>',
       iconSize: [18, 18],
       iconAnchor: [9, 9],
+    });
+
+  const hoverIcon = () =>
+    L.divIcon({
+      className: '',
+      html:
+        '<span style="display:block;width:16px;height:16px;border-radius:9999px;background:#f59e0b;border:3px solid #fff;box-shadow:0 0 0 6px rgba(245,158,11,.28),0 2px 8px rgba(0,0,0,.35)"></span>',
+      iconSize: [16, 16],
+      iconAnchor: [8, 8],
+    });
+
+  const ghostIcon = () =>
+    L.divIcon({
+      className: '',
+      html:
+        '<span style="display:grid;place-items:center;width:22px;height:22px;border-radius:9999px;background:#7c3aed;color:#fff;font:800 10px/1 sans-serif;border:2.5px solid #fff;box-shadow:0 0 0 6px rgba(124,58,237,.22),0 3px 10px rgba(0,0,0,.3)">G</span>',
+      iconSize: [22, 22],
+      iconAnchor: [11, 11],
     });
 
   function isClosed(pts) {
@@ -315,6 +337,40 @@
   $effect(() => {
     void userLocation;
     drawLocation();
+  });
+
+  $effect(() => {
+    const coord = hoverCoord;
+    if (!map || !layerGroup) return;
+    if (hoverMarker) {
+      hoverMarker.remove();
+      hoverMarker = null;
+    }
+    if (Array.isArray(coord) && coord.length === 2 && Number.isFinite(coord[0]) && Number.isFinite(coord[1])) {
+      hoverMarker = L.marker(coord, {
+        icon: hoverIcon(),
+        interactive: false,
+        keyboard: false,
+        zIndexOffset: 950,
+      }).addTo(layerGroup);
+    }
+  });
+
+  $effect(() => {
+    const coord = ghostPosition;
+    if (!map || !layerGroup) return;
+    if (ghostMarker) {
+      ghostMarker.remove();
+      ghostMarker = null;
+    }
+    if (Array.isArray(coord) && coord.length === 2 && Number.isFinite(coord[0]) && Number.isFinite(coord[1])) {
+      ghostMarker = L.marker(coord, {
+        icon: ghostIcon(),
+        interactive: false,
+        keyboard: false,
+        zIndexOffset: 900,
+      }).addTo(layerGroup);
+    }
   });
 
   const hasValidUserLocation = $derived(

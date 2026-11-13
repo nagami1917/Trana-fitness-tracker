@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Activity;
 use App\Models\EnergyExpenditure;
 use App\Models\FitnessProfile;
+use App\Models\Gear;
 use App\Models\User;
 use App\Services\EnergyExpenditureCalibrationService;
 
@@ -58,6 +59,7 @@ class ActivityService
 
         $activity = $user->activities()->create([
             'activity_type' => $validated['activity_type'],
+            'gear_id' => $validated['gear_id'] ?? null,
             'distance_km' => $validated['distance_km'],
             'duration_min' => $validated['duration_min'],
             'elevation_gain_m' => $validated['elevation_gain_m'] ?? 0,
@@ -72,6 +74,10 @@ class ActivityService
             'notes' => $validated['notes'] ?? null,
             'source' => $validated['source'] ?? 'manual',
         ]);
+
+        if ($activity->gear_id) {
+            Gear::where('user_id', $user->id)->find($activity->gear_id)?->syncLoggedKm();
+        }
 
         $this->syncExperienceLevel($user);
 
@@ -123,7 +129,14 @@ class ActivityService
             $updates['average_pace'] = round($durationMin / $distanceKm, 2);
         }
 
+        $previousGearId = $activity->gear_id;
+
         $activity->update($updates);
+
+        $newGearId = $activity->gear_id;
+        foreach (array_unique(array_filter([$previousGearId, $newGearId])) as $gearId) {
+            Gear::where('user_id', $user->id)->find($gearId)?->syncLoggedKm();
+        }
 
         return $activity->fresh();
     }

@@ -50,6 +50,13 @@ trait MapsProfileFields
             'typical_temperature_c' => ['sometimes', 'numeric', 'min:-10', 'max:50'],
             'city' => ['sometimes', 'nullable', 'string', 'max:120'],
             'units' => ['sometimes', 'in:metric,imperial'],
+            'resting_hr' => ['sometimes', 'nullable', 'integer', 'min:30', 'max:120'],
+            'max_hr' => ['sometimes', 'nullable', 'integer', 'min:100', 'max:240'],
+            'hr_zones' => ['sometimes', 'nullable', 'array', 'max:5'],
+            'hr_zones.*.zone' => ['required_with:hr_zones', 'integer', 'min:1', 'max:5'],
+            'hr_zones.*.name' => ['required_with:hr_zones', 'string', 'max:40'],
+            'hr_zones.*.min' => ['required_with:hr_zones', 'integer', 'min:30', 'max:240'],
+            'hr_zones.*.max' => ['required_with:hr_zones', 'integer', 'min:30', 'max:240'],
         ];
     }
 }

@@ -21,20 +21,28 @@
     Footprints,
     Activity,
     SlidersHorizontal,
+    BellRing,
+    Plus,
   } from 'lucide-svelte';
   import Card from '../../components/common/Card.svelte';
   import Segmented from '../../components/common/Segmented.svelte';
   import CityRegionInput from '../../components/common/CityRegionInput.svelte';
-  import { profile, session, logout, notify, modelCard, activities } from '../../stores/index.js';
+  import ProgressBar from '../../components/common/ProgressBar.svelte';
+  import { profile, session, logout, notify, modelCard, activities, gearList, loadGear, unitSystem } from '../../stores/index.js';
   import { api } from '../../services/client.js';
   import { energyApi, importBatch, parseCsv, CSV_COLUMNS } from '../../services/energyService.js';
+  import { buildHrZones } from '../../lib/analytics/heartRate.js';
+  import { buildPushSubscriptionPayload, notificationSupport, showLocalFuelingNotification } from '../../lib/pushNotifications.js';
   import { theme, setTheme } from '../../lib/theme.js';
   import {
+    distanceUnit,
+    fromDisplayDistance,
     fromDisplayHeight,
     fromDisplayTemp,
     fromDisplayWeight,
     heightUnit,
     tempUnit,
+    toDisplayDistance,
     toDisplayHeight,
     toDisplayTemp,
     toDisplayWeight,
@@ -57,10 +65,34 @@
     sweat_profile: $profile?.sweat_profile ?? 'normal',
     experience_level: $profile?.experience_level ?? 3,
     typical_temperature_c: $profile?.typical_temperature_c ?? 26,
+    resting_hr: $profile?.resting_hr ?? '',
+    max_hr: $profile?.max_hr ?? '',
     units: $profile?.units ?? 'metric',
   });
   let saving = $state(false);
   let locating = $state(false);
+
+  // Gear locker state
+  let addingGear = $state(false);
+  let gearSaving = $state(false);
+  let gearDraft = $state({ name: '', sport: 'run', brand: '', max_km: 700 });
+
+  // Web Push notifications state
+  let pushState = $state({
+    subscribed: false,
+    count: 0,
+    preferences: { pre_workout_fueling: true, gear_wear_alerts: true, race_carb_loading: true },
+  });
+  let pushBusy = $state(false);
+  const pushSupport = notificationSupport();
+
+  const hrZonePreview = $derived(
+    buildHrZones({
+      maxHr: form.max_hr !== '' ? Number(form.max_hr) : null,
+      restingHr: form.resting_hr !== '' ? Number(form.resting_hr) : null,
+      birthYear: form.birth_year !== '' ? Number(form.birth_year) : null,
+    }),
+  );
 
   // Wearable energy-expenditure calibration (services/energyService.js).
   let calibration = $state(null);
@@ -69,7 +101,104 @@
   let importError = $state('');
   let importNote = $state('');
 
-  onMount(loadCalibration);
+  onMount(() => {
+    void loadCalibration();
+    void loadGear();
+    void loadPushStatus();
+  });
+
+  async function loadPushStatus() {
+    try {
+      const res = await api.push.status();
+      if (res) pushState = res;
+    } catch {
+      // ignore if push endpoint unavailable
+    }
+  }
+
+  async function enablePush() {
+    if (pushBusy) return;
+    pushBusy = true;
+    try {
+      const sub = await buildPushSubscriptionPayload();
+      const res = await api.push.subscribe({ ...sub, preferences: pushState.preferences });
+      pushState = {
+        subscribed: true,
+        count: Math.max(1, pushState.count),
+        preferences: res?.preferences ?? pushState.preferences,
+      };
+      notify('Pre-workout fueling alerts enabled on this device.');
+    } catch (err) {
+      notify(err?.message || 'Could not enable push reminders', 'error');
+    } finally {
+      pushBusy = false;
+    }
+  }
+
+  async function disablePush() {
+    if (pushBusy) return;
+    pushBusy = true;
+    try {
+      await api.push.unsubscribe();
+      pushState = { ...pushState, subscribed: false, count: 0 };
+      notify('Device push subscription removed.', 'info');
+    } catch (err) {
+      notify(err?.message || 'Could not unsubscribe', 'error');
+    } finally {
+      pushBusy = false;
+    }
+  }
+
+  async function togglePushPref(key) {
+    const next = { ...pushState.preferences, [key]: !pushState.preferences[key] };
+    pushState = { ...pushState, preferences: next };
+    try {
+      await api.push.updatePreferences(next);
+    } catch {
+      // ignore
+    }
+  }
+
+  async function saveNewGear(event) {
+    event?.preventDefault?.();
+    if (!gearDraft.name.trim() || gearSaving) return;
+    gearSaving = true;
+    try {
+      const created = await api.gear.create({
+        name: gearDraft.name.trim(),
+        sport: gearDraft.sport,
+        brand: gearDraft.brand.trim() || null,
+        max_km: Math.max(50, Number(gearDraft.max_km) || 700),
+      });
+      gearList.update((rows) => [created, ...rows]);
+      gearDraft = { name: '', sport: 'run', brand: '', max_km: 700 };
+      addingGear = false;
+      notify('Gear added to locker.');
+    } catch (err) {
+      notify(err?.message || 'Could not add gear', 'error');
+    } finally {
+      gearSaving = false;
+    }
+  }
+
+  async function toggleGearRetire(item) {
+    try {
+      const updated = await api.gear.update(item.id, { retired: !item.retired });
+      gearList.update((rows) => rows.map((r) => (r.id === item.id ? updated : r)));
+    } catch (err) {
+      notify(err?.message || 'Could not update gear', 'error');
+    }
+  }
+
+  async function deleteGear(id) {
+    try {
+      await api.gear.remove(id);
+      gearList.update((rows) => rows.filter((r) => r.id !== id));
+      notify('Gear removed.', 'info');
+    } catch (err) {
+      notify(err?.message || 'Could not delete gear', 'error');
+    }
+  }
 
   async function loadCalibration() {
     try {
@@ -127,6 +256,8 @@
         sweat_profile: $profile.sweat_profile ?? 'normal',
         experience_level: $profile.experience_level ?? 3,
         typical_temperature_c: $profile.typical_temperature_c ?? 26,
+        resting_hr: $profile.resting_hr ?? '',
+        max_hr: $profile.max_hr ?? '',
         units: $profile.units ?? 'metric',
       };
     }
@@ -137,6 +268,8 @@
     saving = true;
     let written = false;
     try {
+      const resting = form.resting_hr == null || form.resting_hr === '' ? null : Number(form.resting_hr);
+      const maxHr = form.max_hr == null || form.max_hr === '' ? null : Number(form.max_hr);
       const updated = await api.profile.update({
         name: form.name,
         weight_kg: Number(form.weight_kg),
@@ -147,6 +280,13 @@
         sweat_profile: form.sweat_profile,
         experience_level: Number(form.experience_level),
         typical_temperature_c: Number(form.typical_temperature_c),
+        resting_hr: resting,
+        max_hr: maxHr,
+        hr_zones: buildHrZones({
+          maxHr,
+          restingHr: resting,
+          birthYear: form.birth_year !== '' ? Number(form.birth_year) : null,
+        }).map(({ zone, name, min, max }) => ({ zone, name, min, max })),
         units: form.units,
       });
       written = true;
@@ -397,6 +537,28 @@
                 }}
               />
             </div>
+
+            <div class="border-t border-brand-100 pt-3">
+              <div class="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <span class="label">Resting heart rate (bpm)</span>
+                  <input class="input num-tabular" type="number" min="30" max="120" placeholder="e.g. 54" bind:value={form.resting_hr} />
+                </div>
+                <div>
+                  <span class="label">Max heart rate (bpm)</span>
+                  <input class="input num-tabular" type="number" min="110" max="230" placeholder="Auto from birth year" bind:value={form.max_hr} />
+                </div>
+              </div>
+              <div class="mt-2.5 grid grid-cols-5 gap-1.5">
+                {#each hrZonePreview as z (z.zone)}
+                  <div class="rounded-xl border border-brand-100 bg-brand-50/40 p-1.5 text-center">
+                    <span class="mx-auto block h-1 w-6 rounded-full" style="background:{z.color}"></span>
+                    <p class="mt-1 text-[10px] font-extrabold text-ink-900">Z{z.zone}</p>
+                    <p class="num-tabular text-[10px] font-bold text-ink-400">{z.min}–{z.max}</p>
+                  </div>
+                {/each}
+              </div>
+            </div>
           </div>
         </Card>
       </div>
@@ -535,6 +697,120 @@ garmin,run,5.2,32.5,158,68,420,2026-11-09T08:00:00+08:00"
       </div>
 
       <div class="space-y-4">
+        <Card>
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <Footprints size={17} class="text-brand-500" />
+              <h2 class="text-lg">Gear & Shoe Locker</h2>
+            </div>
+            <button type="button" class="btn-chip !py-1" onclick={() => (addingGear = !addingGear)}>
+              <Plus size={12} /> {addingGear ? 'Close' : 'Add gear'}
+            </button>
+          </div>
+          <p class="mt-1 text-xs font-semibold text-ink-500">
+            Track shoe cushioning & bike mileage automatically — alerts fire at 85% wear.
+          </p>
+
+          {#if addingGear}
+            <form class="mt-3 grid gap-2 rounded-2xl border border-brand-100 bg-brand-50/40 p-3 sm:grid-cols-4" onsubmit={saveNewGear}>
+              <input class="input sm:col-span-2" placeholder="Name (e.g. Vaporfly 3)" bind:value={gearDraft.name} required />
+              <select class="input" bind:value={gearDraft.sport}>
+                <option value="run">Running Shoe</option>
+                <option value="ride">Bike</option>
+                <option value="hike">Trail / Hike</option>
+                <option value="all">All Sports</option>
+              </select>
+              <input class="input num-tabular" type="number" min="50" max="50000" placeholder="Max km" bind:value={gearDraft.max_km} />
+              <input class="input sm:col-span-3" placeholder="Brand (optional)" bind:value={gearDraft.brand} />
+              <button type="submit" class="btn-primary !py-2" disabled={gearSaving}>Save</button>
+            </form>
+          {/if}
+
+          <div class="mt-3 space-y-2.5">
+            {#each $gearList as item (item.id)}
+              <div class="rounded-2xl border border-brand-100 bg-white/80 p-3">
+                <div class="flex items-center justify-between gap-2">
+                  <div>
+                    <p class="text-xs font-extrabold text-ink-900">
+                      {item.name}
+                      {#if item.brand}<span class="font-semibold text-ink-400">· {item.brand}</span>{/if}
+                      {#if item.retired}<span class="ml-1 rounded-full bg-ink-100 px-2 py-0.5 text-[10px] text-ink-500">Retired</span>{/if}
+                    </p>
+                    <p class="num-tabular text-[11px] font-bold text-ink-500">
+                      {Math.round(toDisplayDistance(item.total_km, $unitSystem))} / {Math.round(toDisplayDistance(item.max_km, $unitSystem))} {distanceUnit($unitSystem)} ({Math.round(item.wear_pct)}%)
+                    </p>
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    <button type="button" class="btn-chip !py-1" onclick={() => toggleGearRetire(item)}>
+                      {item.retired ? 'Reactivate' : 'Retire'}
+                    </button>
+                    <button type="button" class="text-ink-300 hover:text-rose-500 p-1" aria-label="Delete {item.name}" onclick={() => deleteGear(item.id)}>
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+                <div class="mt-2">
+                  <ProgressBar value={item.total_km} max={item.max_km} tone={item.wear_pct >= 85 ? 'amber' : 'brand'} height="h-1.5" />
+                </div>
+              </div>
+            {:else}
+              <p class="text-xs font-semibold text-ink-400">No shoes or bikes added yet.</p>
+            {/each}
+          </div>
+        </Card>
+
+        <Card>
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <BellRing size={17} class="text-brand-500" />
+              <h2 class="text-lg">Pre-Workout Fueling Push</h2>
+            </div>
+            <span class="pill {pushState.subscribed ? 'bg-emerald-50 text-emerald-700' : ''}">
+              {pushState.subscribed ? 'Subscribed' : 'Off'}
+            </span>
+          </div>
+          <p class="mt-2 text-xs font-semibold leading-relaxed text-ink-500">
+            Receive pre-session meal timing windows (3h and 45m prior), shoe wear alerts, and race-week carb-loading reminders.
+          </p>
+
+          <div class="mt-3 flex flex-wrap gap-2">
+            {#if !pushState.subscribed}
+              <button type="button" class="btn-primary" disabled={pushBusy || !pushSupport.supported} onclick={enablePush}>
+                <BellRing size={14} /> Enable push reminders
+              </button>
+            {:else}
+              <button type="button" class="btn-ghost" disabled={pushBusy} onclick={disablePush}>
+                Disable push
+              </button>
+            {/if}
+            <button
+              type="button"
+              class="btn-chip"
+              onclick={async () => {
+                const ok = await showLocalFuelingNotification();
+                notify(ok ? 'Test reminder dispatched' : 'Grant notification permission first', ok ? 'success' : 'info');
+              }}
+            >
+              Send test notification
+            </button>
+          </div>
+
+          <div class="mt-3 space-y-1.5 text-xs font-bold text-ink-700">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={pushState.preferences.pre_workout_fueling} onchange={() => togglePushPref('pre_workout_fueling')} class="accent-brand-600 rounded" />
+              <span>Pre-workout carb & meal window alerts</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={pushState.preferences.gear_wear_alerts} onchange={() => togglePushPref('gear_wear_alerts')} class="accent-brand-600 rounded" />
+              <span>Gear wear warnings (≥85% mileage)</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={pushState.preferences.race_carb_loading} onchange={() => togglePushPref('race_carb_loading')} class="accent-brand-600 rounded" />
+              <span>48h pre-race carb-loading reminders</span>
+            </label>
+          </div>
+        </Card>
+
         <Card flat>
           <div class="flex items-center gap-2">
             <ShieldCheck size={17} class="text-brand-500" />

@@ -13,6 +13,9 @@
     Trophy,
     Brain,
     MoreHorizontal,
+    Activity as ActivityIconLucide,
+    Flag,
+    Wheat,
   } from 'lucide-svelte';
   import StatCard from '../../components/dashboard/StatCard.svelte';
   import TrackActivityPrompt from '../../components/dashboard/TrackActivityPrompt.svelte';
@@ -24,7 +27,21 @@
   import ProgressBar from '../../components/common/ProgressBar.svelte';
   import Segmented from '../../components/common/Segmented.svelte';
   import LineChart from '../../components/analytics/LineChart.svelte';
-  import { activities, profile, goals, todayStats, weekStats, trends, chartSeries, modelCard, plans, unitSystem } from '../../stores/index.js';
+  import {
+    activities,
+    profile,
+    goals,
+    todayStats,
+    weekStats,
+    trends,
+    chartSeries,
+    modelCard,
+    plans,
+    trainingLoad,
+    activeRacePrep,
+    loadRaceEvents,
+    unitSystem,
+  } from '../../stores/index.js';
   import { navigate } from '../../lib/router.js';
   import { api } from '../../services/client.js';
   import { detectPlace, readCachedPlace, writeCachedPlace } from '../../lib/location.js';
@@ -111,6 +128,7 @@
   onMount(() => {
     void locateLive();
     acquireLivePosition();
+    void loadRaceEvents();
     void (async () => {
       model = await loadModel();
       loadingModel = false;
@@ -163,6 +181,10 @@
       temperatureC: $profile.typical_temperature_c,
       dailyCarbTargetG: $goals?.carb_target_g ?? $profile.daily_carb_goal_g,
       energyCalibrationFactor: Number($profile.energy_calibration_factor) || 1,
+      maxHr: $profile.max_hr ?? null,
+      restingHr: $profile.resting_hr ?? null,
+      acwr: $trainingLoad?.acwr ?? null,
+      carbLoading: Boolean($activeRacePrep?.prep?.inCarbLoadWindow),
     });
     return { d, f };
   });
@@ -247,6 +269,45 @@
   </div>
 
   <div class="space-y-4 scroll-mt-20" data-tour="dashboard-overview">
+    <!-- Readiness (ACWR) & Race Carb-Loading strip -->
+    {#if $trainingLoad?.meta || $activeRacePrep}
+      <div class="flex flex-wrap items-center gap-2">
+        {#if $trainingLoad?.meta}
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 rounded-2xl border border-brand-100 bg-white/90 px-3.5 py-2 text-xs font-extrabold text-ink-900 shadow-soft transition hover:border-brand-300"
+            onclick={() => navigate('/analytics')}
+          >
+            <ActivityIconLucide size={14} class="text-brand-600" />
+            <span>Readiness: {$trainingLoad.meta.label}</span>
+            {#if $trainingLoad.acwr != null}
+              <span class="num-tabular rounded-full px-2 py-0.5 text-[11px] {$trainingLoad.meta.tone}">
+                ACWR {$trainingLoad.acwr.toFixed(2)}
+              </span>
+            {/if}
+          </button>
+        {/if}
+
+        {#if $activeRacePrep}
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 rounded-2xl border px-3.5 py-2 text-xs font-extrabold shadow-soft transition {$activeRacePrep.prep.inCarbLoadWindow
+              ? 'border-amber-300 bg-amber-50 text-amber-900'
+              : 'border-brand-100 bg-white/90 text-ink-900 hover:border-brand-300'}"
+            onclick={() => navigate('/calendar')}
+          >
+            {#if $activeRacePrep.prep.inCarbLoadWindow}
+              <Wheat size={14} class="text-amber-600" />
+              <span>Carb-load active for {$activeRacePrep.race.title || $activeRacePrep.race.name} ({$activeRacePrep.prep.daysUntil}d)</span>
+            {:else}
+              <Flag size={14} class="text-brand-600" />
+              <span>{$activeRacePrep.race.title || $activeRacePrep.race.name} in {$activeRacePrep.prep.daysUntil} days</span>
+            {/if}
+          </button>
+        {/if}
+      </div>
+    {/if}
+
     <!-- compact idle / live expandable track status -->
     <TrackActivityPrompt fallbackCenter={livePlace ? [livePlace.latitude, livePlace.longitude] : [14.676, 121.0437]} />
 

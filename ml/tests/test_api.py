@@ -171,3 +171,28 @@ def test_laravel_accepted_prediction_boundaries_are_also_accepted_by_ml():
 def test_bundled_model_card_identifies_synthetic_training_data():
     body = client.get("/model/info").json()
     assert body["training_source"] == "synthetic"
+
+
+def test_fueling_kit_hr_intensity_and_carb_loading():
+    res = client.post(
+        "/predict",
+        json=payload(
+            distance_km=21.1,
+            target_hr=182,
+            max_hr=190,
+            resting_hr=50,
+            acwr=1.35,
+            carb_loading=True,
+            fuel_items=[
+                {"name": "Hydro Flask", "category": "drink", "carbs_g": 30, "sodium_mg": 350, "fluid_ml": 500},
+                {"name": "Espresso Gel", "category": "gel", "carbs_g": 25, "sodium_mg": 50, "fluid_ml": 0},
+            ],
+        ),
+    )
+    assert res.status_code == 200, res.text
+    fueling = res.json()["fueling"]
+    assert fueling["intensity"] == "very_vigorous"
+    assert fueling["carbs"]["daily_target_g"] == 540
+    assert fueling["kit"]["items"]
+    assert fueling["kit"]["cadence"]["sip_every_min"] > 0
+

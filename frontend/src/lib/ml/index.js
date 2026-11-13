@@ -50,7 +50,14 @@ export function suggestElevation(distanceKm, activityType) {
   return Math.round(distanceKm * perKm);
 }
 
-export async function predictPlan({ activity, profile, activities = [] }) {
+export async function predictPlan({
+  activity,
+  profile,
+  activities = [],
+  fuelItems = [],
+  acwr = null,
+  carbLoading = false,
+} = {}) {
   const [model, card] = await Promise.all([loadModel(), loadModelCard()]);
   const history = activities
     .filter((a) => a.duration_min && a.distance_km)
@@ -88,6 +95,11 @@ export async function predictPlan({ activity, profile, activities = [] }) {
     temperatureC: activity.temperature_c ?? profile?.typical_temperature_c ?? 26,
     dailyCarbTargetG: profile?.daily_carb_goal_g,
     energyCalibrationFactor: Number(profile?.energy_calibration_factor) || 1,
+    maxHr: profile?.max_hr ?? null,
+    restingHr: profile?.resting_hr ?? null,
+    acwr,
+    carbLoading,
+    fuelItems,
   });
 
   return {

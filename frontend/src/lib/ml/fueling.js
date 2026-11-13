@@ -14,6 +14,14 @@ export const SWEAT_PROFILES = {
   high: { sodium: 800, fluid: 900 },
 };
 
+export const DEFAULT_KIT_ITEMS = [
+  { id: 'default-drink', name: 'Sports Drink Mix', category: 'drink', carbs_g: 28, sodium_mg: 320, fluid_ml: 500, calories: 112, serving_label: '500 ml bottle', is_active: true },
+  { id: 'default-gel', name: 'Energy Gel', category: 'gel', carbs_g: 25, sodium_mg: 55, fluid_ml: 0, calories: 100, serving_label: 'gel packet', is_active: true },
+  { id: 'default-chew', name: 'Energy Chews', category: 'chew', carbs_g: 24, sodium_mg: 70, fluid_ml: 0, calories: 96, serving_label: 'pouch', is_active: true },
+  { id: 'default-salt', name: 'Electrolyte Cap', category: 'salt', carbs_g: 0, sodium_mg: 215, fluid_ml: 0, calories: 0, serving_label: 'capsule', is_active: true },
+  { id: 'default-banana', name: 'Ripe Banana', category: 'food', carbs_g: 27, sodium_mg: 1, fluid_ml: 0, calories: 105, serving_label: 'medium banana', is_active: true },
+];
+
 const FALLBACK_SPEED = { run: 9.0, ride: 21.0, walk: 4.8, hike: 3.8 };
 
 export function estimateMet(activityType, speedKmh, elevationPerKm = 0) {
@@ -27,6 +35,18 @@ export function estimateMet(activityType, speedKmh, elevationPerKm = 0) {
   else if (activityType === 'walk') met = 2.0 + speedKmh * 0.45;
   else met = 3.6 + speedKmh * 0.6;
   return Math.max(1.6, met + climb);
+}
+
+function hrAdjustedMet(met, targetHr, maxHr, restingHr) {
+  if (!targetHr || targetHr <= 30) return met;
+  const ceilHr = Number(maxHr) || 190;
+  const floorHr = Number(restingHr) || 55;
+  const reserve = Math.max(30, ceilHr - floorHr);
+  const hrr = Math.max(0, Math.min(1.05, (Number(targetHr) - floorHr) / reserve));
+  if (hrr >= 0.85) return Math.max(met, 11.2);
+  if (hrr >= 0.72) return Math.max(met, 8.5);
+  if (hrr < 0.55) return Math.min(met, 4.8);
+  return met;
 }
 
 export function intensityLabel(met) {
@@ -63,7 +83,113 @@ export function gelEquivalent(carbPerHour) {
 }
 
 /**
- * @returns full fueling plan: calories, carbs, sodium, fluid, timeline, notes.
+ * Pack concrete bottles, gels, chews, and salt tabs for a planned session.
+ */
+export function buildFuelingKit({
+  durationMin = 60,
+  carbsTotalG = 0,
+  sodiumTotalMg = 0,
+  fluidTotalMl = 0,
+  items = [],
+} = {}) {
+  const customActive = (Array.isArray(items) ? items : []).filter((i) => i && i.is_active !== false);
+  const pool = customActive.length > 0 ? customActive : DEFAULT_KIT_ITEMS;
+  const drinks = pool.filter((i) => i.category === 'drink' && Number(i.fluid_ml) > 0);
+  const carbItems = pool.filter((i) => ['gel', 'chew', 'food'].includes(i.category) && Number(i.carbs_g) > 0);
+  const salts = pool.filter((i) => i.category === 'salt' && Number(i.sodium_mg) > 0);
+
+  const packed = [];
+  let coveredCarbs = 0;
+  let coveredSodium = 0;
+  let coveredFluid = 0;
+
+  if (fluidTotalMl > 150 && drinks.length > 0) {
+    const drink = drinks.reduce((best, d) => (Number(d.fluid_ml) > Number(best.fluid_ml) ? d : best), drinks[0]);
+    const perUnitMl = Math.max(100, Number(drink.fluid_ml) || 500);
+    const qty = Math.max(1, Math.round(fluidTotalMl / perUnitMl));
+    const carbs = Math.round(qty * (Number(drink.carbs_g) || 0));
+    const sodium = Math.round(qty * (Number(drink.sodium_mg) || 0));
+    const fluid = Math.round(qty * perUnitMl);
+    packed.push({
+      id: drink.id,
+      name: drink.name,
+      category: 'drink',
+      quantity: qty,
+      servingLabel: drink.serving_label || `${Math.round(perUnitMl)} ml bottle`,
+      carbsG: carbs,
+      sodiumMg: sodium,
+      fluidMl: fluid,
+    });
+    coveredCarbs += carbs;
+    coveredSodium += sodium;
+    coveredFluid += fluid;
+  }
+
+  const remCarbs = Math.max(0, carbsTotalG - coveredCarbs);
+  if (remCarbs >= 12 && carbItems.length > 0) {
+    const carbItem = carbItems[0];
+    const perUnitC = Math.max(5, Number(carbItem.carbs_g) || 25);
+    const qty = Math.max(1, Math.ceil((remCarbs - 4) / perUnitC));
+    const carbs = Math.round(qty * perUnitC);
+    const sodium = Math.round(qty * (Number(carbItem.sodium_mg) || 0));
+    const fluid = Math.round(qty * (Number(carbItem.fluid_ml) || 0));
+    packed.push({
+      id: carbItem.id,
+      name: carbItem.name,
+      category: carbItem.category || 'gel',
+      quantity: qty,
+      servingLabel: carbItem.serving_label || 'serving',
+      carbsG: carbs,
+      sodiumMg: sodium,
+      fluidMl: fluid,
+    });
+    coveredCarbs += carbs;
+    coveredSodium += sodium;
+    coveredFluid += fluid;
+  }
+
+  const remSodium = Math.max(0, sodiumTotalMg - coveredSodium);
+  if (remSodium >= 140 && salts.length > 0) {
+    const salt = salts[0];
+    const perUnitS = Math.max(50, Number(salt.sodium_mg) || 200);
+    const qty = Math.max(1, Math.round(remSodium / perUnitS));
+    const sodium = Math.round(qty * perUnitS);
+    packed.push({
+      id: salt.id,
+      name: salt.name,
+      category: 'salt',
+      quantity: qty,
+      servingLabel: salt.serving_label || 'capsule',
+      carbsG: 0,
+      sodiumMg: sodium,
+      fluidMl: 0,
+    });
+    coveredSodium += sodium;
+  }
+
+  const carbServings = packed
+    .filter((p) => ['gel', 'chew', 'food'].includes(p.category))
+    .reduce((sum, p) => sum + p.quantity, 0);
+  const feedEveryMin = carbServings > 0 && durationMin >= 45 ? Math.round(durationMin / carbServings) : null;
+  const sipEveryMin = fluidTotalMl >= 300 ? 15 : 20;
+
+  return {
+    items: packed,
+    totals: {
+      carbsG: Math.round(coveredCarbs),
+      sodiumMg: Math.round(coveredSodium),
+      fluidMl: Math.round(coveredFluid),
+    },
+    cadence: {
+      feedEveryMin,
+      sipEveryMin,
+      sipMl: Math.round((fluidTotalMl / Math.max(1, durationMin)) * sipEveryMin),
+    },
+  };
+}
+
+/**
+ * @returns full fueling plan: calories, carbs, sodium, fluid, timeline, kit, notes.
  */
 export function recommendFueling({
   activityType,
@@ -75,23 +201,34 @@ export function recommendFueling({
   temperatureC = 22,
   dailyCarbTargetG,
   energyCalibrationFactor = 1,
+  targetHr = null,
+  maxHr = null,
+  restingHr = null,
+  acwr = null,
+  carbLoading = false,
+  fuelItems = [],
 }) {
   const hours = Math.max(durationMin, 1) / 60;
   const speed = avgSpeedKmh || FALLBACK_SPEED[activityType] || 5;
-  const met = estimateMet(activityType, speed, elevationPerKm);
+  const met = hrAdjustedMet(estimateMet(activityType, speed, elevationPerKm), targetHr, maxHr, restingHr);
   const calFactor = Math.min(2.0, Math.max(0.5, Number(energyCalibrationFactor) || 1.0));
   const caloriesTotal = met * weightKg * hours * calFactor;
   const intensity = intensityLabel(met);
 
   const carbPerHour = carbRatePerHour(durationMin, met);
   const carbsTotal = carbPerHour * hours;
-  const dailyTarget = dailyCarbTargetG || Math.round(weightKg * (met < 8 ? 6 : 8));
+  const dailyTarget = carbLoading
+    ? Math.round(weightKg * 9)
+    : dailyCarbTargetG || Math.round(weightKg * (met < 8 ? 6 : 8));
+  const recoveryMultiplier = acwr !== null && acwr >= 1.3 ? 1.2 : 1.0;
 
   const profile = SWEAT_PROFILES[sweatProfile] || SWEAT_PROFILES.normal;
   const heat = 1 + Math.max(0, temperatureC - 22) * 0.025;
   const durationFactor = 1 + Math.max(0, durationMin - 90) / 600;
   const sodiumPerHour = profile.sodium * heat * durationFactor;
   const fluidPerHour = profile.fluid * heat;
+  const sodiumTotal = sodiumPerHour * hours;
+  const fluidTotal = fluidPerHour * hours;
 
   const notes = [];
   if (durationMin < 60) {
@@ -108,6 +245,12 @@ export function recommendFueling({
     if (temperatureC >= 28)
       notes.push('Warm conditions: add ~200–300 ml/h of fluid and 150 mg/h of sodium.');
   }
+  if (carbLoading) {
+    notes.push(`Race-week carb loading active: aim for ${Math.round(dailyTarget)} g carbs/day (9 g/kg) with low-fibre meals.`);
+  }
+  if (recoveryMultiplier > 1) {
+    notes.push('Elevated training load (ACWR >= 1.3): post-session recovery carbs boosted by 20%.');
+  }
 
   return {
     intensity,
@@ -123,14 +266,15 @@ export function recommendFueling({
       dailyTargetG: Math.round(dailyTarget),
       preSessionG: Math.round(weightKg * 1.0),
     },
-    sodium: { perHourMg: Math.round(sodiumPerHour), totalMg: Math.round(sodiumPerHour * hours) },
-    fluid: { perHourMl: Math.round(fluidPerHour), totalMl: Math.round(fluidPerHour * hours) },
-    timeline: buildTimeline({ weightKg, durationMin, carbPerHour, sodiumPerHour, fluidPerHour }),
+    sodium: { perHourMg: Math.round(sodiumPerHour), totalMg: Math.round(sodiumTotal) },
+    fluid: { perHourMl: Math.round(fluidPerHour), totalMl: Math.round(fluidTotal) },
+    timeline: buildTimeline({ weightKg, durationMin, carbPerHour, fluidPerHour, recoveryMultiplier }),
+    kit: buildFuelingKit({ durationMin, carbsTotalG: carbsTotal, sodiumTotalMg: sodiumTotal, fluidTotalMl: fluidTotal, items: fuelItems }),
     notes,
   };
 }
 
-function buildTimeline({ weightKg, durationMin, carbPerHour, fluidPerHour }) {
+function buildTimeline({ weightKg, durationMin, carbPerHour, fluidPerHour, recoveryMultiplier = 1 }) {
   const items = [
     {
       window: '3 h before',
@@ -159,11 +303,13 @@ function buildTimeline({ weightKg, durationMin, carbPerHour, fluidPerHour }) {
       icon: 'during',
     });
   }
+  const recCarbs = Math.round(weightKg * 0.4 * recoveryMultiplier);
+  const recProtein = Math.round(weightKg * (recoveryMultiplier > 1 ? 0.3 : 0.25));
   items.push({
     window: 'Within 30 min after',
     label: 'Recovery',
-    detail: `${Math.round(weightKg * 0.4)} g carbs + ${Math.round(weightKg * 0.25)} g protein`,
-    carbsG: Math.round(weightKg * 0.4),
+    detail: `${recCarbs} g carbs + ${recProtein} g protein`,
+    carbsG: recCarbs,
     icon: 'recovery',
   });
   return items;

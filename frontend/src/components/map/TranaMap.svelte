@@ -30,6 +30,7 @@
     heading = null,           // movement heading in degrees [0..360)
     startPosition = null,     // [lat, lng]
     finishPosition = null,    // [lat, lng]
+    ghostPosition = null,     // [lat, lng]
     nutritionMarkers = [],    // [{ lat, lng, label, message }]
     showNutrition = false,
 
@@ -258,7 +259,7 @@
       onPick={onRoutePick}
     />
     <ActivityRoute {map} {points} {roadSnapping} />
-    <ActivityMarker {map} {currentPosition} {startPosition} {finishPosition} {accuracyM} {heading} />
+    <ActivityMarker {map} {currentPosition} {startPosition} {finishPosition} {ghostPosition} {accuracyM} {heading} />
     {#if showNutrition}
       <NutritionMarker {map} markers={nutritionMarkers} />
     {/if}

@@ -1,11 +1,14 @@
 <script>
-  import { CalendarDays, ChevronLeft, ChevronRight, Plus } from 'lucide-svelte';
+  import { onMount } from 'svelte';
+  import { CalendarDays, ChevronLeft, ChevronRight, Plus, Flag, Wheat, Trash2, LoaderCircle } from 'lucide-svelte';
   import Card from '../../components/common/Card.svelte';
   import EmptyState from '../../components/common/EmptyState.svelte';
   import ActivityIcon from '../../components/activities/ActivityIcon.svelte';
-  import { activities, plans, unitSystem } from '../../stores/index.js';
+  import { activities, plans, profile, raceEvents, loadRaceEvents, notify, unitSystem } from '../../stores/index.js';
+  import { api } from '../../services/client.js';
+  import { buildRacePrepPlan } from '../../lib/analytics/racePlanner.js';
   import { navigate } from '../../lib/router.js';
-  import { distanceUnit } from '../../lib/units.js';
+  import { distanceUnit, toDisplayDistance } from '../../lib/units.js';
   import {
     startOfWeek,
     isSameDay,
@@ -18,6 +21,20 @@
 
   const TYPES = ['run', 'ride', 'walk', 'hike'];
   let sportFilter = $state('all');
+  let showRaceForm = $state(false);
+  let savingRace = $state(false);
+  let raceDraft = $state({
+    title: '',
+    activity_type: 'run',
+    distance_km: 21.1,
+    race_date: '',
+    goal_time_min: '',
+    carb_loading_enabled: true,
+  });
+
+  onMount(() => {
+    void loadRaceEvents();
+  });
 
   let weekStart = $state(startOfWeek(new Date()));
 
@@ -50,6 +67,66 @@
   const weekPlans = $derived($plans.filter((p) => activeTypes.includes(p.activity_type) && p.status === 'planned' && p.planned_for));
   const weekActivities = $derived($activities.filter((a) => activeTypes.includes(a.activity_type) && a.started_at));
 
+  const racePreps = $derived(
+    $raceEvents.map((race) => ({
+      race,
+      prep: buildRacePrepPlan(race, Number($profile?.weight_kg) || 60),
+    })),
+  );
+
+  const primaryRace = $derived(racePreps.find((item) => item.prep && item.prep.daysUntil >= 0) ?? null);
+
+  function racesForDay(day) {
+    const key = isoDay(day);
+    return $raceEvents.filter((r) => r.race_date === key);
+  }
+
+  function carbDaysForDay(day) {
+    const key = isoDay(day);
+    const matches = [];
+    for (const item of racePreps) {
+      if (!item.prep?.carbLoadDays) continue;
+      for (const cd of item.prep.carbLoadDays) {
+        if (cd.date === key) matches.push({ raceName: item.race.title || item.race.name, ...cd });
+      }
+    }
+    return matches;
+  }
+
+  async function saveRace(event) {
+    event?.preventDefault?.();
+    if (!raceDraft.title.trim() || !raceDraft.race_date || savingRace) return;
+    savingRace = true;
+    try {
+      const created = await api.raceEvents.create({
+        title: raceDraft.title.trim(),
+        activity_type: raceDraft.activity_type,
+        distance_km: Math.max(0.5, Number(raceDraft.distance_km) || 10),
+        race_date: raceDraft.race_date,
+        goal_time_min: raceDraft.goal_time_min ? Number(raceDraft.goal_time_min) : null,
+        carb_loading_enabled: Boolean(raceDraft.carb_loading_enabled),
+      });
+      raceEvents.update((rows) => [...rows, created].sort((a, b) => a.race_date.localeCompare(b.race_date)));
+      raceDraft = { title: '', activity_type: 'run', distance_km: 21.1, race_date: '', goal_time_min: '', carb_loading_enabled: true };
+      showRaceForm = false;
+      notify('Target race added to calendar & carb-load schedule.');
+    } catch (err) {
+      notify(err?.message || 'Could not save race event', 'error');
+    } finally {
+      savingRace = false;
+    }
+  }
+
+  async function removeRace(id) {
+    try {
+      await api.raceEvents.remove(id);
+      raceEvents.update((rows) => rows.filter((r) => r.id !== id));
+      notify('Race removed from calendar.', 'info');
+    } catch (err) {
+      notify(err?.message || 'Could not delete race', 'error');
+    }
+  }
+
   function plansFor(day) {
     return weekPlans
       .filter((p) => isSameDay(p.planned_for, day))
@@ -62,7 +139,9 @@
       .sort((a, b) => new Date(b.started_at) - new Date(a.started_at));
   }
 
-  const weekEmpty = $derived(weekDays.every((d) => plansFor(d).length === 0 && activitiesFor(d).length === 0));
+  const weekEmpty = $derived(
+    weekDays.every((d) => plansFor(d).length === 0 && activitiesFor(d).length === 0 && racesForDay(d).length === 0 && carbDaysForDay(d).length === 0),
+  );
 </script>
 
 <div class="space-y-5">
@@ -100,7 +179,7 @@
 
   <div class="flex flex-wrap items-center justify-between gap-2">
     <p class="text-sm font-extrabold tracking-tight text-ink-500">{rangeLabel}</p>
-    <div class="flex flex-wrap gap-1.5">
+    <div class="flex flex-wrap items-center gap-1.5">
       {#each ['all', 'run', 'ride', 'walk', 'hike'] as s (s)}
         <button
           type="button"
@@ -111,8 +190,67 @@
           {s === 'all' ? 'All sports' : activityLabel(s)}
         </button>
       {/each}
+      <button type="button" class="btn-chip !py-1 !border-brand-300 !text-brand-700" onclick={() => (showRaceForm = !showRaceForm)}>
+        <Flag size={12} /> {showRaceForm ? 'Close' : 'Add race'}
+      </button>
     </div>
   </div>
+
+  {#if showRaceForm}
+    <Card>
+      <h2 class="text-sm font-extrabold text-ink-900">Schedule a target race (unlocks taper & 48h carb-loading)</h2>
+      <form class="mt-3 grid gap-2.5 sm:grid-cols-6" onsubmit={saveRace}>
+        <input class="input sm:col-span-2" placeholder="Race name (e.g. Manila Half Marathon)" bind:value={raceDraft.title} required />
+        <select class="input" bind:value={raceDraft.activity_type}>
+          <option value="run">Run</option>
+          <option value="ride">Ride</option>
+          <option value="walk">Walk</option>
+          <option value="hike">Hike</option>
+        </select>
+        <input class="input num-tabular" type="number" step="0.1" min="0.5" placeholder="Distance (km)" bind:value={raceDraft.distance_km} required />
+        <input class="input" type="date" bind:value={raceDraft.race_date} required />
+        <button type="submit" class="btn-primary !py-2" disabled={savingRace}>
+          {#if savingRace}<LoaderCircle size={14} class="animate-spin" />{:else}Save race{/if}
+        </button>
+      </form>
+      <label class="mt-2 inline-flex items-center gap-2 text-xs font-bold text-ink-600 cursor-pointer">
+        <input type="checkbox" bind:checked={raceDraft.carb_loading_enabled} class="accent-brand-600 rounded" />
+        Highlight 48-hour pre-race carb-loading window (8–10 g/kg/day)
+      </label>
+    </Card>
+  {/if}
+
+  {#if primaryRace}
+    <Card class="bg-gradient-to-br from-brand-50 to-white">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <span class="pill !bg-brand-gradient !text-white">
+            <Flag size={11} /> {primaryRace.prep.daysUntil === 0 ? 'Race Day!' : `${primaryRace.prep.daysUntil} days to ${primaryRace.race.title || primaryRace.race.name}`}
+          </span>
+          <p class="mt-2 text-xs font-semibold text-ink-500">
+            {primaryRace.race.distance_km} km {activityLabel(primaryRace.race.activity_type)} · Race morning breakfast target: <span class="font-extrabold text-ink-900">{primaryRace.prep.raceDayBreakfastCarbsG} g carbs</span>
+          </p>
+        </div>
+        <button type="button" class="btn-ghost !py-1 !text-rose-500" onclick={() => removeRace(primaryRace.race.id)}>
+          <Trash2 size={13} /> Remove
+        </button>
+      </div>
+
+      <div class="mt-3 grid gap-2 sm:grid-cols-4">
+        {#each primaryRace.prep.weeklyPlan.slice(-4) as wk (wk.weeksOut)}
+          <div class="rounded-2xl border border-brand-100 bg-white p-2.5">
+            <p class="text-[10px] font-extrabold uppercase text-brand-700">{wk.label} · {wk.phase}</p>
+            <p class="num-tabular text-sm font-extrabold text-ink-900 mt-0.5">
+              {Math.round(toDisplayDistance(wk.targetKm, $unitSystem))} {distanceUnit($unitSystem)} / wk
+            </p>
+            <p class="num-tabular text-[11px] font-semibold text-ink-400">
+              Long session ~{Math.round(toDisplayDistance(wk.longKm, $unitSystem))} {distanceUnit($unitSystem)}
+            </p>
+          </div>
+        {/each}
+      </div>
+    </Card>
+  {/if}
 
   {#if weekEmpty}
     <EmptyState
@@ -126,6 +264,8 @@
       {#each weekDays as day (day.toISOString())}
         {@const dayPlans = plansFor(day)}
         {@const dayActs = activitiesFor(day)}
+        {@const dayRaces = racesForDay(day)}
+        {@const dayCarbs = carbDaysForDay(day)}
         {@const today = isSameDay(day, new Date())}
         <div
           class="rounded-2xl border p-3 {today
@@ -155,6 +295,28 @@
           </div>
 
           <div class="mt-2 space-y-1.5">
+            {#each dayRaces as race (race.id)}
+              <div class="flex items-center gap-1.5 rounded-xl bg-brand-gradient px-2 py-1.5 text-white shadow-soft">
+                <Flag size={13} class="shrink-0" />
+                <div class="min-w-0 flex-1 leading-tight">
+                  <p class="truncate text-[11px] font-extrabold">{race.title || race.name}</p>
+                  <p class="num-tabular truncate text-[10px] font-bold text-white/90">
+                    {formatDistance(race.distance_km, $unitSystem)} {distanceUnit($unitSystem)} Race Day
+                  </p>
+                </div>
+              </div>
+            {/each}
+
+            {#each dayCarbs as cd (cd.raceName + cd.date)}
+              <div class="flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-2 py-1.5 text-amber-900">
+                <Wheat size={13} class="shrink-0 text-amber-600" />
+                <div class="min-w-0 flex-1 leading-tight">
+                  <p class="truncate text-[11px] font-extrabold">Carb-Load ({cd.perKg}g/kg)</p>
+                  <p class="num-tabular truncate text-[10px] font-bold text-amber-700">{cd.carbsG}g carbs · {cd.raceName}</p>
+                </div>
+              </div>
+            {/each}
+
             {#each dayPlans as plan (plan.id)}
               {@const matchedDone = dayActs.some((a) => a.activity_type === plan.activity_type)}
               <button
@@ -191,7 +353,7 @@
               </button>
             {/each}
 
-            {#if dayPlans.length === 0 && dayActs.length === 0}
+            {#if dayPlans.length === 0 && dayActs.length === 0 && dayRaces.length === 0 && dayCarbs.length === 0}
               <p class="py-2 text-center text-[11px] font-semibold text-ink-300">—</p>
             {/if}
           </div>

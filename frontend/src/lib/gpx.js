@@ -1,11 +1,12 @@
 /**
- * GPX & TCX route import/export utilities for TRANA.
+ * GPX, TCX & FIT route import/export utilities for TRANA.
  *
- * Lets athletes upload watch/Strava `.gpx` or `.tcx` files directly in
+ * Lets athletes upload watch/Strava `.gpx`, `.tcx`, or `.fit` files directly in
  * Activities or Plan Activity, and export any planned/completed route as GPX 1.1.
  */
 
 import { haversineKm } from '../services/mapService.js';
+import { decodeFit, isFitBuffer } from './fit.js';
 
 const escapeXml = (str = '') =>
   String(str)
@@ -170,15 +171,42 @@ function parseWithRegex(text, isTcx) {
 }
 
 /**
- * Parse `.gpx` or `.tcx` text into TRANA activity + route metrics.
+ * Parse `.gpx`, `.tcx`, or binary `.fit` input into TRANA activity + route metrics.
  * Throws a clear error if fewer than 2 valid GPS trackpoints exist.
  */
-export function parseActivityFile(text, fileName = '') {
+export function parseActivityFile(input, fileName = '') {
+  const lowerName = fileName.toLowerCase();
+  if (input instanceof ArrayBuffer || input instanceof Uint8Array || lowerName.endsWith('.fit')) {
+    const bytes = input instanceof Uint8Array
+      ? input
+      : input instanceof ArrayBuffer
+        ? new Uint8Array(input)
+        : new TextEncoder().encode(String(input || ''));
+    if (!isFitBuffer(bytes)) {
+      throw new Error('Could not parse this .FIT file — ensure it is a valid Garmin FIT activity.');
+    }
+    const decoded = decodeFit(bytes);
+    if (decoded.points.length < 2) {
+      throw new Error('Could not find at least 2 GPS coordinates in this .FIT file.');
+    }
+    return buildParsedResult({
+      points: decoded.points,
+      activityType: decoded.activityType,
+      name: fileName.replace(/\.fit$/i, ''),
+      source: 'fit',
+      overrideDistanceKm: decoded.distanceKm,
+      overrideDurationMin: decoded.durationMin,
+      overrideElevationGainM: decoded.elevationGainM,
+      overrideAvgHr: decoded.avgHeartRate,
+      overrideCalories: decoded.calories,
+    });
+  }
+
+  const text = input;
   if (typeof text !== 'string' || !text.trim()) {
     throw new Error('The uploaded file is empty.');
   }
 
-  const lowerName = fileName.toLowerCase();
   const isTcx = lowerName.endsWith('.tcx') || /<TrainingCenterDatabase/i.test(text);
 
   let points = [];
@@ -248,24 +276,52 @@ export function parseActivityFile(text, fileName = '') {
     throw new Error('Could not find at least 2 GPS coordinates in this file.');
   }
 
+  return buildParsedResult({
+    points,
+    activityType,
+    name,
+    source: isTcx ? 'tcx' : 'gpx',
+  });
+}
+
+function buildParsedResult({
+  points,
+  activityType,
+  name,
+  source,
+  overrideDistanceKm = null,
+  overrideDurationMin = null,
+  overrideElevationGainM = null,
+  overrideAvgHr = null,
+  overrideCalories = null,
+}) {
   let distanceKm = 0;
   for (let i = 1; i < points.length; i += 1) {
     distanceKm += haversineKm([points[i - 1].lat, points[i - 1].lng], [points[i].lat, points[i].lng]);
   }
+  if (overrideDistanceKm && overrideDistanceKm > 0.05) {
+    distanceKm = overrideDistanceKm;
+  }
 
   const altitudes = points.map((p) => (Number.isFinite(p.ele) ? p.ele : null));
-  const elevationGainM = computeSmoothedElevationGain(altitudes);
+  const elevationGainM = overrideElevationGainM != null ? Math.round(overrideElevationGainM) : computeSmoothedElevationGain(altitudes);
 
   const validTimes = points.map((p) => p.time).filter((t) => typeof t === 'number' && Number.isFinite(t));
   const startedAt = validTimes.length > 0 ? new Date(validTimes[0]).toISOString() : new Date().toISOString();
   const endedAt = validTimes.length > 1 ? new Date(validTimes.at(-1)).toISOString() : null;
   let durationMin = 0;
-  if (validTimes.length >= 2 && validTimes.at(-1) > validTimes[0]) {
+  if (overrideDurationMin && overrideDurationMin >= 1) {
+    durationMin = Math.round(overrideDurationMin * 10) / 10;
+  } else if (validTimes.length >= 2 && validTimes.at(-1) > validTimes[0]) {
     durationMin = Math.round(((validTimes.at(-1) - validTimes[0]) / 60000) * 10) / 10;
   }
 
   const hrs = points.map((p) => p.hr).filter((h) => typeof h === 'number' && Number.isFinite(h) && h >= 30 && h <= 240);
-  const avgHeartRate = hrs.length > 0 ? Math.round(hrs.reduce((s, h) => s + h, 0) / hrs.length) : null;
+  const avgHeartRate = overrideAvgHr != null
+    ? Math.round(overrideAvgHr)
+    : hrs.length > 0
+      ? Math.round(hrs.reduce((s, h) => s + h, 0) / hrs.length)
+      : null;
 
   const thinned = thinPoints(points, 400);
   const route = thinned.map((p) => [Math.round(p.lat * 1e6) / 1e6, Math.round(p.lng * 1e6) / 1e6]);
@@ -274,7 +330,7 @@ export function parseActivityFile(text, fileName = '') {
     features: [
       {
         type: 'Feature',
-        properties: { activity_type: activityType, source: isTcx ? 'tcx' : 'gpx' },
+        properties: { activity_type: activityType, source },
         geometry: {
           type: 'LineString',
           coordinates: route.map(([lat, lng]) => [lng, lat]),
@@ -290,6 +346,7 @@ export function parseActivityFile(text, fileName = '') {
     durationMin: durationMin >= 1 ? durationMin : null,
     elevationGainM,
     avgHeartRate,
+    calories: overrideCalories != null ? Math.round(overrideCalories) : null,
     startedAt,
     endedAt,
     route,
@@ -297,6 +354,6 @@ export function parseActivityFile(text, fileName = '') {
     elevationProfile: thinned
       .map((p, idx) => (Number.isFinite(p.ele) ? { index: idx, eleM: Math.round(p.ele) } : null))
       .filter(Boolean),
-    source: isTcx ? 'tcx' : 'gpx',
+    source,
   };
 }

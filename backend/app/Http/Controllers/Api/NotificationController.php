@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Gear;
 use App\Models\GoalEvent;
 use App\Models\InAppNotification;
 use App\Models\Prediction;
+use App\Models\RaceEvent;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -85,10 +87,13 @@ class NotificationController extends Controller
 
     /**
      * Derive reminders from what already exists — no cron, no queue:
-     *  · plan_today:   predictions scheduled for today, still `planned`
-     *  · goal_reached: achievements recorded today (goal history rows)
+     *  · plan_today:       predictions scheduled for today, still `planned`
+     *  · plan_fuel_window: pre-workout carb reminder when a today plan needs >= 60 min / fueling
+     *  · goal_reached:     achievements recorded today (goal history rows)
+     *  · gear_wear:        active gear reaching >= 85% of rated distance
+     *  · race_carb_load:   target race within 48h with carb loading enabled
      */
-    private function synthesize(User $user): void
+    public static function synthesizeForUser(User $user): void
     {
         $today = Carbon::today();
 
@@ -96,7 +101,7 @@ class NotificationController extends Controller
             ->where('status', 'planned')
             ->whereNotNull('planned_for')
             ->whereBetween('planned_for', [$today, $today->copy()->addDay()])
-            ->get(['id', 'activity_type', 'distance_km', 'planned_for']);
+            ->get(['id', 'activity_type', 'distance_km', 'duration_min', 'carbs_total_g', 'planned_for']);
 
         foreach ($plans as $plan) {
             InAppNotification::insertOrIgnore([
@@ -109,6 +114,21 @@ class NotificationController extends Controller
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
+
+            if ((int) $plan->carbs_total_g > 0 || (float) $plan->duration_min >= 60) {
+                $weightKg = (float) ($user->fitnessProfile?->weight_kg ?? 60);
+                $preCarbs = (int) round($weightKg * 1.2);
+                InAppNotification::insertOrIgnore([
+                    'user_id' => $user->id,
+                    'type' => 'plan_fuel_window',
+                    'dedupe_key' => 'fuelwin:'.$plan->id.':'.$today->toDateString(),
+                    'title' => 'Pre-workout fueling window',
+                    'body' => "Aim for ~{$preCarbs} g carbs 3 h before your ".ucfirst($plan->activity_type)
+                        ." (".$plan->planned_for->format('g A').').',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
         }
 
         $events = GoalEvent::where('user_id', $user->id)
@@ -132,5 +152,54 @@ class NotificationController extends Controller
                 'updated_at' => now(),
             ]);
         }
+
+        $gearItems = Gear::where('user_id', $user->id)
+            ->where('retired', false)
+            ->get();
+
+        foreach ($gearItems as $gear) {
+            $maxKm = (float) $gear->max_km;
+            if ($maxKm <= 0) {
+                continue;
+            }
+            $totalKm = $gear->totalKm();
+            $pct = ($totalKm / $maxKm) * 100.0;
+            if ($pct >= 85.0) {
+                $tier = $pct >= 100.0 ? '100' : '85';
+                InAppNotification::insertOrIgnore([
+                    'user_id' => $user->id,
+                    'type' => 'gear_wear',
+                    'dedupe_key' => "gear:{$gear->id}:{$tier}",
+                    'title' => $pct >= 100.0 ? 'Gear past rated lifespan' : 'Gear wear alert',
+                    'body' => "{$gear->name} is at ".round($totalKm)." / ".round($maxKm)." km (".round($pct)."%).",
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+        }
+
+        $races = RaceEvent::where('user_id', $user->id)
+            ->where('carb_loading_enabled', true)
+            ->whereBetween('race_date', [$today->toDateString(), $today->copy()->addDays(2)->toDateString()])
+            ->get();
+
+        foreach ($races as $race) {
+            $weightKg = (float) ($user->fitnessProfile?->weight_kg ?? 60);
+            $targetCarbs = (int) round($weightKg * 9.0);
+            InAppNotification::insertOrIgnore([
+                'user_id' => $user->id,
+                'type' => 'race_carb_load',
+                'dedupe_key' => "racecarbload:{$race->id}:".$today->toDateString(),
+                'title' => 'Race-week carb loading active',
+                'body' => "{$race->title} is coming up ({$race->race_date->toDateString()}). Target ~{$targetCarbs} g carbs today (9 g/kg).",
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+    }
+
+    private function synthesize(User $user): void
+    {
+        self::synthesizeForUser($user);
     }
 }

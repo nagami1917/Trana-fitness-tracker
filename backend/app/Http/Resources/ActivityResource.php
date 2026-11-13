@@ -26,6 +26,7 @@ class ActivityResource extends JsonResource
                 array_key_exists('route_geojson', $this->resource->getAttributes()),
                 fn () => $this->route_geojson
             ),
+            'gear_id' => $this->gear_id,
             'notes' => $this->notes,
             'source' => $this->source,
         ];

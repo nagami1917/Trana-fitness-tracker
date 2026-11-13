@@ -13,11 +13,15 @@ use App\Http\Controllers\Api\EmailVerificationController;
 use App\Http\Controllers\Api\ErrorReportController;
 use App\Http\Controllers\Api\DailySessionFoodController;
 use App\Http\Controllers\Api\EnergyExpenditureController;
+use App\Http\Controllers\Api\FuelItemController;
+use App\Http\Controllers\Api\GearController;
 use App\Http\Controllers\Api\GoalController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PasswordRecoveryController;
 use App\Http\Controllers\Api\PredictionController;
 use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\Api\PushSubscriptionController;
+use App\Http\Controllers\Api\RaceEventController;
 use App\Http\Controllers\Api\RouteController;
 use App\Http\Controllers\Api\SystemController;
 use App\Http\Controllers\Api\WeightLogController;
@@ -109,6 +113,30 @@ Route::middleware(['auth:sanctum', 'ensure.active'])->group(function () {
     Route::get('/goals', [GoalController::class, 'show']);
     Route::put('/goals', [GoalController::class, 'update'])->middleware('throttle:writes');
     Route::get('/goals/history', [GoalController::class, 'history']);
+
+    // Custom race-day fuel items & kit builder
+    Route::get('/fuel-items', [FuelItemController::class, 'index']);
+    Route::post('/fuel-items', [FuelItemController::class, 'store'])->middleware('throttle:writes');
+    Route::match(['put', 'patch'], '/fuel-items/{fuelItem}', [FuelItemController::class, 'update'])->middleware('throttle:writes');
+    Route::delete('/fuel-items/{fuelItem}', [FuelItemController::class, 'destroy'])->middleware('throttle:writes');
+
+    // Gear / shoes mileage tracking
+    Route::get('/gear', [GearController::class, 'index']);
+    Route::post('/gear', [GearController::class, 'store'])->middleware('throttle:writes');
+    Route::match(['put', 'patch'], '/gear/{gear}', [GearController::class, 'update'])->middleware('throttle:writes');
+    Route::delete('/gear/{gear}', [GearController::class, 'destroy'])->middleware('throttle:writes');
+
+    // Target race events & carb-loading calendar
+    Route::get('/race-events', [RaceEventController::class, 'index']);
+    Route::post('/race-events', [RaceEventController::class, 'store'])->middleware('throttle:writes');
+    Route::match(['put', 'patch'], '/race-events/{raceEvent}', [RaceEventController::class, 'update'])->middleware('throttle:writes');
+    Route::delete('/race-events/{raceEvent}', [RaceEventController::class, 'destroy'])->middleware('throttle:writes');
+
+    // Web Push notification subscriptions & smart reminder preferences
+    Route::get('/push/subscription', [PushSubscriptionController::class, 'show']);
+    Route::post('/push/subscribe', [PushSubscriptionController::class, 'subscribe'])->middleware('throttle:writes');
+    Route::put('/push/preferences', [PushSubscriptionController::class, 'updatePreferences'])->middleware('throttle:writes');
+    Route::delete('/push/unsubscribe', [PushSubscriptionController::class, 'unsubscribe'])->middleware('throttle:writes');
 
     // Daily sessions — daily progress tracking that resets at midnight
     Route::get('/daily-sessions/today', [DailySessionController::class, 'today']);

@@ -42,6 +42,12 @@ class PredictRequest(BaseModel):
     temperature_c: float = Field(default=22, ge=-20, le=55)
     daily_carb_target_g: float | None = Field(default=None, ge=0, le=1200)
     energy_calibration_factor: float = Field(default=1.0, ge=0.5, le=2.0)
+    target_hr: float | None = Field(default=None, ge=30, le=240)
+    max_hr: float | None = Field(default=None, ge=100, le=240)
+    resting_hr: float | None = Field(default=None, ge=30, le=120)
+    acwr: float | None = Field(default=None, ge=0, le=5)
+    carb_loading: bool = False
+    fuel_items: list[dict] = Field(default_factory=list, max_length=30)
     route: list[tuple[float, float]] | None = Field(
         default=None,
         description="Optional [[lat, lng], ...] polyline; used to derive distance when distance_km is omitted",
@@ -77,6 +83,7 @@ class FuelingPrediction(BaseModel):
     sodium: dict
     fluid: dict
     timeline: list[dict]
+    kit: dict | None = None
     notes: list[str]
 
 

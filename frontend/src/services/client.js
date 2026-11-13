@@ -259,4 +259,32 @@ export const api = {
     update: (patch) => request('/goals', { method: 'PUT', body: patch }).then((d) => d.data),
     history: () => request('/goals/history').then((d) => d.data),
   },
+
+  fuelItems: {
+    list: () => request('/fuel-items').then((d) => d.data),
+    create: (payload) => request('/fuel-items', { method: 'POST', body: payload }).then((d) => d.data),
+    update: (id, payload) => request(`/fuel-items/${id}`, { method: 'PATCH', body: payload }).then((d) => d.data),
+    remove: (id) => request(`/fuel-items/${id}`, { method: 'DELETE' }),
+  },
+
+  gear: {
+    list: () => request('/gear').then((d) => d.data),
+    create: (payload) => request('/gear', { method: 'POST', body: payload }).then((d) => d.data),
+    update: (id, payload) => request(`/gear/${id}`, { method: 'PATCH', body: payload }).then((d) => d.data),
+    remove: (id) => request(`/gear/${id}`, { method: 'DELETE' }),
+  },
+
+  raceEvents: {
+    list: () => request('/race-events').then((d) => d.data),
+    create: (payload) => request('/race-events', { method: 'POST', body: payload }).then((d) => d.data),
+    update: (id, payload) => request(`/race-events/${id}`, { method: 'PATCH', body: payload }).then((d) => d.data),
+    remove: (id) => request(`/race-events/${id}`, { method: 'DELETE' }),
+  },
+
+  push: {
+    status: () => request('/push/subscription').then((d) => d.data),
+    subscribe: (payload) => request('/push/subscribe', { method: 'POST', body: payload }).then((d) => d.data),
+    updatePreferences: (prefs) => request('/push/preferences', { method: 'PUT', body: prefs }).then((d) => d.data),
+    unsubscribe: (endpoint) => request('/push/unsubscribe', { method: 'DELETE', body: endpoint ? { endpoint } : {} }),
+  },
 };

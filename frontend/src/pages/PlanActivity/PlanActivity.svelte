@@ -33,7 +33,21 @@
   import ElevationProfile from '../../components/route/ElevationProfile.svelte';
   import FuelingPlan from '../../components/fueling/FuelingPlan.svelte';
   import Segmented from '../../components/common/Segmented.svelte';
-  import { activities, goals, profile, plans, notify, upsertPlan, removePlanById, unitSystem } from '../../stores/index.js';
+  import {
+    activities,
+    goals,
+    profile,
+    plans,
+    fuelItems,
+    loadFuelItems,
+    loadRaceEvents,
+    trainingLoad,
+    activeRacePrep,
+    notify,
+    upsertPlan,
+    removePlanById,
+    unitSystem,
+  } from '../../stores/index.js';
   import { api } from '../../services/client.js';
   import { navigate, query } from '../../lib/router.js';
   import { loadModel, predictPlan } from '../../lib/ml/index.js';
@@ -157,6 +171,8 @@
   onMount(() => {
     if (cachedPlace) seedLivePosition(cachedPlace);
     acquireLivePosition();
+    void loadFuelItems();
+    void loadRaceEvents();
     void (async () => {
       model = await loadModel();
       // hydrate from a saved plan link (?plan=12) or profile defaults;
@@ -312,6 +328,9 @@
           daily_carb_goal_g: $goals?.carb_target_g ?? $profile?.daily_carb_goal_g,
         },
         activities: $activities,
+        fuelItems: $fuelItems,
+        acwr: $trainingLoad?.acwr ?? null,
+        carbLoading: Boolean($activeRacePrep?.prep?.inCarbLoadWindow),
       });
     } finally {
       computing = false;
@@ -655,8 +674,8 @@
     const file = event?.currentTarget?.files?.[0];
     if (!file) return;
     try {
-      const text = await file.text();
-      const parsed = parseActivityFile(text, file.name);
+      const payload = /\.fit$/i.test(file.name) ? await file.arrayBuffer() : await file.text();
+      const parsed = parseActivityFile(payload, file.name);
       markEdited();
       following = false;
       form.activity_type = parsed.activityType;
@@ -1071,9 +1090,9 @@
             <button type="button" class="btn-chip" onclick={undoPoint}><Undo2 size={12} /> Undo</button>
             <button type="button" class="btn-chip" onclick={clearRoute}><Trash2 size={12} /> Clear</button>
           {/if}
-          <input bind:this={gpxFileInput} type="file" accept=".gpx,.tcx" class="hidden" onchange={handleImportGpx} />
+          <input bind:this={gpxFileInput} type="file" accept=".gpx,.tcx,.fit" class="hidden" onchange={handleImportGpx} />
           <button type="button" class="btn-chip" onclick={() => gpxFileInput?.click()}>
-            <Upload size={12} /> Import GPX
+            <Upload size={12} /> Import GPX / FIT
           </button>
           {#if plannedRoute?.length >= 2}
             <button type="button" class="btn-chip" onclick={exportCurrentGpx}>

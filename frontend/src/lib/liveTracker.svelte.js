@@ -7,7 +7,8 @@
  * and keeps Dashboard immediately updated with both live status and the latest
  * result, with Screen Wake Lock + offline save queue durability.
  */
-import { session, profile, upsertActivity, notify } from '../stores/index.js';
+import { get } from 'svelte/store';
+import { session, profile, activities, upsertActivity, loadGear, notify } from '../stores/index.js';
 import { api } from '../services/client.js';
 import { activityApi, validateTrackPoint } from '../services/activityService.js';
 import { dailySessionApi } from '../services/dailySessionService.js';
@@ -15,6 +16,8 @@ import { watch, getCurrentPosition, trackPoint, GpsError } from '../services/gps
 import { snapRoute } from '../services/roadSnappingService.js';
 import { haversineKm, elevationGainM } from '../services/mapService.js';
 import { estimateMet, recommendFueling } from './ml/fueling.js';
+import { computeGhostPacerState } from './route/ghostPacer.js';
+import { detectNewPRs } from './analytics/records.js';
 import { queueActivitySave } from './offlineQueue.js';
 import { KM_TO_MI, isImperial } from './units.js';
 
@@ -59,6 +62,8 @@ let plannedPath = $state([]);
 let plannedLabel = $state('Free GPS');
 let plannedPlanKey = $state(null);
 let plannedFueling = $state(null);
+let plannedDurationMin = $state(null);
+let gearId = $state(null);
 
 // Live fueling & voice coaching state
 let fluidLoggedMl = $state(0);
@@ -68,6 +73,7 @@ let lastFuelSec = $state(0);
 let voiceCues = $state(false);
 let announcedSplits = $state(0);
 let wakeLockActive = $state(false);
+let lastOffRouteVoiceAt = 0;
 
 let lastOutcome = $state(null);
 let lastDailySession = $state(null);
@@ -185,6 +191,8 @@ function persist() {
       plannedLabel,
       plannedPlanKey,
       plannedFueling,
+      plannedDurationMin,
+      gearId,
       fluidLoggedMl,
       carbsLoggedG,
       lastHydrateSec,
@@ -259,6 +267,7 @@ function resetLiveFields() {
   lastHydrateSec = 0;
   lastFuelSec = 0;
   announcedSplits = 0;
+  lastOffRouteVoiceAt = 0;
   statusNote = '';
   void releaseWakeLock();
 }
@@ -298,6 +307,12 @@ function appendGpsFix(fix) {
         const secs = Math.round((paceMin - mins) * 60);
         speakCue(`${completedSplits} ${unitWord}${completedSplits > 1 ? 's' : ''} complete. Average pace ${mins} minutes ${secs} seconds per ${unitWord}.`);
       }
+    }
+
+    // Off-route audio alert (45s cooldown)
+    if (voiceCues && ghostState?.offRoute && Date.now() - lastOffRouteVoiceAt > 45000) {
+      lastOffRouteVoiceAt = Date.now();
+      speakCue(`Off route by ${ghostState.offRouteMeters} meters.`);
     }
   }
   persist();
@@ -431,6 +446,16 @@ const recordedCoords = $derived(
   points.map((p) => [p.latitude, p.longitude]),
 );
 
+const ghostState = $derived.by(() =>
+  computeGhostPacerState({
+    plannedPath,
+    targetDurationMin: plannedDurationMin,
+    elapsedSec: durationSec,
+    coveredDistanceKm: distanceKm,
+    currentPosition,
+  }),
+);
+
 const status = $derived.by(() => {
   if (saving) return 'saving';
   if (tracking && paused) return 'paused';
@@ -453,6 +478,8 @@ function clearRuntimeOnly() {
   plannedLabel = 'Free GPS';
   plannedPlanKey = null;
   plannedFueling = null;
+  plannedDurationMin = null;
+  gearId = null;
   lastOutcome = null;
   lastDailySession = null;
 }
@@ -474,6 +501,8 @@ function hydrateForUser(userId) {
     if (typeof saved.plannedLabel === 'string') plannedLabel = saved.plannedLabel;
     plannedPlanKey = saved.plannedPlanKey ?? null;
     plannedFueling = saved.plannedFueling ?? null;
+    plannedDurationMin = saved.plannedDurationMin != null ? Number(saved.plannedDurationMin) : null;
+    gearId = saved.gearId != null ? Number(saved.gearId) : null;
     fluidLoggedMl = Number(saved.fluidLoggedMl) || 0;
     carbsLoggedG = Number(saved.carbsLoggedG) || 0;
     lastHydrateSec = Number(saved.lastHydrateSec) || 0;
@@ -556,12 +585,18 @@ function setShowRoads(value) {
   if (tracking) persist();
 }
 
+function setGearId(id) {
+  gearId = id ? Number(id) : null;
+  if (tracking) persist();
+}
+
 function setPathContext({
   source = 'none',
   path = [],
   label = 'Free GPS',
   planKey = null,
   fueling = null,
+  durationMin = null,
 } = {}) {
   if (tracking) return;
   pathSource = source;
@@ -569,6 +604,7 @@ function setPathContext({
   plannedLabel = label;
   plannedPlanKey = planKey;
   plannedFueling = fueling;
+  plannedDurationMin = durationMin != null && Number.isFinite(Number(durationMin)) ? Number(durationMin) : null;
 }
 
 function logHydration(mlAmount = 200) {
@@ -585,6 +621,21 @@ function logFuel(gramsAmount = 25) {
   persist();
 }
 
+function logFuelItem(item) {
+  if (!tracking || !item) return;
+  const carbs = Math.max(0, Number(item.carbs_g) || 0);
+  const ml = Math.max(0, Number(item.fluid_ml) || 0);
+  if (carbs > 0) {
+    carbsLoggedG += carbs;
+    lastFuelSec = Math.round(durationSec);
+  }
+  if (ml > 0) {
+    fluidLoggedMl += ml;
+    lastHydrateSec = Math.round(durationSec);
+  }
+  persist();
+}
+
 function toggleVoiceCues() {
   voiceCues = !voiceCues;
   if (voiceCues) speakCue('Voice coaching enabled.');
@@ -595,10 +646,14 @@ function startActivity(overrides = {}) {
   if (tracking) return;
   if (overrides.activityType) activityType = overrides.activityType;
   if (overrides.pathSource !== undefined) pathSource = overrides.pathSource;
-  if (Array.isArray(overrides.plannedPath)) plannedPath = [...overrides.plannedPath];
+    if (Array.isArray(overrides.plannedPath)) plannedPath = [...overrides.plannedPath];
   if (overrides.plannedLabel !== undefined) plannedLabel = overrides.plannedLabel;
   if (overrides.plannedPlanKey !== undefined) plannedPlanKey = overrides.plannedPlanKey;
   if (overrides.plannedFueling !== undefined) plannedFueling = overrides.plannedFueling;
+  if (overrides.plannedDurationMin !== undefined) {
+    plannedDurationMin = overrides.plannedDurationMin != null ? Number(overrides.plannedDurationMin) : null;
+  }
+  if (overrides.gearId !== undefined) gearId = overrides.gearId ? Number(overrides.gearId) : null;
 
   points = [];
   snappedPoints = [];
@@ -765,9 +820,11 @@ async function stopActivity({ currentTodaySession = null, allowStationary = fals
       route: routeCoords.length >= 2 ? routeCoords : null,
       route_geojson: routeGeojson,
       notes: intakeParts.length ? intakeParts.join(' · ') : null,
+      gear_id: gearId || null,
       source: allowStationary && distanceKm < 0.05 ? 'manual' : 'gps',
     };
 
+    const previousActivities = get(activities);
     const savedActivity = await activityApi.create(activityPayload);
     const caloriesBurned = Number(savedActivity?.calories ?? estimatedCalories) || 0;
 
@@ -795,7 +852,10 @@ async function stopActivity({ currentTodaySession = null, allowStationary = fals
     }
 
     if (savedActivity) upsertActivity(savedActivity);
+    if (gearId) void loadGear();
     void api.profile.get().then((p) => p && profile.set(p)).catch(() => {});
+
+    const brokenPRs = savedActivity ? detectNewPRs(savedActivity, previousActivities) : [];
 
     const completedSnapshot = {
       status: 'completed',
@@ -822,7 +882,11 @@ async function stopActivity({ currentTodaySession = null, allowStationary = fals
     resetLiveFields();
     lastOutcome = completedSnapshot;
     persist();
-    notify("Activity saved to today's session", 'success');
+    if (brokenPRs.length > 0) {
+      notify(`New PR! ${brokenPRs.map((r) => r.label).join(', ')} saved to your session`, 'success');
+    } else {
+      notify("Activity saved to today's session", 'success');
+    }
     return { saved: true, outcome: completedSnapshot, dailySession: lastDailySession };
   } catch (error) {
     // Queue locally on connectivity/server failures (never discard an athlete's outdoor run!)
@@ -895,6 +959,9 @@ export const liveTracker = {
   get plannedLabel() { return plannedLabel; },
   get plannedPlanKey() { return plannedPlanKey; },
   get plannedFueling() { return plannedFueling; },
+  get plannedDurationMin() { return plannedDurationMin; },
+  get gearId() { return gearId; },
+  get ghostState() { return ghostState; },
   get activeFuelTargets() { return activeFuelTargets; },
   get fluidLoggedMl() { return fluidLoggedMl; },
   get carbsLoggedG() { return carbsLoggedG; },
@@ -918,9 +985,11 @@ export const liveTracker = {
   setActivityType,
   setRoadSnapping,
   setShowRoads,
+  setGearId,
   setPathContext,
   logHydration,
   logFuel,
+  logFuelItem,
   toggleVoiceCues,
   appendGpsFix,
   startActivity,
