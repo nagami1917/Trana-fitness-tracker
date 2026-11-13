@@ -45,9 +45,12 @@ const ratio = contrastRatio(ink400Match[1], '#ffffff');
 assert.ok(ratio >= 4.5, `Expected ink[400] (${ink400Match[1]}) WCAG AA >= 4.5:1 on white, got ${ratio.toFixed(2)}`);
 
 const appCss = readFileSync(resolve(root, 'src/app.css'), 'utf8');
-for (const token of ['--bg-surface', '--bg-subtle', '--text-primary', '--text-muted', '--border-hairline', '--track-ring', '--track-bar', '--chart-tick', '--brand-text', '.bg-sky-50', '.bg-ink-100', '.card-flat', 'tabular-nums', '.leaflet-tile-pane']) {
+for (const token of ['--bg-surface', '--bg-subtle', '--text-primary', '--text-muted', '--border-hairline', '--track-ring', '--track-bar', '--chart-tick', '--brand-text', '.bg-sky-50', '.bg-ink-100', '.bg-brand-50\\/75', '.bg-violet-50\\/70', '.card-flat', 'tabular-nums', '.leaflet-tile-pane']) {
   assert.ok(appCss.includes(token), `app.css missing expected token/rule: ${token}`);
 }
+
+const mascotGuideSrc = readFileSync(resolve(root, 'src/components/common/MascotGuide.svelte'), 'utf8');
+assert.ok(!mascotGuideSrc.includes('text-brand-800'), 'MascotGuide tip text must use high-contrast text-ink-700');
 
 for (const shade of ['100:', '200:', '300:', '400:', '500:', '600:', '700:', '800:', '900:']) {
   assert.ok(tailwindCfg.includes(shade), `tailwind.config.js missing ink shade ${shade}`);

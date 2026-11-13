@@ -207,7 +207,7 @@
           </p>
 
           {#if step.tip}
-            <div class="mt-3.5 rounded-2xl border border-brand-100 bg-brand-50/75 px-3.5 py-2.5 text-xs font-semibold leading-relaxed text-brand-800 sm:mt-4">
+            <div class="mt-3.5 rounded-2xl border border-brand-200/80 bg-brand-50/75 px-3.5 py-2.5 text-xs font-semibold leading-relaxed text-ink-700 sm:mt-4">
               🐾 {step.tip}
             </div>
           {/if}
@@ -292,7 +292,7 @@
           </p>
 
           {#if step.tip}
-            <div class="mt-2.5 rounded-2xl border border-brand-100 bg-brand-50/75 px-3 py-2 text-[11px] font-semibold leading-relaxed text-brand-800 sm:mt-3">
+            <div class="mt-2.5 rounded-2xl border border-brand-200/80 bg-brand-50/75 px-3 py-2 text-[11px] font-semibold leading-relaxed text-ink-700 sm:mt-3">
               🐾 {step.tip}
             </div>
           {/if}

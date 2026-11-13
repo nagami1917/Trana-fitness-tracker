@@ -320,13 +320,16 @@ html.theme-dark .bg-white\/40 {
 }
 
 html.theme-dark .bg-brand-50,
+html.theme-dark .bg-brand-50\/90,
 html.theme-dark .bg-brand-50\/80,
+html.theme-dark .bg-brand-50\/75,
 html.theme-dark .bg-brand-50\/70,
 html.theme-dark .bg-brand-50\/60,
 html.theme-dark .bg-brand-50\/50,
 html.theme-dark .bg-brand-50\/40,
 html.theme-dark .bg-brand-50\/30,
-html.theme-dark .bg-brand-50\/20 {
+html.theme-dark .bg-brand-50\/20,
+html.theme-dark .bg-ink-50 {
   background-color: var(--bg-subtle) !important;
   border-color: var(--border-hairline) !important;
 }
@@ -341,8 +344,13 @@ html.theme-dark .bg-ink-200 {
 }
 
 html.theme-dark [class*='from-brand-50'],
+html.theme-dark [class*='from-brand-100'],
 html.theme-dark [class*='from-white'],
-html.theme-dark [class*='to-brand-100'] {
+html.theme-dark [class*='via-brand-50'],
+html.theme-dark [class*='via-white'],
+html.theme-dark [class*='to-brand-50'],
+html.theme-dark [class*='to-brand-100'],
+html.theme-dark [class*='to-white'] {
   --tw-gradient-from: var(--bg-subtle) var(--tw-gradient-from-position) !important;
   --tw-gradient-via: var(--bg-surface) var(--tw-gradient-via-position) !important;
   --tw-gradient-to: var(--bg-surface) var(--tw-gradient-to-position) !important;
@@ -351,7 +359,7 @@ html.theme-dark [class*='to-brand-100'] {
 html.theme-dark .bg-amber-50,
 html.theme-dark .bg-amber-50\/70,
 html.theme-dark .bg-amber-100 {
-  background-color: rgba(120, 53, 15, 0.3) !important;
+  background-color: rgba(120, 53, 15, 0.32) !important;
   border-color: rgba(245, 158, 11, 0.35) !important;
   color: #fde68a !important;
 }
@@ -360,36 +368,79 @@ html.theme-dark .bg-emerald-50,
 html.theme-dark .bg-emerald-50\/70,
 html.theme-dark .bg-emerald-50\/60,
 html.theme-dark .bg-emerald-100 {
-  background-color: rgba(6, 78, 59, 0.3) !important;
+  background-color: rgba(6, 78, 59, 0.32) !important;
   border-color: rgba(16, 185, 129, 0.35) !important;
   color: #a7f3d0 !important;
 }
 
 html.theme-dark .bg-rose-50,
 html.theme-dark .bg-rose-50\/60,
+html.theme-dark .bg-rose-100,
 html.theme-dark .bg-red-50,
 html.theme-dark .bg-red-50\/70,
 html.theme-dark .bg-red-100 {
-  background-color: rgba(136, 19, 55, 0.3) !important;
+  background-color: rgba(136, 19, 55, 0.32) !important;
   border-color: rgba(244, 63, 94, 0.38) !important;
   color: #fecdd3 !important;
 }
 
 html.theme-dark .bg-sky-50,
-html.theme-dark .bg-sky-50\/70 {
-  background-color: rgba(12, 74, 110, 0.32) !important;
+html.theme-dark .bg-sky-50\/70,
+html.theme-dark .bg-sky-100 {
+  background-color: rgba(12, 74, 110, 0.34) !important;
   border-color: rgba(56, 189, 248, 0.38) !important;
   color: #bae6fd !important;
 }
 
+html.theme-dark .bg-violet-50\/70 {
+  background-color: rgba(76, 29, 149, 0.3) !important;
+  border-color: rgba(167, 139, 250, 0.38) !important;
+  color: #ddd6fe !important;
+}
+
+html.theme-dark .border-amber-200,
+html.theme-dark .border-amber-300 {
+  border-color: rgba(245, 158, 11, 0.38) !important;
+}
+
+html.theme-dark .border-emerald-100,
+html.theme-dark .border-emerald-200 {
+  border-color: rgba(16, 185, 129, 0.35) !important;
+}
+
+html.theme-dark .border-rose-100,
+html.theme-dark .border-rose-200,
+html.theme-dark .border-rose-300,
 html.theme-dark .border-red-200 {
   border-color: rgba(244, 63, 94, 0.38) !important;
 }
 
-html.theme-dark .text-red-900 {
+html.theme-dark .border-sky-200 {
+  border-color: rgba(56, 189, 248, 0.38) !important;
+}
+
+html.theme-dark .border-violet-200 {
+  border-color: rgba(167, 139, 250, 0.38) !important;
+}
+
+html.theme-dark .border-slate-200\/80 {
+  border-color: var(--border-hairline) !important;
+}
+
+html.theme-dark .text-red-900,
+html.theme-dark .text-rose-700,
+html.theme-dark .text-rose-800 {
   color: #fecdd3 !important;
 }
 
+html.theme-dark .text-amber-600,
+html.theme-dark .text-amber-700,
+html.theme-dark .text-amber-800,
+html.theme-dark .text-amber-900 {
+  color: #fde68a !important;
+}
+
+html.theme-dark .text-emerald-600,
 html.theme-dark .text-emerald-900 {
   color: #a7f3d0 !important;
 }
@@ -398,13 +449,23 @@ html.theme-dark .text-sky-900 {
   color: #bae6fd !important;
 }
 
+html.theme-dark .text-violet-700,
+html.theme-dark .text-violet-900 {
+  color: #ddd6fe !important;
+}
+
+html.theme-dark .text-cyan-600 {
+  color: #67e8f9 !important;
+}
+
 html.theme-dark .text-ink-900,
 html.theme-dark .text-ink-800 {
   color: var(--text-primary) !important;
 }
 
 html.theme-dark .text-ink-700,
-html.theme-dark .text-ink-600 {
+html.theme-dark .text-ink-600,
+html.theme-dark .text-slate-700 {
   color: var(--text-secondary) !important;
 }
 
@@ -441,6 +502,7 @@ html.theme-dark .border-brand-100,
 html.theme-dark .border-brand-100\/70,
 html.theme-dark .border-brand-100\/80,
 html.theme-dark .border-brand-200,
+html.theme-dark .border-brand-200\/80,
 html.theme-dark .border-brand-200\/70,
 html.theme-dark .border-brand-300,
 html.theme-dark .border-white\/50,
@@ -448,6 +510,11 @@ html.theme-dark .border-white\/60,
 html.theme-dark .border-white\/70,
 html.theme-dark .border-white\/80 {
   border-color: var(--border-hairline) !important;
+}
+
+html.theme-dark .ring-white,
+html.theme-dark .ring-white\/80 {
+  --tw-ring-color: var(--border-card) !important;
 }
 
 html.theme-dark .hover\:bg-white:hover,
