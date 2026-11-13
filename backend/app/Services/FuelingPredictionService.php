@@ -50,7 +50,37 @@ class FuelingPredictionService
                 'carbsG' => (int) ($step['carbs_g'] ?? 0),
                 'icon' => $step['icon'] ?? 'meal',
             ], (array) ($fueling['timeline'] ?? [])),
+            'kit' => $this->normaliseKit((array) ($fueling['kit'] ?? [])),
             'notes' => array_values((array) ($fueling['notes'] ?? [])),
+        ];
+    }
+
+    private function normaliseKit(array $kit): array
+    {
+        if ($kit === []) {
+            return ['items' => [], 'totals' => ['carbsG' => 0, 'sodiumMg' => 0, 'fluidMl' => 0], 'cadence' => []];
+        }
+
+        return [
+            'items' => array_map(fn ($item) => [
+                'name' => $item['name'] ?? 'Item',
+                'category' => $item['category'] ?? 'gel',
+                'quantity' => (int) ($item['quantity'] ?? 1),
+                'servingLabel' => $item['serving_label'] ?? 'serving',
+                'carbsG' => (int) ($item['carbs_g'] ?? 0),
+                'sodiumMg' => (int) ($item['sodium_mg'] ?? 0),
+                'fluidMl' => (int) ($item['fluid_ml'] ?? 0),
+            ], (array) ($kit['items'] ?? [])),
+            'totals' => [
+                'carbsG' => (int) Arr::get($kit, 'totals.carbs_g', 0),
+                'sodiumMg' => (int) Arr::get($kit, 'totals.sodium_mg', 0),
+                'fluidMl' => (int) Arr::get($kit, 'totals.fluid_ml', 0),
+            ],
+            'cadence' => [
+                'feedEveryMin' => Arr::get($kit, 'cadence.feed_every_min'),
+                'sipEveryMin' => Arr::get($kit, 'cadence.sip_every_min'),
+                'sipMl' => Arr::get($kit, 'cadence.sip_ml'),
+            ],
         ];
     }
 }

@@ -32,6 +32,7 @@ class StoreActivityRequest extends FormRequest
             'route_geojson' => ['nullable', 'array'],
             'average_speed' => ['nullable', 'numeric', 'min:0', 'max:300'],
             'average_pace' => ['nullable', 'numeric', 'min:0', 'max:1440'],
+            'gear_id' => ['nullable', 'integer', Rule::exists('gear', 'id')->where(fn ($q) => $q->where('user_id', $this->user()?->id))],
             'notes' => ['nullable', 'string', 'max:2000'],
             'source' => ['nullable', 'string', 'max:24'],
         ];

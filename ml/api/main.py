@@ -107,6 +107,12 @@ def predict_fueling(payload: PredictRequest, duration_min: float | None = None) 
         temperature_c=payload.temperature_c,
         daily_carb_target_g=payload.daily_carb_target_g,
         energy_calibration_factor=payload.energy_calibration_factor,
+        target_hr=payload.target_hr,
+        max_hr=payload.max_hr,
+        resting_hr=payload.resting_hr,
+        acwr=payload.acwr,
+        carb_loading=payload.carb_loading,
+        fuel_items=payload.fuel_items,
     )
     return recommend(inp)
 
@@ -134,6 +140,12 @@ def predict_all(payload: PredictRequest) -> PredictResponse:
             temperature_c=payload.temperature_c,
             daily_carb_target_g=payload.daily_carb_target_g,
             energy_calibration_factor=payload.energy_calibration_factor,
+            target_hr=payload.target_hr,
+            max_hr=payload.max_hr,
+            resting_hr=payload.resting_hr,
+            acwr=payload.acwr,
+            carb_loading=payload.carb_loading,
+            fuel_items=payload.fuel_items,
         )
     )
 

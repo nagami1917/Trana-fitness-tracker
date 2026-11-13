@@ -24,6 +24,7 @@ class PredictionService
         private readonly RouteService $routes,
         private readonly ActivityService $activities,
         private readonly EnergyExpenditureCalibrationService $calibration,
+        private readonly AnalyticsService $analytics,
     ) {
     }
 
@@ -66,9 +67,53 @@ class PredictionService
             'history' => $history,
         ];
 
+        if ($profile->max_hr) {
+            $payload['max_hr'] = (int) $profile->max_hr;
+        }
+        if ($profile->resting_hr) {
+            $payload['resting_hr'] = (int) $profile->resting_hr;
+        }
+
+        $fuelItems = $user->fuelItems()
+            ->where('is_active', true)
+            ->orderBy('id')
+            ->limit(25)
+            ->get(['name', 'category', 'carbs_g', 'sodium_mg', 'fluid_ml', 'serving_label'])
+            ->map(fn ($item) => [
+                'name' => $item->name,
+                'category' => $item->category,
+                'carbs_g' => (float) $item->carbs_g,
+                'sodium_mg' => (int) $item->sodium_mg,
+                'fluid_ml' => (int) $item->fluid_ml,
+                'serving_label' => $item->serving_label,
+            ])
+            ->all();
+        if ($fuelItems !== []) {
+            $payload['fuel_items'] = $fuelItems;
+        }
+
         $goal = $user->goal ?? $user->ensureGoals();
         if (! empty($goal->carb_target_g)) {
             $payload['daily_carb_target_g'] = (int) $goal->carb_target_g;
+        }
+
+        $recentActs = $user->activities()
+            ->where('started_at', '>=', now()->subDays(28))
+            ->get();
+        if ($recentActs->isNotEmpty()) {
+            $load = $this->analytics->trainingLoad($recentActs);
+            if ($load['acwr'] !== null) {
+                $payload['acwr'] = (float) $load['acwr'];
+            }
+        }
+
+        $upcomingCarbRace = $user->raceEvents()
+            ->where('carb_loading_enabled', true)
+            ->whereDate('race_date', '>=', now()->toDateString())
+            ->whereDate('race_date', '<=', now()->addDays(2)->toDateString())
+            ->exists();
+        if ($upcomingCarbRace) {
+            $payload['carb_loading'] = true;
         }
 
         if ($routeContext['route'] !== null) {

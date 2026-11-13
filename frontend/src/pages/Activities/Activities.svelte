@@ -1,6 +1,6 @@
 <script>
   import { onMount, tick } from 'svelte';
-  import { Plus, Search, LoaderCircle, Trash2, MapPin, Flame, Timer, Gauge, Route as RouteIcon, Sparkles, TrendingUp, X, Undo2, Download, Upload, ArrowLeftRight, Repeat, Pencil } from 'lucide-svelte';
+  import { Plus, Search, LoaderCircle, Trash2, MapPin, Flame, Timer, Gauge, Route as RouteIcon, Sparkles, TrendingUp, X, Undo2, Download, Upload, ArrowLeftRight, Repeat, Pencil, Share2 } from 'lucide-svelte';
   import Card from '../../components/common/Card.svelte';
   import ActivityIcon from '../../components/activities/ActivityIcon.svelte';
   import RouteMap from '../../components/route/RouteMap.svelte';
@@ -8,13 +8,16 @@
   import Modal from '../../components/common/Modal.svelte';
   import BusyOverlay from '../../components/common/BusyOverlay.svelte';
   import EmptyState from '../../components/common/EmptyState.svelte';
-  import { activities, profile, plans, notify, upsertActivity, removeActivityById, unitSystem } from '../../stores/index.js';
+  import { activities, profile, plans, gearList, loadGear, notify, upsertActivity, removeActivityById, unitSystem } from '../../stores/index.js';
   import { api } from '../../services/client.js';
   import { activityApi } from '../../services/activityService.js';
   import { query } from '../../lib/router.js';
   import { loadModel, predictDuration, routeLengthKm } from '../../lib/ml/index.js';
   import { estimateMet } from '../../lib/ml/fueling.js';
   import { downloadGpx, parseActivityFile } from '../../lib/gpx.js';
+  import { computeGpsSplits, interpolateRoutePosition } from '../../lib/route/splits.js';
+  import { downloadShareCard } from '../../lib/shareCard.js';
+  import { detectNewPRs } from '../../lib/analytics/records.js';
   import { fetchRouteElevation } from '../../services/elevationService.js';
   import { haversineKm } from '../../services/mapService.js';
   import {
@@ -51,6 +54,7 @@
   let addOpen = $state(false);
   let detail = $state(null);
   let detailElevation = $state(null);
+  let hoverDistKm = $state(null);
   let editingDetail = $state(false);
   let editDraft = $state(null);
   let updatingDetail = $state(false);
@@ -114,6 +118,7 @@
   // harness because ssr_context is already torn down at registration).
   onMount(() => {
     acquireLivePosition();
+    void loadGear();
     void (async () => {
       model = await loadModel();
       const q = $query.get('q');
@@ -143,6 +148,7 @@
     editDraft = null;
     confirmingDelete = null;
     detailElevation = null;
+    hoverDistKm = null;
     detail = activity;
     if (activity?.id && !activity.route_geojson && activity.source === 'gps') {
       void activityApi.get(activity.id).then((full) => {
@@ -166,6 +172,7 @@
       elevation_gain_m: Number(detail.elevation_gain_m) || 0,
       calories: detail.calories != null ? String(detail.calories) : '',
       avg_heart_rate: detail.avg_heart_rate != null ? String(detail.avg_heart_rate) : '',
+      gear_id: detail.gear_id != null ? String(detail.gear_id) : '',
       started_at: toDatetimeLocal(detail.started_at),
       notes: detail.notes || '',
     };
@@ -182,11 +189,13 @@
         elevation_gain_m: Math.max(0, Math.round(Number(editDraft.elevation_gain_m) || 0)),
         calories: editDraft.calories !== '' ? Math.max(0, Math.round(Number(editDraft.calories))) : null,
         avg_heart_rate: editDraft.avg_heart_rate !== '' ? Math.round(Number(editDraft.avg_heart_rate)) : null,
+        gear_id: editDraft.gear_id !== '' ? Number(editDraft.gear_id) : null,
         started_at: new Date(editDraft.started_at).toISOString(),
         notes: editDraft.notes?.trim() || null,
       };
       const updated = await api.activities.update(detail.id, payload);
       upsertActivity(updated);
+      void loadGear();
       detail = updated;
       editingDetail = false;
       editDraft = null;
@@ -198,40 +207,22 @@
     }
   }
 
-  const detailSplits = $derived.by(() => {
-    if (!detail) return [];
-    const totalKm = Number(detail.distance_km) || 0;
-    const totalMin = Number(detail.duration_min) || 0;
-    if (totalKm < 0.8 || totalMin <= 0) return [];
-    const stepKm = isImperial($unitSystem) ? 1 / KM_TO_MI : 1;
-    const count = Math.min(25, Math.ceil(totalKm / stepKm));
-    const avgPaceMinPerKm = totalMin / totalKm;
-    const pts = Array.isArray(detail.route) ? detail.route : [];
+  const detailSplits = $derived(
+    detail
+      ? computeGpsSplits({
+          points: Array.isArray(detail.route) ? detail.route : [],
+          elevationProfile: detailElevation?.profile ?? [],
+          totalDurationMin: Number(detail.duration_min) || 0,
+          totalDistanceKm: Number(detail.distance_km) || 0,
+          unit: $unitSystem,
+        })
+      : [],
+  );
 
-    // Estimate split pace variance lightly from route elevation slope if available
-    const eles = detailElevation?.profile ?? [];
-    const out = [];
-    for (let i = 0; i < count; i += 1) {
-      const startKm = i * stepKm;
-      const endKm = Math.min(totalKm, (i + 1) * stepKm);
-      const frac = (endKm - startKm) / stepKm;
-      if (frac < 0.1) continue;
-      let gradeFactor = 1;
-      if (eles.length >= 2) {
-        const eStart = eles.find((p) => p.distKm >= startKm) ?? eles[0];
-        const eEnd = [...eles].reverse().find((p) => p.distKm <= endKm) ?? eles.at(-1);
-        const dEle = (eEnd?.eleM ?? 0) - (eStart?.eleM ?? 0);
-        const segLenM = Math.max(100, (endKm - startKm) * 1000);
-        gradeFactor = Math.max(0.8, Math.min(1.35, 1 + (dEle / segLenM) * 3.2));
-      }
-      out.push({
-        label: i + 1,
-        frac,
-        paceMinKm: avgPaceMinPerKm * gradeFactor,
-        hasRoute: pts.length >= 2,
-      });
-    }
-    return out;
+  const detailHoverCoord = $derived.by(() => {
+    if (hoverDistKm == null || !Array.isArray(detail?.route) || detail.route.length < 2) return null;
+    const totalKm = Math.max(0.01, Number(detailElevation?.profile?.at(-1)?.distKm ?? detail.distance_km) || 0.01);
+    return interpolateRoutePosition(detail.route, hoverDistKm / totalKm);
   });
 
   function blankDraft() {
@@ -243,6 +234,7 @@
       duration_min: 30,
       elevation_gain_m: 40,
       avg_heart_rate: '',
+      gear_id: '',
       started_at: local,
       route: [],
       notes: '',
@@ -348,8 +340,8 @@
     const file = event?.currentTarget?.files?.[0];
     if (!file) return;
     try {
-      const text = await file.text();
-      const parsed = parseActivityFile(text, file.name);
+      const raw = /\.fit$/i.test(file.name) ? await file.arrayBuffer() : await file.text();
+      const parsed = parseActivityFile(raw, file.name);
       draft = blankDraft();
       draft.activity_type = parsed.activityType;
       draft.distance_km = Math.max(0.05, parsed.distanceKm);
@@ -370,7 +362,7 @@
       routeMap?.fitRouteBounds?.();
       notify(`Parsed ${file.name} (${parsed.distanceKm} km) — review and save.`);
     } catch (err) {
-      notify(err?.message || 'Could not import GPX / TCX file', 'error');
+      notify(err?.message || 'Could not import GPX / TCX / FIT file', 'error');
     } finally {
       event.currentTarget.value = '';
     }
@@ -510,6 +502,7 @@
     try {
       const distance = draftRouteKm > 0 ? Number(draftRouteKm.toFixed(2)) : Number(draft.distance_km);
       const finalRoute = routePath.length > 1 ? routePath : draft.route.length > 1 ? draft.route : null;
+      const priorActivities = [...$activities];
       const created = await api.activities.create({
         activity_type: draft.activity_type,
         distance_km: distance,
@@ -517,6 +510,7 @@
         elevation_gain_m: Number(draft.elevation_gain_m) || 0,
         calories: draftCalories,
         avg_heart_rate: draft.avg_heart_rate !== '' ? Math.round(Number(draft.avg_heart_rate)) : null,
+        gear_id: draft.gear_id !== '' ? Number(draft.gear_id) : null,
         started_at: new Date(draft.started_at).toISOString(),
         route: finalRoute,
         route_geojson: importedGeojson,
@@ -526,8 +520,14 @@
       written = true;
       addOpen = false;
       upsertActivity(created);
+      if (draft.gear_id) void loadGear();
       void api.profile.get().then((p) => p && profile.set(p)).catch(() => {});
-      notify('Activity logged — your model just got sharper.');
+      const brokenPRs = detectNewPRs(created, priorActivities);
+      if (brokenPRs.length > 0) {
+        notify(`New PR! ${brokenPRs.map((r) => r.label).join(', ')} saved.`);
+      } else {
+        notify('Activity logged — your model just got sharper.');
+      }
     } catch (error) {
       notify(written ? 'Activity saved, but the view could not refresh. Reload when connected.' : (error.message || 'Could not save the activity'), 'error');
     } finally {
@@ -543,6 +543,7 @@
       confirmingDelete = null;
       detail = null;
       removeActivityById(id);
+      void loadGear();
       notify('Activity deleted.', 'info');
     } catch (error) {
       notify(written ? 'Activity deleted, but the view could not refresh. Reload when connected.' : (error.message || 'Could not delete'), 'error');
@@ -577,9 +578,9 @@
       </p>
     </div>
     <div class="flex flex-wrap items-center gap-2 self-start">
-      <input bind:this={gpxInput} type="file" accept=".gpx,.tcx" class="hidden" onchange={handleImportActivityFile} />
-      <button class="btn-ghost" onclick={() => gpxInput?.click()} title="Import a .gpx or .tcx workout from Garmin, Apple Watch, or Strava">
-        <Upload size={15} /> Import GPX / TCX
+      <input bind:this={gpxInput} type="file" accept=".gpx,.tcx,.fit" class="hidden" onchange={handleImportActivityFile} />
+      <button class="btn-ghost" onclick={() => gpxInput?.click()} title="Import a .gpx, .tcx, or .fit workout from Garmin, Apple Watch, or Strava">
+        <Upload size={15} /> Import GPX / TCX / FIT
       </button>
       <button class="btn-ghost" onclick={exportCsv} disabled={exporting} title="Download your full history as CSV">
         {#if exporting}<LoaderCircle size={15} class="animate-spin" /> Exporting…{:else}<Download size={15} /> Export CSV{/if}
@@ -728,6 +729,18 @@
       <span class="label">Started at</span>
       <input class="input" type="datetime-local" bind:value={draft.started_at} />
     </div>
+
+    {#if $gearList.filter((g) => !g.retired).length > 0}
+      <div>
+        <span class="label">Gear / Shoes (optional)</span>
+        <select class="input" bind:value={draft.gear_id}>
+          <option value="">None</option>
+          {#each $gearList.filter((g) => !g.retired) as g (g.id)}
+            <option value={String(g.id)}>{g.name}</option>
+          {/each}
+        </select>
+      </div>
+    {/if}
 
     <div class="sm:col-span-2">
       <span class="label">Notes</span>
@@ -930,6 +943,17 @@
           <span class="label">Started at</span>
           <input class="input" type="datetime-local" bind:value={editDraft.started_at} />
         </div>
+        {#if $gearList.length > 0}
+          <div>
+            <span class="label">Gear / Shoes</span>
+            <select class="input" bind:value={editDraft.gear_id}>
+              <option value="">None</option>
+              {#each $gearList as g (g.id)}
+                <option value={String(g.id)}>{g.name}{g.retired ? ' (retired)' : ''}</option>
+              {/each}
+            </select>
+          </div>
+        {/if}
         <div class="sm:col-span-2">
           <span class="label">Notes</span>
           <input class="input" placeholder="How did this session go?" bind:value={editDraft.notes} />
@@ -945,7 +969,7 @@
       <div class="grid gap-4 sm:grid-cols-2">
         {#if detail.route?.length}
           <div class="sm:col-span-2">
-            <RouteMap points={detail.route} height={230} />
+            <RouteMap points={detail.route} hoverCoord={detailHoverCoord} height={230} />
           </div>
         {/if}
 
@@ -956,6 +980,7 @@
               gainM={detailElevation.gainM}
               lossM={detailElevation.lossM}
               source={detailElevation.source}
+              onHover={(dist) => (hoverDistKm = dist)}
             />
           </div>
         {/if}
@@ -978,17 +1003,22 @@
         {#if detailSplits.length >= 2}
           <div class="sm:col-span-2 rounded-2xl border border-brand-100 bg-brand-50/40 p-3">
             <p class="text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-2">
-              Estimated {distanceUnit($unitSystem)} splits
+              {detail.route?.length >= 2 ? 'GPS splits & Grade-Adjusted Pace (GAP)' : `Estimated ${distanceUnit($unitSystem)} splits`}
             </p>
-            <div class="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-              {#each detailSplits as split (split.label)}
-                {@const barPct = Math.min(100, Math.max(25, Math.round((detailSplits[0].paceMinKm / Math.max(0.5, split.paceMinKm)) * 80)))}
+            <div class="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+              {#each detailSplits as split (split.split)}
+                {@const barPct = Math.min(100, Math.max(25, Math.round((detailSplits[0].paceMinPerKm / Math.max(0.5, split.paceMinPerKm)) * 80)))}
                 <div class="flex items-center gap-2 text-xs">
-                  <span class="num-tabular w-12 shrink-0 font-extrabold text-ink-500">{distanceUnit($unitSystem)} {split.label}</span>
+                  <span class="num-tabular w-12 shrink-0 font-extrabold text-ink-500">{distanceUnit($unitSystem)} {split.split}</span>
                   <div class="flex-1 h-2 rounded-full bg-white overflow-hidden">
                     <div class="h-full rounded-full bg-brand-gradient" style="width: {barPct}%"></div>
                   </div>
-                  <span class="w-20 shrink-0 text-right font-extrabold text-ink-900 tabular-nums">{pace(split.paceMinKm, $unitSystem)}</span>
+                  <span class="w-20 shrink-0 text-right font-extrabold text-ink-900 tabular-nums">{pace(split.paceMinPerKm, $unitSystem)}</span>
+                  {#if split.gapMinPerKm && detail.activity_type === 'run'}
+                    <span class="hidden sm:inline w-24 shrink-0 text-right text-[11px] font-bold text-brand-700 tabular-nums">
+                      GAP {pace(split.gapMinPerKm, $unitSystem)}
+                    </span>
+                  {/if}
                 </div>
               {/each}
             </div>
@@ -1045,6 +1075,19 @@
               <Download size={14} /> GPX
             </button>
           {/if}
+          <button
+            class="btn-ghost"
+            onclick={() => {
+              const ok = downloadShareCard({
+                activity: detail,
+                unit: $unitSystem,
+                athleteName: $profile?.name || 'TRANA Athlete',
+              });
+              if (ok) notify('Downloaded 1080×1080 share card');
+            }}
+          >
+            <Share2 size={14} /> Share Card
+          </button>
           <button class="btn-primary ml-auto" onclick={() => { detail = null; }}>Done</button>
         {/if}
       </div>

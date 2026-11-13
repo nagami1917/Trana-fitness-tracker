@@ -9,6 +9,7 @@
     currentPosition = null,
     startPosition = null,
     finishPosition = null,
+    ghostPosition = null,
     accuracyM = null,
     heading = null,
   } = $props();
@@ -21,6 +22,7 @@
   let startMarker = null;
   let finishMarker = null;
   let currentMarker = null;
+  let ghostMarker = null;
   let currentConeEl = null;
 
   let displayedPos = null; // [lat, lng]
@@ -180,9 +182,11 @@
     removeMarker(startMarker);
     removeMarker(finishMarker);
     removeMarker(currentMarker);
+    removeMarker(ghostMarker);
     startMarker = null;
     finishMarker = null;
     currentMarker = null;
+    ghostMarker = null;
     currentConeEl = null;
     displayedPos = null;
   }
@@ -343,6 +347,34 @@
     const acc = Number.isFinite(Number(accuracyM)) ? Number(accuracyM) : null;
     const pos = displayedPos ?? toLatLng(currentPosition);
     if (pos) updateAccuracyLayer(pos, acc);
+  });
+
+  // Ghost pacer marker
+  $effect(() => {
+    if (!map) {
+      removeMarker(ghostMarker);
+      ghostMarker = null;
+      return;
+    }
+    const ghost = toLatLng(ghostPosition);
+    if (!ghost) {
+      removeMarker(ghostMarker);
+      ghostMarker = null;
+      return;
+    }
+    if (!ghostMarker) {
+      const el = makeCircle({ color: '#7c3aed', size: 18, ring: '#ffffff', title: 'Ghost Pacer', zIndex: '18' });
+      el.textContent = 'G';
+      el.style.display = 'grid';
+      el.style.placeItems = 'center';
+      el.style.color = '#ffffff';
+      el.style.font = '800 9px/1 sans-serif';
+      ghostMarker = new maplibregl.Marker({ element: el, anchor: 'center' })
+        .setLngLat([ghost[1], ghost[0]])
+        .addTo(map);
+    } else {
+      ghostMarker.setLngLat([ghost[1], ghost[0]]);
+    }
   });
 
   onDestroy(() => {

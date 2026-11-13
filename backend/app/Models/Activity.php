@@ -16,6 +16,7 @@ class Activity extends Model
 
     protected $fillable = [
         'user_id',
+        'gear_id',
         'activity_type',
         'distance_km',
         'elevation_gain_m',
@@ -36,6 +37,7 @@ class Activity extends Model
     {
         return [
             'user_id' => 'integer',
+            'gear_id' => 'integer',
             'distance_km' => 'float',
             'elevation_gain_m' => 'integer',
             'duration_min' => 'float',
@@ -53,6 +55,11 @@ class Activity extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function gear(): BelongsTo
+    {
+        return $this->belongsTo(Gear::class);
     }
 
     public function activityPoints(): HasMany

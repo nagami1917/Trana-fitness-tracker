@@ -8,12 +8,19 @@ import { derived, get, writable } from 'svelte/store';
 import { api, onUnauthorized } from '../services/client.js';
 import { loadModelCard } from '../lib/ml/index.js';
 import { startOfWeek, weekdayShort } from '../lib/format.js';
+import { computeTrainingLoad } from '../lib/analytics/trainingLoad.js';
+import { computeDistancePRs } from '../lib/analytics/records.js';
+import { buildHrZones } from '../lib/analytics/heartRate.js';
+import { buildRacePrepPlan } from '../lib/analytics/racePlanner.js';
 
 export const session = writable(null);
 export const profile = writable(null);
 export const activities = writable([]);
 export const plans = writable([]);
 export const goals = writable(null);
+export const fuelItems = writable([]);
+export const gearList = writable([]);
+export const raceEvents = writable([]);
 export const modelCard = writable(null);
 export const ready = writable(false);
 export const booting = writable(true);
@@ -96,6 +103,9 @@ function clearUserData() {
   activities.set([]);
   plans.set([]);
   goals.set(null);
+  fuelItems.set([]);
+  gearList.set([]);
+  raceEvents.set([]);
 }
 
 onUnauthorized(() => {
@@ -165,6 +175,39 @@ export async function refresh() {
   plans.set(pl);
   goals.set(g);
   if (get(session)?.id) writeBootCache();
+}
+
+export async function loadFuelItems() {
+  if (!api.auth.hasToken()) return [];
+  try {
+    const items = await api.fuelItems.list();
+    if (Array.isArray(items)) fuelItems.set(items);
+    return items ?? [];
+  } catch {
+    return get(fuelItems);
+  }
+}
+
+export async function loadGear() {
+  if (!api.auth.hasToken()) return [];
+  try {
+    const items = await api.gear.list();
+    if (Array.isArray(items)) gearList.set(items);
+    return items ?? [];
+  } catch {
+    return get(gearList);
+  }
+}
+
+export async function loadRaceEvents() {
+  if (!api.auth.hasToken()) return [];
+  try {
+    const items = await api.raceEvents.list();
+    if (Array.isArray(items)) raceEvents.set(items);
+    return items ?? [];
+  } catch {
+    return get(raceEvents);
+  }
 }
 
 export function upsertActivity(saved) {
@@ -432,4 +475,26 @@ export const weekdayLoad = derived(parsedActivities, ($idx) => {
     label: weekdayShort[dayIndex],
     ...summarize(buckets[dayIndex]),
   }));
+});
+
+export const trainingLoad = derived(activities, ($a) => computeTrainingLoad($a));
+
+export const distancePRs = derived(activities, ($a) => computeDistancePRs($a));
+
+export const hrZones = derived(profile, ($p) =>
+  buildHrZones({
+    maxHr: $p?.max_hr,
+    restingHr: $p?.resting_hr,
+    birthYear: $p?.birth_year,
+    customZones: $p?.hr_zones,
+  }),
+);
+
+export const activeRacePrep = derived([raceEvents, profile], ([$races, $p]) => {
+  const weightKg = Number($p?.weight_kg) || 60;
+  for (const race of $races) {
+    const prep = buildRacePrepPlan(race, weightKg);
+    if (prep && prep.daysUntil >= 0) return { race, prep };
+  }
+  return null;
 });

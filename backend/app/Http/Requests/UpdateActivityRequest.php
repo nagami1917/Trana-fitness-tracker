@@ -32,6 +32,7 @@ class UpdateActivityRequest extends FormRequest
             'route_geojson' => ['sometimes', 'nullable', 'array'],
             'average_speed' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:300'],
             'average_pace' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:1440'],
+            'gear_id' => ['sometimes', 'nullable', 'integer', Rule::exists('gear', 'id')->where(fn ($q) => $q->where('user_id', $this->user()?->id))],
             'notes' => ['sometimes', 'nullable', 'string', 'max:2000'],
         ];
     }

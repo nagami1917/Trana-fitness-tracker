@@ -37,6 +37,7 @@ class ActivityController extends Controller
             ->select([
                 'id',
                 'user_id',
+                'gear_id',
                 'activity_type',
                 'distance_km',
                 'elevation_gain_m',
@@ -109,7 +110,9 @@ class ActivityController extends Controller
     public function destroy(Request $request, Activity $activity): JsonResponse
     {
         abort_unless($activity->user_id === $request->user()->id, 404);
+        $gear = $activity->gear;
         $activity->delete();
+        $gear?->syncLoggedKm();
 
         return response()->json(['deleted' => true]);
     }

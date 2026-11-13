@@ -1,13 +1,29 @@
 <script>
   import { onMount } from 'svelte';
-  import { ChartColumn, Brain, TrendingDown, Flame, Trophy, Gauge, Sparkles, Info, ArrowRight, Scale, LoaderCircle, Trash2 } from 'lucide-svelte';
+  import { ChartColumn, Brain, TrendingDown, Flame, Trophy, Gauge, Sparkles, Info, ArrowRight, Scale, LoaderCircle, Trash2, Activity, HeartPulse, Zap } from 'lucide-svelte';
   import Card from '../../components/common/Card.svelte';
   import Skeleton from '../../components/common/Skeleton.svelte';
   import BarChart from '../../components/analytics/BarChart.svelte';
   import LineChart from '../../components/analytics/LineChart.svelte';
   import DoughnutChart from '../../components/analytics/DoughnutChart.svelte';
   import ActivityIcon from '../../components/activities/ActivityIcon.svelte';
-  import { activities, modelCard, typeBreakdown, paceTrend, weekdayLoad, chartSeries, personalBests, streak, notify, unitSystem } from '../../stores/index.js';
+  import {
+    activities,
+    modelCard,
+    typeBreakdown,
+    paceTrend,
+    weekdayLoad,
+    chartSeries,
+    personalBests,
+    streak,
+    trainingLoad,
+    distancePRs,
+    hrZones,
+    notify,
+    unitSystem,
+  } from '../../stores/index.js';
+  import { computeAerobicEfficiency } from '../../lib/analytics/heartRate.js';
+  import { buildRiegelCurve } from '../../lib/analytics/records.js';
   import { api } from '../../services/client.js';
   import { navigate } from '../../lib/router.js';
   import { nf, pace, kcal, km, duration as fmtDuration, shortDate } from '../../lib/format.js';
@@ -43,6 +59,8 @@
   const weeklyCalories = $derived(energySeries.map((w) => Math.round(w.calories)));
   const weeklyLabels = $derived(energySeries.map((w) => w.label));
   const mixed = $derived($typeBreakdown.filter((t) => t.count > 0));
+  const aerobicEfficiency = $derived(computeAerobicEfficiency($activities, $hrZones));
+  const riegelCurve = $derived(buildRiegelCurve($activities, 'run'));
 
   const importance = $derived(
     Object.entries($modelCard?.feature_importance ?? {})
@@ -386,11 +404,16 @@
     {/if}
   </Card>
 
-  <!-- personal bests -->
+  <!-- personal bests & distance PRs -->
   <Card>
-    <div class="flex items-center gap-2">
-      <Trophy size={17} class="text-brand-500" />
-      <h2 class="text-lg">Personal bests</h2>
+    <div class="flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2">
+        <Trophy size={17} class="text-brand-500" />
+        <h2 class="text-lg">Personal bests & Distance PRs</h2>
+      </div>
+      {#if riegelCurve.anchor}
+        <span class="pill">Riegel predictions</span>
+      {/if}
     </div>
     <div class="mt-3 grid gap-3 sm:grid-cols-3">
       {#each [
@@ -428,7 +451,128 @@
         </div>
       {/each}
     </div>
+
+    {#if $distancePRs.length > 0}
+      <div class="mt-4">
+        <p class="text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink-400">Benchmark records</p>
+        <div class="mt-2 grid gap-2 sm:grid-cols-3 lg:grid-cols-5">
+          {#each $distancePRs as pr (pr.key)}
+            <div class="rounded-2xl border border-brand-100 bg-white px-3 py-2.5">
+              <p class="text-[11px] font-extrabold uppercase tracking-wide text-brand-700">{pr.label}</p>
+              <p class="num-tabular font-display text-base font-extrabold text-ink-900">{fmtDuration(pr.minutes)}</p>
+              <p class="num-tabular text-[11px] font-semibold text-ink-400">{pace(pr.paceMinPerKm, $unitSystem)}</p>
+            </div>
+          {/each}
+        </div>
+      </div>
+    {/if}
+
+    {#if riegelCurve.points.length >= 2}
+      <div class="mt-4 rounded-2xl border border-brand-100 bg-brand-50/40 p-3.5">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <p class="text-xs font-extrabold text-ink-900 flex items-center gap-1.5">
+            <Zap size={14} class="text-brand-500" /> Riegel Race Predictor Curve
+          </p>
+          <p class="text-[11px] font-semibold text-ink-400">
+            Anchored on {km(riegelCurve.anchor.distanceKm, $unitSystem)} {distanceUnit($unitSystem)} in {fmtDuration(riegelCurve.anchor.minutes)}
+          </p>
+        </div>
+        <div class="mt-2.5 grid grid-cols-4 gap-2 sm:grid-cols-8">
+          {#each riegelCurve.points as pt (pt.distanceKm)}
+            <div class="rounded-xl bg-white p-2 text-center border border-brand-100/70">
+              <p class="text-[10px] font-extrabold uppercase text-ink-400">{pt.label}</p>
+              <p class="num-tabular text-xs font-extrabold text-ink-900 mt-0.5">{fmtDuration(pt.minutes)}</p>
+            </div>
+          {/each}
+        </div>
+      </div>
+    {/if}
   </Card>
+
+  <!-- Training load (ACWR) & Heart rate zones / Aerobic efficiency -->
+  <div class="grid gap-5 xl:grid-cols-2">
+    <Card>
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <Activity size={17} class="text-brand-500" />
+          <h2 class="text-lg">Training Load & Readiness</h2>
+        </div>
+        <span class="pill num-tabular {$trainingLoad.meta.tone}">
+          {$trainingLoad.meta.label}
+          {#if $trainingLoad.acwr != null}· ACWR {$trainingLoad.acwr.toFixed(2)}{/if}
+        </span>
+      </div>
+
+      <div class="mt-3 grid grid-cols-3 gap-2 text-center">
+        <div class="rounded-2xl bg-brand-50/70 p-2.5">
+          <p class="text-[10px] font-extrabold uppercase text-ink-400">Acute (7d)</p>
+          <p class="num-tabular font-display text-lg font-extrabold text-ink-900">{$trainingLoad.acute7}</p>
+        </div>
+        <div class="rounded-2xl bg-brand-50/70 p-2.5">
+          <p class="text-[10px] font-extrabold uppercase text-ink-400">Chronic (28d avg)</p>
+          <p class="num-tabular font-display text-lg font-extrabold text-ink-900">{$trainingLoad.chronicWeeklyAvg}</p>
+        </div>
+        <div class="rounded-2xl bg-brand-50/70 p-2.5">
+          <p class="text-[10px] font-extrabold uppercase text-ink-400">Ratio</p>
+          <p class="num-tabular font-display text-lg font-extrabold text-brand-700">
+            {$trainingLoad.acwr != null ? $trainingLoad.acwr.toFixed(2) : '—'}
+          </p>
+        </div>
+      </div>
+
+      <div class="mt-3">
+        <BarChart
+          labels={$trainingLoad.series.map((d) => d.label)}
+          series={[{ label: 'Acute 7d', data: $trainingLoad.series.map((d) => d.acute7), colors: $trainingLoad.series.map(() => '#ff85b8') }]}
+          height={175}
+          tooltipLabel={(ctx) => `${Math.round(ctx.parsed.y)} acute load`}
+        />
+      </div>
+      <p class="mt-2 text-[11px] font-semibold text-ink-500">{$trainingLoad.meta.advice}</p>
+    </Card>
+
+    <Card>
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <HeartPulse size={17} class="text-brand-500" />
+          <h2 class="text-lg">HR Zones & Aerobic Efficiency</h2>
+        </div>
+        {#if aerobicEfficiency.deltaPct != null}
+          <span class="pill num-tabular {aerobicEfficiency.deltaPct >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}">
+            {aerobicEfficiency.deltaPct >= 0 ? '+' : ''}{aerobicEfficiency.deltaPct}% efficiency
+          </span>
+        {/if}
+      </div>
+
+      <div class="mt-3 grid grid-cols-5 gap-1.5">
+        {#each $hrZones as z (z.zone)}
+          <div class="rounded-xl border border-brand-100 bg-white p-2 text-center">
+            <span class="mx-auto block h-1.5 w-8 rounded-full" style="background:{z.color}"></span>
+            <p class="mt-1 text-[10px] font-extrabold text-ink-900">Z{z.zone} · {z.name}</p>
+            <p class="num-tabular text-[10px] font-bold text-ink-400">{z.min}–{z.max}</p>
+          </div>
+        {/each}
+      </div>
+
+      {#if aerobicEfficiency.series.length >= 2}
+        <div class="mt-3">
+          <LineChart
+            labels={aerobicEfficiency.series.map((s) => s.label)}
+            series={[{ label: 'EF (m/min/bpm)', data: aerobicEfficiency.series.map((s) => s.efficiencyIndex), color: '#10b981' }]}
+            height={175}
+            tooltipLabel={(ctx) => `${Number(ctx.parsed.y).toFixed(2)} m/min/bpm`}
+          />
+        </div>
+        <p class="mt-2 text-[11px] font-semibold text-ink-500">
+          Speed per heartbeat across heart-rate logged workouts — upward slope signals improving aerobic base.
+        </p>
+      {:else}
+        <p class="mt-6 text-sm font-semibold text-ink-400">
+          Log at least two workouts with average heart rate (from Garmin/Apple Watch CSV, .TCX/.FIT import, or manual entry) to chart aerobic decoupling.
+        </p>
+      {/if}
+    </Card>
+  </div>
 
   <!-- how it works -->
   <Card class="bg-gradient-to-br from-white to-brand-50">

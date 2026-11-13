@@ -23,6 +23,9 @@
     ShieldCheck,
     ChevronDown,
     ChevronUp,
+    Footprints,
+    AlertTriangle,
+    Zap,
   } from 'lucide-svelte';
   import TranaMap from '../../components/map/TranaMap.svelte';
   import GPSStatus from '../../components/activity/GPSStatus.svelte';
@@ -32,7 +35,7 @@
   import FoodLogger from '../../components/activity/FoodLogger.svelte';
   import ActivityIcon from '../../components/activities/ActivityIcon.svelte';
   import { link, navigate, query } from '../../lib/router.js';
-  import { plans, notify, unitSystem } from '../../stores/index.js';
+  import { plans, notify, unitSystem, gearList, fuelItems, loadGear, loadFuelItems } from '../../stores/index.js';
   import { distanceUnit, toDisplayDistance } from '../../lib/units.js';
   import { dailySessionApi } from '../../services/dailySessionService.js';
   import { readCachedPlace } from '../../lib/location.js';
@@ -236,8 +239,13 @@
       label: selectedPathLabel,
       planKey: selectedPlanKey,
       fueling: activePlan?.fueling ?? null,
+      durationMin: activePlan?.duration?.minutes ?? null,
     });
   });
+
+  const activeGearOptions = $derived($gearList.filter((g) => !g.retired));
+  const activeCustomFuelItems = $derived($fuelItems.filter((item) => item.is_active !== false));
+  const ghostState = $derived(liveTracker.ghostState);
 
   $effect(() => {
     if (liveTracker.lastDailySession) {
@@ -569,6 +577,7 @@
       plannedLabel: selectedPathLabel,
       plannedPlanKey: selectedPlanKey,
       plannedFueling: activePlan?.fueling ?? null,
+      plannedDurationMin: activePlan?.duration?.minutes ?? null,
     });
   }
 
@@ -632,6 +641,8 @@
     if (cachedPlace) seedLivePosition(cachedPlace);
     acquireLivePosition();
     loadTodaySession();
+    void loadGear();
+    void loadFuelItems();
     draftPlan = readDraftPlan();
 
     const planParam = $query.get('plan');
@@ -751,6 +762,7 @@
         heading={displayHeading}
         {startPosition}
         {finishPosition}
+        ghostPosition={tracking && ghostState?.ghostPosition ? ghostState.ghostPosition : null}
         bind:following
         autoCenter={true}
         {roadSnapping}
@@ -805,6 +817,56 @@
       calories={estimatedCalories}
     />
 
+    {#if tracking && ghostState && (ghostState.active || ghostState.offRouteMeters != null)}
+      <div class="flex flex-wrap items-center justify-between gap-2 rounded-2xl border px-3.5 py-2.5 text-xs font-extrabold {ghostState.offRoute
+        ? 'border-rose-300 bg-rose-50 text-rose-800'
+        : 'border-violet-200 bg-violet-50/70 text-violet-900'}">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="inline-flex items-center gap-1 rounded-full bg-violet-600 px-2 py-0.5 text-[10px] text-white">
+            <Zap size={11} /> Ghost Pacer
+          </span>
+          {#if ghostState.active}
+            <span class="num-tabular">
+              {#if ghostState.deltaDistanceM >= 0}
+                +{ghostState.deltaDistanceM} m ahead ({ghostState.deltaSec}s)
+              {:else}
+                {Math.abs(ghostState.deltaDistanceM)} m behind ({Math.abs(ghostState.deltaSec)}s)
+              {/if}
+            </span>
+            {#if ghostState.projectedEtaMin != null}
+              <span class="num-tabular text-violet-700">· ETA {ghostState.projectedEtaMin} min</span>
+            {/if}
+          {/if}
+        </div>
+        {#if ghostState.offRoute}
+          <span class="inline-flex items-center gap-1 rounded-full bg-rose-600 px-2.5 py-0.5 text-[11px] text-white">
+            <AlertTriangle size={12} /> Off route ({ghostState.offRouteMeters} m)
+          </span>
+        {/if}
+      </div>
+    {/if}
+
+    {#if !tracking && activeGearOptions.length > 0}
+      <div class="flex flex-wrap items-center gap-2 rounded-2xl border border-brand-100 bg-brand-50/40 px-3.5 py-2">
+        <span class="inline-flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wide text-ink-500">
+          <Footprints size={13} class="text-brand-600" /> Gear
+        </span>
+        <select
+          aria-label="Select shoe or bike for this session"
+          class="input !w-auto !py-1.5 !text-xs flex-1 sm:max-w-xs"
+          value={liveTracker.gearId ?? ''}
+          onchange={(e) => liveTracker.setGearId(e.currentTarget.value ? Number(e.currentTarget.value) : null)}
+        >
+          <option value="">No gear selected</option>
+          {#each activeGearOptions as item (item.id)}
+            <option value={item.id}>
+              {item.name} ({Math.round(toDisplayDistance(item.total_km, $unitSystem))} {distanceUnit($unitSystem)})
+            </option>
+          {/each}
+        </select>
+      </div>
+    {/if}
+
     {#if tracking}
       <!-- Live Fueling & Voice Coaching Bar -->
       <div class="rounded-2xl border p-3.5 transition {liveTracker.hydrateDue || liveTracker.fuelDue
@@ -846,6 +908,18 @@
               <Flame size={12} />
               {liveTracker.fuelDue ? 'Fuel now (+25g)' : '+25g carbs'}
             </button>
+            {#each activeCustomFuelItems.slice(0, 3) as item (item.id)}
+              <button
+                type="button"
+                class="btn-chip !py-1.5"
+                onclick={() => {
+                  liveTracker.logFuelItem(item);
+                  notify(`Logged ${item.name}`);
+                }}
+              >
+                + {item.name} ({item.carbs_g}g)
+              </button>
+            {/each}
             <button
               type="button"
               class="btn-chip !py-1.5"

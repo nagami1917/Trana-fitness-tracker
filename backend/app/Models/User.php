@@ -91,6 +91,26 @@ class User extends Authenticatable
         return $this->hasMany(DailySession::class)->orderByDesc('session_date');
     }
 
+    public function fuelItems(): HasMany
+    {
+        return $this->hasMany(FuelItem::class);
+    }
+
+    public function gear(): HasMany
+    {
+        return $this->hasMany(Gear::class);
+    }
+
+    public function raceEvents(): HasMany
+    {
+        return $this->hasMany(RaceEvent::class)->orderBy('race_date');
+    }
+
+    public function pushSubscriptions(): HasMany
+    {
+        return $this->hasMany(PushSubscription::class);
+    }
+
     /** Create the paired rows every athlete needs, with sensible defaults. */
     public function ensureProfile(): FitnessProfile
     {
