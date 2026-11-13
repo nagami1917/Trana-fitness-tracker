@@ -26,11 +26,15 @@ return new class extends Migration
             $table->index(['user_id', 'sport']);
         });
 
-        Schema::table('activities', function (Blueprint $table) {
-            if (! Schema::hasColumn('activities', 'gear_id')) {
-                $table->foreignId('gear_id')->nullable()->constrained('gear')->nullOnDelete();
-            }
-        });
+        if (! Schema::hasColumn('activities', 'gear_id')) {
+            Schema::table('activities', function (Blueprint $table) {
+                if (DB::getDriverName() === 'sqlite') {
+                    $table->unsignedBigInteger('gear_id')->nullable()->index();
+                } else {
+                    $table->foreignId('gear_id')->nullable()->constrained('gear')->nullOnDelete();
+                }
+            });
+        }
 
         $this->secureDataApi('gear');
     }
@@ -39,7 +43,11 @@ return new class extends Migration
     {
         if (Schema::hasColumn('activities', 'gear_id')) {
             Schema::table('activities', function (Blueprint $table) {
-                $table->dropConstrainedForeignId('gear_id');
+                if (DB::getDriverName() === 'sqlite') {
+                    $table->dropColumn('gear_id');
+                } else {
+                    $table->dropConstrainedForeignId('gear_id');
+                }
             });
         }
         Schema::dropIfExists('gear');

@@ -3,12 +3,12 @@
  */
 
 export function notificationSupport() {
-  if (typeof window === 'undefined') return { supported: false, permission: 'unsupported' };
+  if (typeof window === 'undefined') return { supported: false, permission: 'unsupported', hasServiceWorker: false };
   const supported = 'Notification' in window;
   return {
     supported,
     permission: supported ? Notification.permission : 'unsupported',
-    hasServiceWorker: 'serviceWorker' in navigator,
+    hasServiceWorker: typeof navigator !== 'undefined' && 'serviceWorker' in navigator,
   };
 }
 
@@ -67,7 +67,7 @@ export async function showLocalFuelingNotification({
   if (typeof window === 'undefined' || !('Notification' in window)) return false;
   if (Notification.permission !== 'granted') return false;
 
-  if ('serviceWorker' in navigator) {
+  if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
     try {
       const reg = await navigator.serviceWorker.getRegistration();
       if (reg && typeof reg.showNotification === 'function') {

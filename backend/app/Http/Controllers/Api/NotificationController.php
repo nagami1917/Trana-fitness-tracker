@@ -180,7 +180,8 @@ class NotificationController extends Controller
 
         $races = RaceEvent::where('user_id', $user->id)
             ->where('carb_loading_enabled', true)
-            ->whereBetween('race_date', [$today->toDateString(), $today->copy()->addDays(2)->toDateString()])
+            ->whereDate('race_date', '>=', $today->toDateString())
+            ->whereDate('race_date', '<=', $today->copy()->addDays(2)->toDateString())
             ->get();
 
         foreach ($races as $race) {

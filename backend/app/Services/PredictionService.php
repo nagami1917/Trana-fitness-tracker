@@ -109,7 +109,8 @@ class PredictionService
 
         $upcomingCarbRace = $user->raceEvents()
             ->where('carb_loading_enabled', true)
-            ->whereBetween('race_date', [now()->toDateString(), now()->addDays(2)->toDateString()])
+            ->whereDate('race_date', '>=', now()->toDateString())
+            ->whereDate('race_date', '<=', now()->addDays(2)->toDateString())
             ->exists();
         if ($upcomingCarbRace) {
             $payload['carb_loading'] = true;
