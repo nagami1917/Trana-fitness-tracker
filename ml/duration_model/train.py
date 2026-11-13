@@ -4,11 +4,17 @@ Three gradient-boosted quantile regressors predict the 10th / 50th / 90th
 percentile of the time an athlete needs for a planned session, which gives the
 UI an honest "estimated range" instead of a single over-confident number.
 
+Split discipline
+----------------
+Activities are split **by user_id** (`GroupShuffleSplit`) *before* constructing
+chronological per-user anchors (`training_frame`), preventing both user-level
+memorization and future-to-past target leakage.
+
 Artifacts
 ---------
 duration_model/duration_model.joblib   : scikit-learn object (used by FastAPI)
 duration_model/duration_model.json     : the same trees as plain JSON so the PWA can
-                                    evaluate them in the browser while offline
+                                         evaluate them in the browser while offline
 duration_model/model_card.json         : metrics + feature names, surfaced in the UI
 
 Run
@@ -32,7 +38,7 @@ import numpy as np
 import pandas as pd
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import GroupShuffleSplit
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -44,16 +50,16 @@ DATA = ROOT / "data"
 
 QUANTILES = {"q10": 0.10, "q50": 0.50, "q90": 0.90}
 MIN_TRAIN_ROWS = 200
+MIN_PLAUSIBLE_SPEED_KMH = 0.5
+MAX_PLAUSIBLE_SPEED_KMH = 65.0
 
 
 def normalize_activities(frame: pd.DataFrame) -> pd.DataFrame:
-    """Fill the columns training needs when the source table is lean.
+    """Fill the columns training needs and drop physically corrupt speeds.
 
     External tables (GeoLife / FitRec CSVs) carry only
     user/mode/distance/duration/time — the training frame additionally wants
-    a row id, elevation, weight and experience. Defaults mirror the
-    evaluation protocol: elevation 0 m, weight 60 kg, experience inferred
-    from how much that athlete has already logged in that mode.
+    a row id, elevation, weight and experience.
     """
     from duration_model.preprocess import experience_level
 
@@ -69,10 +75,14 @@ def normalize_activities(frame: pd.DataFrame) -> pd.DataFrame:
     out["duration_min"] = pd.to_numeric(out["duration_min"], errors="coerce")
     out = out[out["distance_km"].gt(0) & out["duration_min"].gt(0)].copy()
 
+    # Reject obvious paused timers (< 0.5 km/h) or motorized GPS glitches (> 65 km/h).
+    speed = out["distance_km"] / (out["duration_min"] / 60.0)
+    out = out[speed.between(MIN_PLAUSIBLE_SPEED_KMH, MAX_PLAUSIBLE_SPEED_KMH)].copy()
+
     if "elevation_gain_m" not in out.columns:
         out["elevation_gain_m"] = 0.0
     else:
-        out["elevation_gain_m"] = pd.to_numeric(out["elevation_gain_m"], errors="coerce").fillna(0.0)
+        out["elevation_gain_m"] = pd.to_numeric(out["elevation_gain_m"], errors="coerce").fillna(0.0).clip(lower=0.0)
 
     if "weight_kg" not in out.columns:
         out["weight_kg"] = 60.0
@@ -119,7 +129,6 @@ def load_activities(source: str, csv_path: str | None) -> pd.DataFrame:
         """
         with psycopg.connect(dsn) as conn, conn.cursor() as cur:
             cur.execute(query)
-            # psycopg3 exposes Column.name (indexing `d[0]` is psycopg2-style).
             cols = [d.name for d in cur.description]
             return normalize_activities(pd.DataFrame(cur.fetchall(), columns=cols))
 
@@ -132,6 +141,19 @@ def load_activities(source: str, csv_path: str | None) -> pd.DataFrame:
     return frame
 
 
+def _split_activities(clean: pd.DataFrame, seed: int) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Split by unseen user_id when >= 5 users exist; otherwise chronological tail."""
+    n_users = clean["user_id"].nunique()
+    if n_users >= 5:
+        splitter = GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=seed)
+        train_idx, test_idx = next(splitter.split(clean, groups=clean["user_id"]))
+        return training_frame(clean.iloc[train_idx]), training_frame(clean.iloc[test_idx])
+
+    full = training_frame(clean)
+    cut = max(1, int(len(full) * 0.8))
+    return full.iloc[:cut].copy(), full.iloc[cut:].copy()
+
+
 def train(
     activities: pd.DataFrame,
     seed: int = 7,
@@ -140,15 +162,15 @@ def train(
     target_coverage: float = 0.80,
     calibrate_on_holdout: bool = False,
 ) -> dict:
-    frame = training_frame(normalize_activities(activities))
-    x = frame[FEATURE_ORDER].to_numpy(dtype=float)
-    # The model learns a log pace factor; minutes are recovered via the athlete's
-    # own reference speed so predictions stay anchored to their ability.
-    y = frame["log_pace_factor"].to_numpy(dtype=float)
+    clean = normalize_activities(activities)
+    train_frame, test_frame = _split_activities(clean, seed=seed)
 
-    x_train, x_test, y_train, y_test, base_train, base_test = train_test_split(
-        x, y, frame["base_minutes"].to_numpy(), test_size=0.2, random_state=seed
-    )
+    x_train = train_frame[FEATURE_ORDER].to_numpy(dtype=float)
+    y_train = train_frame["log_pace_factor"].to_numpy(dtype=float)
+
+    x_test = test_frame[FEATURE_ORDER].to_numpy(dtype=float)
+    y_test_log = test_frame["log_pace_factor"].to_numpy(dtype=float)
+    base_test = test_frame["base_minutes"].to_numpy(dtype=float)
 
     models: dict[str, GradientBoostingRegressor] = {}
     for name, alpha in QUANTILES.items():
@@ -165,12 +187,14 @@ def train(
         model.fit(x_train, y_train)
         models[name] = model
 
-    # Everything below is evaluated in minutes, which is what the user sees.
-    # (Predictions are log pace factors; multiply by the flat-equivalent time.)
-    pred_median = np.exp(models["q50"].predict(x_test)) * base_test
-    lo = np.exp(models["q10"].predict(x_test)) * base_test
-    hi = np.exp(models["q90"].predict(x_test)) * base_test
-    y_test = np.exp(y_test) * base_test
+    # Evaluate in minutes with identical clamping and non-crossing guards as inference.
+    raw_lo = np.clip(np.exp(models["q10"].predict(x_test)), 0.7, 3.0)
+    raw_med = np.clip(np.exp(models["q50"].predict(x_test)), 0.7, 3.0)
+    raw_hi = np.clip(np.exp(models["q90"].predict(x_test)), 0.7, 3.0)
+    lo = base_test * raw_lo
+    pred_median = np.maximum(base_test * raw_med, lo)
+    hi = np.maximum(base_test * raw_hi, pred_median)
+    y_test = test_frame["duration_min"].to_numpy(dtype=float)
 
     metrics = {
         "mae_min": round(float(mean_absolute_error(y_test, pred_median)), 2),
@@ -187,11 +211,7 @@ def train(
 
     bundle: dict = {"models": models, "feature_order": FEATURE_ORDER, "metrics": metrics}
 
-    # ML phase 2 — interval calibration on real activities: widen q10/q90 to
-    # the target coverage so the band means something outside the synthetic
-    # noise model. Prefer an explicit external calibration table when given;
-    # otherwise (when `--calibrate` or `--source supabase` is used) calibrate on
-    # the unseen 20 % holdout split so trees and width factor stay disjoint.
+    # ML phase 2 — interval calibration on strictly held-out users or external table.
     calibration: dict | None = None
     if calibrate is not None and len(calibrate) > 0:
         from duration_model.calibrate import calibrate_bundle
@@ -200,17 +220,11 @@ def train(
     elif calibrate_on_holdout and len(x_test) > 0:
         from duration_model.calibrate import fit_factor
 
-        raw_lo = np.clip(np.exp(models["q10"].predict(x_test)), 0.7, 3.0)
-        raw_med = np.clip(np.exp(models["q50"].predict(x_test)), 0.7, 3.0)
-        raw_hi = np.clip(np.exp(models["q90"].predict(x_test)), 0.7, 3.0)
-        cal_lo = base_test * raw_lo
-        cal_med = np.maximum(base_test * raw_med, cal_lo)
-        cal_hi = np.maximum(base_test * raw_hi, cal_med)
         calibration = fit_factor(
             actual=y_test,
-            low=cal_lo,
-            median=cal_med,
-            high=cal_hi,
+            low=lo,
+            median=pred_median,
+            high=hi,
             target=target_coverage,
         )
         bundle["calibration"] = calibration
@@ -225,13 +239,13 @@ def train(
         "name": "TRANA duration model",
         "version": datetime.now(timezone.utc).strftime("%Y%m%d.%H%M"),
         "algorithm": "GradientBoostingRegressor (quantile loss, q10/q50/q90)",
-        "target": "log(duration / flat-equivalent time at the athlete's own reference speed)",
+        "target": "log(duration / flat-equivalent time at the athlete's own chronological reference curve)",
         "output": "activity duration in minutes (base × exp(prediction))",
         "features": FEATURE_ORDER,
         "metrics": metrics,
         "feature_importance": importance.to_dict(),
         "trained_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "corpus_rows": int(len(frame)),
+        "corpus_rows": int(len(train_frame) + len(test_frame)),
         "training_source": training_source,
         "calibration": calibration,
     }
@@ -244,7 +258,7 @@ def export_trees(models: dict[str, GradientBoostingRegressor]) -> dict:
     payload: dict = {
         "feature_order": FEATURE_ORDER,
         "target": "log_pace_factor",
-        "base": "distance_km / ref_speed_kmh * 60",
+        "base": "exp(a + b * ln(distance_km))",
         "models": {},
     }
     for name, model in models.items():

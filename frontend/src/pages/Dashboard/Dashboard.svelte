@@ -161,6 +161,8 @@
       avgSpeedKmh: d.speedKmh,
       sweatProfile: $profile.sweat_profile,
       temperatureC: $profile.typical_temperature_c,
+      dailyCarbTargetG: $goals?.carb_target_g ?? $profile.daily_carb_goal_g,
+      energyCalibrationFactor: Number($profile.energy_calibration_factor) || 1,
     });
     return { d, f };
   });

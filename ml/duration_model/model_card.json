@@ -1,41 +1,42 @@
 {
   "name": "TRANA duration model",
-  "version": "20261108.0445",
+  "version": "20261113.1328",
   "algorithm": "GradientBoostingRegressor (quantile loss, q10/q50/q90)",
-  "target": "log(duration / flat-equivalent time at the athlete's own reference speed)",
+  "target": "log(duration / flat-equivalent time at the athlete's own chronological reference curve)",
   "output": "activity duration in minutes (base \u00d7 exp(prediction))",
   "features": [
     "distance_km",
     "elevation_gain_m",
     "elevation_per_km",
-    "weight_kg",
     "experience_level",
+    "history_count",
     "is_run",
     "is_ride",
     "is_walk",
     "is_hike"
   ],
   "metrics": {
-    "mae_min": 9.56,
-    "rmse_min": 27.16,
-    "r2": 0.9524,
-    "mape_pct": 7.18,
-    "interval_coverage_pct": 76.8,
-    "train_rows": 6390,
-    "test_rows": 1598
+    "mae_min": 5.76,
+    "rmse_min": 14.13,
+    "r2": 0.9924,
+    "mape_pct": 5.51,
+    "interval_coverage_pct": 78.9,
+    "train_rows": 7011,
+    "test_rows": 1834
   },
   "feature_importance": {
-    "elevation_per_km": 0.6219,
-    "distance_km": 0.1889,
-    "is_ride": 0.0531,
-    "elevation_gain_m": 0.0441,
-    "is_hike": 0.034,
-    "weight_kg": 0.0332,
-    "experience_level": 0.0105,
-    "is_run": 0.0086,
-    "is_walk": 0.0056
+    "elevation_per_km": 0.6849,
+    "history_count": 0.1516,
+    "elevation_gain_m": 0.0473,
+    "distance_km": 0.0372,
+    "is_ride": 0.0347,
+    "is_run": 0.022,
+    "is_hike": 0.0101,
+    "is_walk": 0.0061,
+    "experience_level": 0.0061
   },
-  "trained_at": "2026-11-08T04:45:29+00:00",
-  "corpus_rows": 7988,
-  "training_source": "synthetic"
+  "trained_at": "2026-11-13T13:28:54+00:00",
+  "corpus_rows": 8845,
+  "training_source": "synthetic",
+  "calibration": null
 }

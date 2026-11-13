@@ -42,11 +42,15 @@ class FuelingInput:
     sweat_profile: str = "normal"
     temperature_c: float = 22.0
     daily_carb_target_g: float | None = None
+    energy_calibration_factor: float = 1.0
     notes: list[str] = field(default_factory=list)
 
 
 def estimate_met(activity_type: str, speed_kmh: float, elevation_per_km: float = 0.0) -> float:
-    climb_bonus = min(2.6, max(0.0, elevation_per_km) * 0.045)
+    # Vertical ascent work against gravity: VAM (m/h) = elev/km * km/h.
+    vam_m_per_h = max(0.0, elevation_per_km) * max(0.0, speed_kmh)
+    climb_coef = 0.009 if activity_type == "ride" else 0.011
+    climb_bonus = min(10.0, vam_m_per_h * climb_coef)
     if activity_type == "run":
         met = speed_kmh * 1.03
     elif activity_type == "ride":
@@ -93,7 +97,8 @@ def recommend(inp: FuelingInput) -> dict:
     }.get(inp.activity_type, 5.0)
 
     met = estimate_met(inp.activity_type, speed, inp.elevation_per_km)
-    calories_total = met * inp.weight_kg * duration_h
+    cal_factor = min(2.0, max(0.5, float(inp.energy_calibration_factor or 1.0)))
+    calories_total = met * inp.weight_kg * duration_h * cal_factor
     intensity = intensity_label(met)
 
     # --- carbohydrates ----------------------------------------------------
@@ -136,7 +141,7 @@ def recommend(inp: FuelingInput) -> dict:
         "met": round(met, 2),
         "calories": {
             "total": int(round(calories_total)),
-            "per_hour": int(round(met * inp.weight_kg)),
+            "per_hour": int(round(met * inp.weight_kg * cal_factor)),
             "from_carbs_pct": 60 if met >= 9 else 45,
         },
         "carbs": {
@@ -170,6 +175,7 @@ def _timeline(inp: FuelingInput, carb_per_h: float, sodium_per_h: float, fluid_p
             "label": "Pre-activity meal",
             "detail": f"{int(round(inp.weight_kg * 1.2))} g carbs, low fibre, moderate protein",
             "carbs_g": int(round(inp.weight_kg * 1.2)),
+            "icon": "meal",
         }
     ]
     if inp.duration_min >= 60:
@@ -179,6 +185,7 @@ def _timeline(inp: FuelingInput, carb_per_h: float, sodium_per_h: float, fluid_p
                 "label": "Top-up snack",
                 "detail": "20–30 g easy carbs if the last meal was early",
                 "carbs_g": 25,
+                "icon": "snack",
             }
         )
     if carb_per_h > 0:
@@ -189,6 +196,7 @@ def _timeline(inp: FuelingInput, carb_per_h: float, sodium_per_h: float, fluid_p
                 "label": f"Every {every} min",
                 "detail": f"{int(carb_per_h * every / 60)} g carbs + {int(fluid_per_h * every / 60)} ml fluid",
                 "carbs_g": int(round(carb_per_h * every / 60)),
+                "icon": "during",
             }
         )
     items.append(
@@ -197,6 +205,7 @@ def _timeline(inp: FuelingInput, carb_per_h: float, sodium_per_h: float, fluid_p
             "label": "Recovery",
             "detail": f"{int(round(inp.weight_kg * 0.4))} g carbs + {int(round(inp.weight_kg * 0.25))} g protein",
             "carbs_g": int(round(inp.weight_kg * 0.4)),
+            "icon": "recovery",
         }
     )
     return items

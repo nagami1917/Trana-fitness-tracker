@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\EnergyExpenditure;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -285,5 +286,56 @@ class EnergyExpenditureTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.calibration_factor', 1.0)
             ->assertJsonPath('data.sample_count', 0);
+    }
+
+    public function test_zero_estimated_rows_do_not_dilute_calibration_factor(): void
+    {
+        $user = $this->athlete('zero-est@trana.test');
+        Sanctum::actingAs($user);
+
+        foreach (['2026-11-06', '2026-11-07', '2026-11-08'] as $day) {
+            $this->postJson('/api/energy-expenditure', $this->sample(800, "{$day}T06:30:00+08:00"))
+                ->assertCreated();
+        }
+
+        // Insert a legacy row whose trana_estimated_calories is 0 — it must not dilute the denominator.
+        EnergyExpenditure::create([
+            'user_id' => $user->id,
+            'device_type' => 'garmin',
+            'activity_type' => 'run',
+            'distance_km' => 10,
+            'duration_min' => 60,
+            'weight_kg' => 72,
+            'measured_calories' => 800,
+            'trana_estimated_calories' => 0,
+            'recorded_at' => '2026-11-05T06:30:00+08:00',
+        ]);
+
+        $factor = (float) $this->getJson('/api/energy-expenditure/calibration')->json('data.calibration_factor');
+        $this->assertEqualsWithDelta(800 / 742, $factor, 0.0001);
+    }
+
+    public function test_hilly_activity_calories_scale_with_vam_ascent_work(): void
+    {
+        Sanctum::actingAs($this->athlete('vam@trana.test', 70));
+
+        $flat = $this->postJson('/api/activities', [
+            'activity_type' => 'run',
+            'distance_km' => 10,
+            'duration_min' => 100,
+            'elevation_gain_m' => 0,
+            'started_at' => '2026-11-08T06:30:00+08:00',
+        ])->assertCreated()->json('data');
+
+        // 1500 m climbing in 100 min = 900 m/h VAM -> +9.9 MET, well above legacy +2.6 MET cap.
+        $steep = $this->postJson('/api/activities', [
+            'activity_type' => 'run',
+            'distance_km' => 10,
+            'duration_min' => 100,
+            'elevation_gain_m' => 1500,
+            'started_at' => '2026-11-09T06:30:00+08:00',
+        ])->assertCreated()->json('data');
+
+        $this->assertGreaterThan($flat['calories'] + 500, $steep['calories']);
     }
 }

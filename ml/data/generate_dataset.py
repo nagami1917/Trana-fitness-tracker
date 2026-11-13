@@ -4,8 +4,8 @@ TRANA — synthetic historical activity corpus generator.
 TRANA predicts duration/fueling from a user's *own* past activities. Because the
 production database starts empty, the duration model is bootstrapped on a
 physics-informed synthetic corpus built from published field formulas
-(Naismith's rule for elevation, ACSM metabolic equations for locomotion speed)
-plus per-athlete fitness factors and realistic measurement noise.
+(Naismith's rule for elevation, ACSM/VAM metabolic cost) plus per-athlete
+fitness factors, flat + hilly terrain coverage, and realistic noise.
 
 Once real activities exist in Supabase, re-train with:
 
@@ -31,21 +31,22 @@ ACTIVITY_TYPES = ("run", "ride", "walk", "hike")
 # Typical moving speed (km/h) for a recreationally fit adult, flat ground, no wind.
 BASE_SPEED_KMH = {"run": 9.6, "ride": 22.0, "walk": 5.0, "hike": 3.9}
 
-# How strongly climbing slows each modality down.
-CLIMB_SENSITIVITY = {"run": 1.25, "ride": 0.45, "walk": 1.0, "hike": 1.45}
+# How strongly climbing slows each modality down (matches flat-equivalent normalization).
+CLIMB_SENSITIVITY = {"run": 0.85, "ride": 0.45, "walk": 0.70, "hike": 0.75}
 
-# Distance at which fatigue starts to bite, and how hard it bites.
-FATIGUE_ONSET_KM = {"run": 8.0, "ride": 45.0, "walk": 6.0, "hike": 8.0}
-FATIGUE_RATE = {"run": 0.012, "ride": 0.006, "walk": 0.014, "hike": 0.016}
+# Smooth Riegel-aligned endurance fatigue reference distance & exponent offset.
+REF_DIST_KM = {"run": 5.0, "ride": 20.0, "walk": 4.0, "hike": 5.0}
+FATIGUE_EXPONENT = {"run": 0.06, "ride": 0.03, "walk": 0.06, "hike": 0.12}
 
-DISTANCE_RANGE_KM = {"run": (3.0, 32.0), "ride": (10.0, 120.0), "walk": (1.5, 15.0), "hike": (3.0, 26.0)}
+# Cover urban & endurance range: 1.5–45 km runs, 2–150 km rides, 0.5–22 km walks, 2–36 km hikes.
+DISTANCE_RANGE_KM = {"run": (1.5, 45.0), "ride": (2.0, 150.0), "walk": (0.5, 22.0), "hike": (2.0, 36.0)}
 
 
 def _rng(seed: int) -> np.random.Generator:
     return np.random.default_rng(seed)
 
 
-def build_corpus(n_users: int = 220, min_activities: int = 12, max_activities: int = 60, seed: int = 42) -> pd.DataFrame:
+def build_corpus(n_users: int = 240, min_activities: int = 12, max_activities: int = 60, seed: int = 42) -> pd.DataFrame:
     rng = _rng(seed)
     rows: list[dict] = []
     activity_id = 1
@@ -55,6 +56,8 @@ def build_corpus(n_users: int = 220, min_activities: int = 12, max_activities: i
         weight_kg = float(np.clip(rng.normal(62, 12), 42, 115))
         experience = int(rng.integers(1, 6))  # 1 = new, 5 = seasoned
         fitness = 0.80 + 0.085 * (experience - 1) + rng.normal(0, 0.045)
+        # Seasoned athletes sustain endurance distance with less pace decay.
+        fatigue_skill = max(0.65, 1.0 - 0.08 * (experience - 3))
         # Each athlete has a personal bias per modality (strength on the bike, etc.)
         modality_bias = {t: float(np.clip(rng.normal(1.0, 0.06), 0.82, 1.22)) for t in ACTIVITY_TYPES}
         favourite = rng.choice(ACTIVITY_TYPES, p=[0.42, 0.26, 0.20, 0.12])
@@ -69,26 +72,32 @@ def build_corpus(n_users: int = 220, min_activities: int = 12, max_activities: i
 
             lo, hi = DISTANCE_RANGE_KM[activity_type]
             # 70 % everyday sessions (log-normal around a short base distance),
-            # 30 % long efforts sampled across the modality's full useful range —
-            # without the second mode the model never learns the endurance tail.
+            # 30 % long efforts sampled across the modality's full useful range.
             if rng.random() < 0.70:
                 distance_km = float(np.clip(rng.lognormal(math.log(lo * 1.5), 0.5), lo, hi))
             else:
                 distance_km = float(rng.uniform(lo * 1.8, hi))
-            elevation_per_km = float(np.clip(rng.lognormal(math.log(9 + 4 * (activity_type == "hike")), 0.85), 0, 95))
+
+            # Include ~25% genuinely flat track/road/trainer sessions (0–1.5 m/km)
+            # alongside rolling & mountain sessions up to 160 m/km so the model
+            # learns the flat boundary accurately without negative-bias distortion.
+            if rng.random() < 0.25 and activity_type != "hike":
+                elevation_per_km = float(rng.uniform(0.0, 1.5)) if rng.random() < 0.5 else 0.0
+            else:
+                cap = 160.0 if activity_type == "hike" else 120.0
+                elevation_per_km = float(np.clip(rng.lognormal(math.log(10 + 18 * (activity_type == "hike")), 0.90), 0.0, cap))
             elevation_gain_m = round(distance_km * elevation_per_km, 1)
 
             # --- physics-informed duration ------------------------------------
             base = BASE_SPEED_KMH[activity_type]
             climb_penalty = 1.0 / (1.0 + CLIMB_SENSITIVITY[activity_type] * elevation_per_km / 100.0)
-            fatigue = 1.0 / (1.0 + FATIGUE_RATE[activity_type] * max(0.0, distance_km - FATIGUE_ONSET_KM[activity_type]))
+            ref_d = REF_DIST_KM[activity_type]
+            fatigue_exp = FATIGUE_EXPONENT[activity_type] * fatigue_skill
+            fatigue = (max(distance_km, 0.5) / ref_d) ** (-fatigue_exp)
             speed = base * fitness * modality_bias[activity_type] * climb_penalty * fatigue
             speed *= float(np.clip(rng.normal(1.0, 0.055), 0.82, 1.2))  # day-to-day form, weather, traffic
 
-            # Hiking/walking pace depends on ascent even more than on gradient alone (Naismith).
             duration_min = distance_km / speed * 60.0
-            if activity_type in ("hike", "walk"):
-                duration_min += elevation_gain_m / 10.0 * (0.55 if activity_type == "hike" else 0.25)
 
             # --- observed calories (MET-based ground truth + noise) ------------
             met = estimate_met(activity_type, speed, elevation_per_km)
@@ -120,8 +129,10 @@ def build_corpus(n_users: int = 220, min_activities: int = 12, max_activities: i
 
 
 def estimate_met(activity_type: str, speed_kmh: float, elevation_per_km: float) -> float:
-    """ACSM-style MET lookup: ~1 kcal/kg/hour per MET, adjusted for climbing."""
-    climb_bonus = min(2.6, elevation_per_km * 0.045)
+    """ACSM-style MET lookup + VAM vertical climbing work."""
+    vam_m_per_h = max(0.0, elevation_per_km) * max(0.0, speed_kmh)
+    climb_coef = 0.009 if activity_type == "ride" else 0.011
+    climb_bonus = min(10.0, vam_m_per_h * climb_coef)
     if activity_type == "run":
         met = speed_kmh * 1.03  # running: MET ≈ 1.03 × km/h
     elif activity_type == "ride":
@@ -134,14 +145,16 @@ def estimate_met(activity_type: str, speed_kmh: float, elevation_per_km: float) 
 
 
 def _fake_timestamp(rng: np.random.Generator, index: int) -> str:
-    day = 40 - int(index * 0.55) - int(rng.integers(0, 3))
+    # Chronological timestamps across sessions (k=0 oldest -> k=max newest)
+    day_offset = int(index * 2) + int(rng.integers(0, 2))
     hour = int(rng.integers(6, 20))
-    return f"2026-{ '11' if day > 0 else '10' }-{abs(day) + 1:02d}T{hour:02d}:00:00+08:00"
+    base = pd.Timestamp("2026-08-01T00:00:00+08:00") + pd.Timedelta(days=day_offset, hours=hour)
+    return base.isoformat()
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate the TRANA bootstrap corpus.")
-    parser.add_argument("--users", type=int, default=220)
+    parser.add_argument("--users", type=int, default=240)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--out", type=Path, default=Path(__file__).parent / "data" / "activities.csv")
     args = parser.parse_args()

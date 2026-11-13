@@ -26,6 +26,7 @@
     elevation_per_km: 'Climbing per km',
     elevation_gain_m: 'Total elevation',
     distance_km: 'Planned distance',
+    history_count: 'Activity history',
     weight_kg: 'Body mass',
     experience_level: 'Experience',
     is_ride: 'Cycling',

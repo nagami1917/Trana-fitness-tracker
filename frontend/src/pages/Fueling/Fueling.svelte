@@ -6,7 +6,7 @@
   import DailyProgress from '../../components/activity/DailyProgress.svelte';
   import FoodLogger from '../../components/activity/FoodLogger.svelte';
   import { recommendFueling, INTENSITY_COPY, gelEquivalent } from '../../lib/ml/fueling.js';
-  import { profile, unitSystem } from '../../stores/index.js';
+  import { goals, profile, unitSystem } from '../../stores/index.js';
   import { navigate } from '../../lib/router.js';
   import { dailySessionApi } from '../../services/dailySessionService.js';
   import {
@@ -47,7 +47,8 @@
       avgSpeedKmh: SPEEDS[activityType],
       sweatProfile: $profile?.sweat_profile ?? 'normal',
       temperatureC,
-      dailyCarbTargetG: $profile?.daily_carb_goal_g,
+      dailyCarbTargetG: $goals?.carb_target_g ?? $profile?.daily_carb_goal_g,
+      energyCalibrationFactor: Number($profile?.energy_calibration_factor) || 1,
     }),
   );
   const intensityCopy = $derived(INTENSITY_COPY[plan.intensity] ?? INTENSITY_COPY.moderate);

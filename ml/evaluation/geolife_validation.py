@@ -258,8 +258,12 @@ def evaluate_activities(frame: pd.DataFrame, model: DurationModel) -> dict:
                 }
             )
             history.append(
-                {"activity_type": activity_type,
-                 "distance_km": distance, "duration_min": actual}
+                {
+                    "activity_type": activity_type,
+                    "distance_km": distance,
+                    "duration_min": actual,
+                    "started_at": getattr(row, "start_time", None),
+                }
             )
 
     by_mode: dict[str, dict] = {}

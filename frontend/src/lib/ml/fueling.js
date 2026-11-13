@@ -17,7 +17,10 @@ export const SWEAT_PROFILES = {
 const FALLBACK_SPEED = { run: 9.0, ride: 21.0, walk: 4.8, hike: 3.8 };
 
 export function estimateMet(activityType, speedKmh, elevationPerKm = 0) {
-  const climb = Math.min(2.6, Math.max(0, elevationPerKm) * 0.045);
+  // Vertical ascent work against gravity: VAM (m/h) = elev/km * km/h.
+  const vamMPerH = Math.max(0, elevationPerKm) * Math.max(0, speedKmh);
+  const climbCoef = activityType === 'ride' ? 0.009 : 0.011;
+  const climb = Math.min(10.0, vamMPerH * climbCoef);
   let met;
   if (activityType === 'run') met = speedKmh * 1.03;
   else if (activityType === 'ride') met = 3.2 + speedKmh * 0.29;
@@ -71,11 +74,13 @@ export function recommendFueling({
   sweatProfile = 'normal',
   temperatureC = 22,
   dailyCarbTargetG,
+  energyCalibrationFactor = 1,
 }) {
   const hours = Math.max(durationMin, 1) / 60;
   const speed = avgSpeedKmh || FALLBACK_SPEED[activityType] || 5;
   const met = estimateMet(activityType, speed, elevationPerKm);
-  const caloriesTotal = met * weightKg * hours;
+  const calFactor = Math.min(2.0, Math.max(0.5, Number(energyCalibrationFactor) || 1.0));
+  const caloriesTotal = met * weightKg * hours * calFactor;
   const intensity = intensityLabel(met);
 
   const carbPerHour = carbRatePerHour(durationMin, met);
@@ -109,7 +114,7 @@ export function recommendFueling({
     met: Math.round(met * 100) / 100,
     calories: {
       total: Math.round(caloriesTotal),
-      perHour: Math.round(met * weightKg),
+      perHour: Math.round(met * weightKg * calFactor),
       fromCarbsPct: met >= 9 ? 60 : 45,
     },
     carbs: {

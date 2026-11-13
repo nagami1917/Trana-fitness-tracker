@@ -100,4 +100,22 @@ if (cal.minutes !== uncal.minutes) throw new Error('calibration moved the median
 if (!((cal.high - cal.low) > (uncal.high - uncal.low) * 2.5)) throw new Error('calibration failed to widen the interval');
 if (!(cal.confidence < uncal.confidence)) throw new Error('wider interval should reduce confidence');
 
+// Priority fixes: flat-equivalent normalization, no weight bias, OOD penalty, VAM climb & calibration.
+const light = predictDuration({ model, activityType: 'run', distanceKm: 10, elevationGainM: 50, weightKg: 50, history: activities });
+const heavy = predictDuration({ model, activityType: 'run', distanceKm: 10, elevationGainM: 50, weightKg: 100, history: activities });
+if (light.minutes !== heavy.minutes) throw new Error('weight_kg distorted duration prediction');
+
+const ood = predictDuration({ model, activityType: 'run', distanceKm: 150, elevationGainM: 5000, weightKg: 60, history: activities });
+if (!(ood.confidence < uncal.confidence)) throw new Error('OOD distance/climb did not lower confidence');
+if (!(ood.low <= ood.minutes && ood.minutes <= ood.high)) throw new Error('OOD quantiles crossed');
+
+const { estimateMet, recommendFueling } = await import('../src/lib/ml/fueling.js');
+if (Math.abs(estimateMet('run', 10, 0) - 10.3) > 1e-4) throw new Error('flat MET baseline drifted');
+if (!(estimateMet('run', 6, 150) - 6 * 1.03 > 5.0)) throw new Error('VAM climb MET failed to exceed legacy 2.6 cap');
+const baseFuel = recommendFueling({ activityType: 'run', durationMin: 60, weightKg: 70, avgSpeedKmh: 10 });
+const calFuel = recommendFueling({ activityType: 'run', durationMin: 60, weightKg: 70, avgSpeedKmh: 10, energyCalibrationFactor: 1.5 });
+if (Math.abs(calFuel.calories.total / baseFuel.calories.total - 1.5) > 0.02) {
+  throw new Error('energyCalibrationFactor failed to scale fueling calories');
+}
+
 console.log('sanity guards passed ✔');

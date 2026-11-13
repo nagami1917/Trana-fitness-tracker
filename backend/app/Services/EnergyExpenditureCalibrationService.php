@@ -35,19 +35,21 @@ class EnergyExpenditureCalibrationService
         }
 
         $totalRatio = 0.0;
+        $validCount = 0;
         foreach ($rows as $row) {
             $estimated = (float) $row->trana_estimated_calories;
             if ($estimated <= 0) {
                 continue;
             }
             $totalRatio += (float) $row->measured_calories / $estimated;
+            $validCount++;
         }
 
-        if ($totalRatio === 0.0) {
+        if ($validCount < self::MIN_SAMPLES || $totalRatio === 0.0) {
             return 1.0;
         }
 
-        $factor = $totalRatio / $count;
+        $factor = $totalRatio / $validCount;
 
         // Clamp to sane bounds so a single outlier can't skew too far
         return (float) max(0.5, min(2.0, $factor));

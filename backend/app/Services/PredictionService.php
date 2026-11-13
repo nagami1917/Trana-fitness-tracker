@@ -23,6 +23,7 @@ class PredictionService
         private readonly FuelingPredictionService $fueling,
         private readonly RouteService $routes,
         private readonly ActivityService $activities,
+        private readonly EnergyExpenditureCalibrationService $calibration,
     ) {
     }
 
@@ -46,6 +47,8 @@ class PredictionService
         // saved prediction, so every plan records which values produced it.
         $profileContext = $profile->predictionContext();
 
+        $calibrationFactor = $this->calibration->calculateFactor($user);
+
         $payload = [
             'activity_type' => $input['activity_type'],
             'distance_km' => $distanceKm,
@@ -59,6 +62,7 @@ class PredictionService
             'activity_experience' => $profileContext['activity_experience'],
             'sweat_profile' => $input['sweat_profile'] ?? $profileContext['sweat_profile'],
             'temperature_c' => (float) ($input['temperature_c'] ?? $profileContext['typical_temperature_c'] ?? 26),
+            'energy_calibration_factor' => $calibrationFactor,
             'history' => $history,
         ];
 

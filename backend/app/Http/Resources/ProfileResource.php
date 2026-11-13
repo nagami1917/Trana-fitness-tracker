@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Models\FitnessProfile;
 use App\Models\User;
+use App\Services\EnergyExpenditureCalibrationService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -42,6 +43,7 @@ class ProfileResource extends JsonResource
             'weekly_calorie_goal' => $goal->weekly_calories,
             'weekly_distance_goal_km' => (float) $goal->weekly_distance_km,
             'daily_carb_goal_g' => $goal->carb_target_g,
+            'energy_calibration_factor' => app(EnergyExpenditureCalibrationService::class)->calculateFactor($user),
             'onboarded' => $profile->onboarded_at !== null,
             'total_activities' => $user->activities_count ?? $user->activities()->count(),
         ];

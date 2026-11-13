@@ -3,8 +3,8 @@
   import { Sparkles, Timer, Flame, Wheat, Droplets, Soup, ArrowRight, ArrowLeft, Compass } from 'lucide-svelte';
   import Card from '../../components/common/Card.svelte';
   import Segmented from '../../components/common/Segmented.svelte';
-  import { loadModel, predictPlan } from '../../lib/ml/index.js';
-  import { INTENSITY_COPY, gelEquivalent } from '../../lib/ml/fueling.js';
+  import { loadModel, predictDuration } from '../../lib/ml/duration.js';
+  import { recommendFueling, INTENSITY_COPY, gelEquivalent } from '../../lib/ml/fueling.js';
   import { duration as fmtDuration, kcal, nf } from '../../lib/format.js';
   import { navigate } from '../../lib/router.js';
 
@@ -12,7 +12,7 @@
   let activityType = $state('run');
   let distanceKm = $state(10);
   let elevationGainM = $state(120);
-  let temperatureC = $state(24);
+  let temperatureC = $state(26);
   let weightKg = $state(65);
   let experienceLevel = $state(3);
   let sweatProfile = $state('normal');
@@ -27,17 +27,27 @@
 
   const plan = $derived.by(() => {
     if (!model) return null;
-    return predictPlan({
+    const distance = Math.max(0.5, Number(distanceKm) || 0);
+    const elevation = Math.max(0, Number(elevationGainM) || 0);
+    const duration = predictDuration({
       model,
       activityType,
-      distanceKm,
-      elevationGainM,
+      distanceKm: distance,
+      elevationGainM: elevation,
       weightKg,
       experienceLevel,
-      sweatProfile,
-      temperatureC,
       history: [],
     });
+    const fueling = recommendFueling({
+      activityType,
+      durationMin: duration.minutes,
+      weightKg,
+      elevationPerKm: elevation / distance,
+      avgSpeedKmh: duration.speedKmh,
+      sweatProfile,
+      temperatureC,
+    });
+    return { duration, fueling };
   });
 
   const intensityCopy = $derived(plan ? (INTENSITY_COPY[plan.fueling.intensity] ?? INTENSITY_COPY.moderate) : INTENSITY_COPY.moderate);

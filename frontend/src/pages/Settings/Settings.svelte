@@ -74,6 +74,9 @@
   async function loadCalibration() {
     try {
       calibration = await energyApi.calibration();
+      if (calibration?.calibration_factor != null) {
+        profile.update((p) => (p ? { ...p, energy_calibration_factor: Number(calibration.calibration_factor) } : p));
+      }
     } catch {
       calibration = null;
     }

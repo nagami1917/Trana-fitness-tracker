@@ -269,4 +269,44 @@ class PredictionCreationTest extends TestCase
             'planned_for' => now()->subDays(2)->toIso8601String(),
         ])->assertUnprocessable()->assertJsonValidationErrors('planned_for');
     }
+
+    public function test_calibration_factor_and_carb_goal_are_sent_on_predict_and_preview(): void
+    {
+        $user = $this->athlete();
+        $user->ensureProfile()->update(['weight_kg' => 72]);
+        $user->ensureGoals()->update(['carb_target_g' => 450]);
+        Sanctum::actingAs($user);
+
+        foreach (['2026-11-06', '2026-11-07', '2026-11-08'] as $day) {
+            $this->postJson('/api/energy-expenditure', [
+                'device_type' => 'garmin',
+                'activity_type' => 'run',
+                'distance_km' => 10,
+                'duration_min' => 60,
+                'weight_kg' => 72,
+                'measured_calories' => 890,
+                'recorded_at' => "{$day}T06:30:00+08:00",
+            ])->assertCreated();
+        }
+
+        $this->fakeMlPredict();
+
+        $this->postJson('/api/predictions/preview', [
+            'activity_type' => 'run',
+            'distance_km' => 10,
+        ])->assertOk();
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/predict')
+            && abs((float) ($request->data()['energy_calibration_factor'] ?? 0) - (890 / 742)) < 0.01
+            && (int) ($request->data()['daily_carb_target_g'] ?? 0) === 450);
+
+        $this->postJson('/api/predictions', [
+            'activity_type' => 'run',
+            'distance_km' => 10,
+        ])->assertCreated();
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/predict')
+            && abs((float) ($request->data()['energy_calibration_factor'] ?? 0) - (890 / 742)) < 0.01
+            && (int) ($request->data()['daily_carb_target_g'] ?? 0) === 450);
+    }
 }
