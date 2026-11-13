@@ -25,14 +25,11 @@
   import FoodLogger from '../../components/activity/FoodLogger.svelte';
   import ActivityIcon from '../../components/activities/ActivityIcon.svelte';
   import { link, navigate, query } from '../../lib/router.js';
-  import { profile, plans, refresh, notify } from '../../stores/index.js';
-  import { activityApi, validateTrackPoint } from '../../services/activityService.js';
+  import { plans, notify } from '../../stores/index.js';
   import { dailySessionApi } from '../../services/dailySessionService.js';
-  import { estimateMet } from '../../lib/ml/fueling.js';
   import { readCachedPlace } from '../../lib/location.js';
   import { acquireLivePosition, releaseLivePosition, seedLivePosition, livePosition } from '../../lib/liveLocation.svelte.js';
-  import { watch, getCurrentPosition, trackPoint, GpsError } from '../../services/gpsService.js';
-  import { snapRoute } from '../../services/roadSnappingService.js';
+  import { liveTracker } from '../../lib/liveTracker.svelte.js';
   import {
     pathToGeoJson,
     routeThroughRoads,
@@ -43,7 +40,7 @@
     isClosedLoop,
     searchPlaces,
   } from '../../services/roadRoutingService.js';
-  import { haversineKm, polylineLengthKm, elevationGainM } from '../../services/mapService.js';
+  import { polylineLengthKm } from '../../services/mapService.js';
   import { nf, shortDate } from '../../lib/format.js';
 
   const SPORTS = [
@@ -53,19 +50,22 @@
     { id: 'hike', label: 'Hike' },
   ];
 
-  // ── activity tracking state ──────────────────────────────────────────
-  let activityType = $state('run');
-  let tracking = $state(false);
-  let paused = $state(false);
-  let saving = $state(false);
+  // ── activity tracking state (backed by app-wide liveTracker) ─────────
+  const activityType = $derived(liveTracker.activityType);
+  const tracking = $derived(liveTracker.tracking);
+  const paused = $derived(liveTracker.paused);
+  const saving = $derived(liveTracker.saving);
+  const points = $derived(liveTracker.points);
+  const currentPosition = $derived(liveTracker.currentPosition);
+  const currentAccuracyM = $derived(liveTracker.currentAccuracyM);
+  const currentHeading = $derived(liveTracker.currentHeading);
+  const startPosition = $derived(liveTracker.startPosition);
+  const finishPosition = $derived(liveTracker.finishPosition);
+  const gpsStatus = $derived(liveTracker.gpsStatus);
+  const gpsMessage = $derived(liveTracker.gpsMessage);
+  const roadSnapping = $derived(liveTracker.roadSnapping);
+  const showRoads = $derived(liveTracker.showRoads);
 
-  let points = $state([]);          // [{ latitude, longitude, altitudeM, speedKmh, timestamp }]
-  let snappedPoints = $state([]);   // [[lat, lng], ...]
-  let currentPosition = $state(null); // [lat, lng]
-  let currentAccuracyM = $state(null);
-  let currentHeading = $state(null);
-  let startPosition = $state(null);
-  let finishPosition = $state(null);
   let following = $state(true);
 
   let cachedPlace = readCachedPlace();
@@ -87,20 +87,6 @@
     }
     return [14.676, 121.0437];
   });
-
-  // Stopwatch state (explicit ms accumulation so timers tick & pause accurately)
-  let startedAtIso = $state(null);
-  let activeSegmentStartMs = $state(null);
-  let elapsedBeforePauseMs = $state(0);
-  let nowMs = $state(Date.now());
-  let ticker = null;
-
-  let gpsStatus = $state('idle');
-  let gpsMessage = $state('');
-  let watcher = null;
-
-  let roadSnapping = $state(true);
-  let showRoads = $state(true);
 
   // ── path selection: 'none' | 'create' | 'plan' ──────────────────────
   let tranaMap = $state(null);
@@ -183,7 +169,7 @@
   });
 
   const mapPlannedWaypoints = $derived(pathSource === 'create' ? customWaypoints : []);
-  const interactiveRoute = $derived(pathSource === 'create' && customDrawing);
+  const interactiveRoute = $derived(!tracking && pathSource === 'create' && customDrawing);
   const routeDashed = $derived(
     pathSource !== 'create' ||
     customRouteMode === 'straight' ||
@@ -198,37 +184,55 @@
   let todaySession = $state(null);
   let loadingSession = $state(true);
 
-  // ── derived statistics ───────────────────────────────────────────────
-  let durationSec = $derived.by(() => {
-    if (!tracking) return 0;
-    const activeMs = !paused && activeSegmentStartMs ? Math.max(0, nowMs - activeSegmentStartMs) : 0;
-    return Math.max(0, (elapsedBeforePauseMs + activeMs) / 1000);
-  });
+  // ── derived statistics (live from shared liveTracker) ────────────────
+  const durationSec = $derived(liveTracker.durationSec);
+  const durationMin = $derived(liveTracker.durationMin);
+  const distanceKm = $derived(liveTracker.distanceKm);
+  const avgSpeedKmh = $derived(liveTracker.avgSpeedKmh);
+  const avgPaceMinKm = $derived(liveTracker.avgPaceMinKm);
+  const elevationM = $derived(liveTracker.elevationM);
+  const estimatedCalories = $derived(liveTracker.estimatedCalories);
 
-  let durationMin = $derived(durationSec / 60);
-
-  let distanceKm = $derived.by(() => {
-    if (points.length < 2) return 0;
-    let total = 0;
-    for (let i = 1; i < points.length; i += 1) {
-      total += haversineKm(
-        [points[i - 1].latitude, points[i - 1].longitude],
-        [points[i].latitude, points[i].longitude],
-      );
+  const selectedPathLabel = $derived.by(() => {
+    if (pathSource === 'plan') {
+      if (activePlan) {
+        const kmText = activePlanKm > 0 ? `${nf(activePlanKm, 2)} km ` : '';
+        return `${kmText}${activePlan.activity_type || activityType} (Plan)`;
+      }
+      return 'From Plan Activity';
     }
-    return total;
+    if (pathSource === 'create') {
+      return customRouteKm > 0 ? `Custom path (${nf(customRouteKm, 2)} km)` : 'Custom path';
+    }
+    return 'Free GPS';
   });
 
-  let avgSpeedKmh = $derived(durationMin > 0 && distanceKm > 0 ? distanceKm / (durationMin / 60) : 0);
-  let avgPaceMinKm = $derived(distanceKm > 0 && durationMin > 0 ? durationMin / distanceKm : 0);
-  let elevationM = $derived(points.length >= 2 ? elevationGainM(points) : 0);
+  const selectedPlannedPath = $derived.by(() => {
+    if (pathSource === 'plan') return activePlanPath;
+    if (pathSource === 'create') return activeCustomPath;
+    return [];
+  });
 
-  let estimatedCalories = $derived.by(() => {
-    if (durationMin <= 0) return 0;
-    const weightKg = Number($profile?.weight_kg) || 60;
-    const elevPerKm = distanceKm > 0 ? elevationM / distanceKm : 0;
-    const met = estimateMet(activityType, avgSpeedKmh, elevPerKm);
-    return Math.round(met * weightKg * (durationMin / 60));
+  const selectedPlanKey = $derived(
+    pathSource === 'plan' && activePlan
+      ? (activePlan.isDraft ? 'draft' : String(activePlan.id))
+      : null,
+  );
+
+  $effect(() => {
+    if (liveTracker.tracking) return;
+    liveTracker.setPathContext({
+      source: pathSource,
+      path: selectedPlannedPath,
+      label: selectedPathLabel,
+      planKey: selectedPlanKey,
+    });
+  });
+
+  $effect(() => {
+    if (liveTracker.lastDailySession) {
+      todaySession = liveTracker.lastDailySession;
+    }
   });
 
   // ── path source helpers ──────────────────────────────────────────────
@@ -265,6 +269,7 @@
   }
 
   function selectPathSource(mode) {
+    if (tracking) return;
     pathSource = mode;
     if (mode === 'none') {
       resetPlanSnap();
@@ -303,7 +308,7 @@
     resetPlanSnap();
 
     if (!Array.isArray(plan.route) || plan.route.length < 2) {
-      if (!tracking && plan.activity_type) activityType = plan.activity_type;
+      if (!tracking && plan.activity_type) liveTracker.setActivityType(plan.activity_type);
       activePlan = plan;
       planPath = [];
       notify('This saved plan only has a target distance. Switching to Create path so you can plot Start & End on the map.', 'info');
@@ -316,7 +321,7 @@
     activePlan = plan;
     planPath = [...plan.route];
     if (!tracking && plan.activity_type) {
-      activityType = plan.activity_type;
+      liveTracker.setActivityType(plan.activity_type);
     }
     following = false;
     void tick().then(() => tranaMap?.fitRouteBounds?.());
@@ -375,7 +380,7 @@
   }
 
   function selectSport(sportId) {
-    activityType = sportId;
+    liveTracker.setActivityType(sportId);
     if (pathSource === 'create' && customWaypoints.length >= 2 && customRouteMode === 'roads') {
       scheduleCustomSnap({ immediate: true });
     }
@@ -543,253 +548,35 @@
     }
   }
 
-  // ── GPS & lifecycle ──────────────────────────────────────────────────
-  function startTicker() {
-    stopTicker();
-    nowMs = Date.now();
-    ticker = setInterval(() => {
-      nowMs = Date.now();
-    }, 1000);
-  }
-
-  function stopTicker() {
-    if (ticker) {
-      clearInterval(ticker);
-      ticker = null;
-    }
-  }
-
-  function appendGpsFix(fix) {
-    const pt = fix?.coords ? trackPoint(fix.coords, fix.timestamp) : fix;
-    const errors = validateTrackPoint(pt);
-    if (errors.length > 0) {
-      gpsStatus = 'error';
-      gpsMessage = 'Invalid GPS reading';
-      return;
-    }
-
-    const pos = [pt.latitude, pt.longitude];
-    currentPosition = pos;
-    if (pt.accuracyM != null) currentAccuracyM = pt.accuracyM;
-    if (pt.heading != null) currentHeading = pt.heading;
-    if (!startPosition) startPosition = pos;
-    if (!pt.suppressedDrift || points.length === 0) {
-      points = [...points, pt];
-    }
-    gpsStatus = 'tracking';
-    gpsMessage = pt.accuracyM != null ? `±${Math.round(pt.accuracyM)}m` : 'Active';
-  }
-
-  async function startGps() {
-    gpsStatus = 'requesting';
-    gpsMessage = 'Acquiring GPS…';
-
-    try {
-      const first = await getCurrentPosition({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
-      appendGpsFix(first);
-    } catch (error) {
-      if (error instanceof GpsError && error.code === 'unsupported') {
-        gpsStatus = 'error';
-        gpsMessage = 'GPS unavailable in this browser';
-        notify(gpsMessage, 'error');
-        return;
-      }
-      if (error instanceof GpsError && error.code === 'denied') {
-        gpsStatus = 'denied';
-        gpsMessage = 'Location permission denied';
-        notify(gpsMessage, 'error');
-        return;
-      }
-      gpsStatus = 'no-signal';
-      gpsMessage = 'Searching for signal…';
-    }
-
-    if (watcher) {
-      watcher.stop();
-      watcher = null;
-    }
-
-    watcher = watch({
+  // ── activity controls (delegated to shared liveTracker) ──────────────
+  function startActivity() {
+    following = true;
+    liveTracker.startActivity({
       activityType,
-      onPoint: (pt) => {
-        if (paused) return;
-        appendGpsFix(pt);
-      },
-      onError: (err) => {
-        if (err instanceof GpsError && err.code === 'denied') {
-          gpsStatus = 'denied';
-          gpsMessage = 'Location permission denied';
-        } else if (err instanceof GpsError && err.code === 'unavailable') {
-          gpsStatus = 'no-signal';
-          gpsMessage = 'Waiting for GPS signal';
-        } else {
-          gpsStatus = 'error';
-          gpsMessage = err?.message || 'GPS unavailable';
-        }
-      },
+      pathSource,
+      plannedPath: selectedPlannedPath,
+      plannedLabel: selectedPathLabel,
+      plannedPlanKey: selectedPlanKey,
     });
   }
 
-  function stopGps() {
-    if (watcher) {
-      watcher.stop();
-      watcher = null;
-    }
-    gpsStatus = 'idle';
-    gpsMessage = '';
-  }
-
-  function startActivity() {
-    points = [];
-    snappedPoints = [];
-    startPosition = null;
-    finishPosition = null;
-    elapsedBeforePauseMs = 0;
-    startedAtIso = new Date().toISOString();
-    activeSegmentStartMs = Date.now();
-    nowMs = Date.now();
-    paused = false;
-    tracking = true;
-    following = true;
-
-    startTicker();
-    startGps();
-  }
-
   function pauseActivity() {
-    if (!tracking || paused) return;
-    if (activeSegmentStartMs) {
-      elapsedBeforePauseMs += Math.max(0, Date.now() - activeSegmentStartMs);
-    }
-    activeSegmentStartMs = null;
-    paused = true;
-    stopTicker();
-    gpsStatus = 'paused';
-    gpsMessage = 'Paused';
+    liveTracker.pauseActivity();
   }
 
   function resumeActivity() {
-    if (!tracking || !paused) return;
-    activeSegmentStartMs = Date.now();
-    nowMs = Date.now();
-    paused = false;
-    startTicker();
-    gpsStatus = 'tracking';
-    gpsMessage = 'Resumed';
+    liveTracker.resumeActivity();
   }
 
   function discardActivity() {
-    stopTicker();
-    stopGps();
-    reset();
-    notify('Tracking discarded', 'info');
+    liveTracker.discardActivity();
   }
 
   async function stopActivity() {
-    if (!tracking || saving) return;
-
-    const finalDurationMin = Math.round(durationMin * 10) / 10;
-    const finalDistanceKm = Math.round(distanceKm * 100) / 100;
-
-    if (finalDistanceKm < 0.05 || finalDurationMin < 1) {
-      if (!paused) pauseActivity();
-      notify('Record at least 0.05 km (50 m) and 1:00 to save — or tap Discard to reset.', 'info');
-      return;
+    const result = await liveTracker.stopActivity({ currentTodaySession: todaySession });
+    if (result?.dailySession) {
+      todaySession = result.dailySession;
     }
-
-    saving = true;
-    stopTicker();
-
-    try {
-      let routeCoords = points.map((p) => [p.latitude, p.longitude]);
-      if (roadSnapping && routeCoords.length >= 2) {
-        try {
-          snappedPoints = await snapRoute(routeCoords);
-          if (snappedPoints.length >= 2) routeCoords = snappedPoints;
-        } catch {
-          snappedPoints = [];
-        }
-      }
-
-      if (routeCoords.length > 0) {
-        finishPosition = routeCoords[routeCoords.length - 1];
-      }
-
-      const routeGeojson = routeCoords.length >= 2
-        ? {
-            type: 'FeatureCollection',
-            features: [{
-              type: 'Feature',
-              properties: { activity_type: activityType },
-              geometry: {
-                type: 'LineString',
-                coordinates: routeCoords.map(([lat, lng]) => [lng, lat]),
-              },
-            }],
-          }
-        : null;
-
-      const activityPayload = {
-        activity_type: activityType,
-        started_at: startedAtIso ?? new Date(Date.now() - Math.round(durationSec * 1000)).toISOString(),
-        ended_at: new Date().toISOString(),
-        distance_km: finalDistanceKm,
-        duration_min: finalDurationMin,
-        elevation_gain_m: Math.round(elevationM),
-        calories: estimatedCalories,
-        average_speed: avgSpeedKmh > 0 ? Math.round(avgSpeedKmh * 10) / 10 : null,
-        average_pace: avgPaceMinKm > 0 ? Math.round(avgPaceMinKm * 100) / 100 : null,
-        route: routeCoords.length >= 2 ? routeCoords : null,
-        route_geojson: routeGeojson,
-        source: 'gps',
-      };
-
-      const savedActivity = await activityApi.create(activityPayload);
-      const caloriesBurned = Number(savedActivity?.calories ?? estimatedCalories) || 0;
-
-      // Preserve today's logged calories_eaten / water / notes while adding newly burned calories.
-      let existingBurned = Number(todaySession?.calories_burned ?? 0);
-      if (!todaySession) {
-        try {
-          const todayRes = await dailySessionApi.today();
-          todaySession = todayRes?.data ?? null;
-          existingBurned = Number(todaySession?.calories_burned ?? 0);
-        } catch {
-          // ignore
-        }
-      }
-
-      const sessionRes = await dailySessionApi.saveToday({
-        calories_burned: existingBurned + caloriesBurned,
-      });
-      if (sessionRes?.data) {
-        todaySession = sessionRes.data;
-      }
-
-      await refresh();
-      notify("Activity saved to today's session", 'success');
-      stopGps();
-      reset();
-    } catch (error) {
-      notify(error?.message || 'Failed to save activity', 'error');
-    } finally {
-      saving = false;
-    }
-  }
-
-  function reset() {
-    tracking = false;
-    paused = false;
-    points = [];
-    snappedPoints = [];
-    currentPosition = null;
-    currentAccuracyM = null;
-    currentHeading = null;
-    startPosition = null;
-    finishPosition = null;
-    startedAtIso = null;
-    activeSegmentStartMs = null;
-    elapsedBeforePauseMs = 0;
   }
 
   // ── load today's session & seed city view ────────────────────────────
@@ -804,6 +591,24 @@
     }
   }
 
+  function hydrateActivePathFromTracker() {
+    if (!liveTracker.tracking) return;
+    pathSource = liveTracker.pathSource || 'none';
+    if (pathSource === 'plan') {
+      const key = liveTracker.plannedPlanKey;
+      const found = key === 'draft'
+        ? draftPlan
+        : $plans.find((p) => String(p.id) === String(key));
+      if (found) activePlan = found;
+      planPath = Array.isArray(liveTracker.plannedPath) ? [...liveTracker.plannedPath] : [];
+    } else if (pathSource === 'create') {
+      const savedPath = Array.isArray(liveTracker.plannedPath) ? [...liveTracker.plannedPath] : [];
+      customSnappedPath = savedPath;
+      customWaypoints = savedPath.length >= 2 ? waypointsFromPath(savedPath) : [];
+      customDrawing = false;
+    }
+  }
+
   onMount(() => {
     if (cachedPlace) seedLivePosition(cachedPlace);
     acquireLivePosition();
@@ -811,7 +616,10 @@
     draftPlan = readDraftPlan();
 
     const planParam = $query.get('plan');
-    if (planParam === 'draft') {
+    if (liveTracker.tracking) {
+      hydratedQueryPlan = true;
+      hydrateActivePathFromTracker();
+    } else if (planParam === 'draft') {
       hydratedQueryPlan = true;
       if (draftPlan) selectPlanRoute(draftPlan);
     } else if (planParam) {
@@ -823,8 +631,8 @@
     }
 
     return () => {
-      stopTicker();
-      stopGps();
+      // Do NOT stop liveTracker ticker/GPS here — tracking continues across pages
+      // so Dashboard stays synced until Pause / End & save / Discard.
       clearTimeout(customSnapTimer);
       customSnapAbort?.abort();
       planSnapAbort?.abort();
@@ -835,7 +643,7 @@
 
   // Apply ?plan=<id> if $plans arrives asynchronously after mount (e.g., hard reload on /track?plan=2).
   $effect(() => {
-    if (hydratedQueryPlan) return;
+    if (hydratedQueryPlan || liveTracker.tracking) return;
     const planParam = $query.get('plan');
     if (!planParam || planParam === 'draft') return;
     const found = $plans.find((p) => String(p.id) === String(planParam));
@@ -885,11 +693,21 @@
       <div class="flex flex-wrap items-center gap-3">
         <GPSStatus status={gpsStatus} message={gpsMessage} />
         <label class="inline-flex items-center gap-1.5 text-xs font-bold text-ink-700 cursor-pointer select-none">
-          <input type="checkbox" bind:checked={roadSnapping} class="accent-brand-600 rounded" />
+          <input
+            type="checkbox"
+            checked={roadSnapping}
+            onchange={(e) => liveTracker.setRoadSnapping(e.currentTarget.checked)}
+            class="accent-brand-600 rounded"
+          />
           <span>Road snap</span>
         </label>
         <label class="inline-flex items-center gap-1.5 text-xs font-bold text-ink-700 cursor-pointer select-none">
-          <input type="checkbox" bind:checked={showRoads} class="accent-brand-600 rounded" />
+          <input
+            type="checkbox"
+            checked={showRoads}
+            onchange={(e) => liveTracker.setShowRoads(e.currentTarget.checked)}
+            class="accent-brand-600 rounded"
+          />
           <span>Show roads</span>
         </label>
       </div>
@@ -907,7 +725,8 @@
           >
             <button
               type="button"
-              class="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-extrabold transition cursor-pointer {pathSource === 'none'
+              disabled={tracking}
+              class="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-extrabold transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed {pathSource === 'none'
                 ? 'bg-brand-gradient text-white shadow-glow'
                 : 'text-ink-600 hover:bg-brand-50'}"
               onclick={() => selectPathSource('none')}
@@ -916,7 +735,8 @@
             </button>
             <button
               type="button"
-              class="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-extrabold transition cursor-pointer {pathSource === 'create'
+              disabled={tracking}
+              class="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-extrabold transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed {pathSource === 'create'
                 ? 'bg-brand-gradient text-white shadow-glow'
                 : 'text-ink-600 hover:bg-brand-50'}"
               onclick={() => selectPathSource('create')}
@@ -925,7 +745,8 @@
             </button>
             <button
               type="button"
-              class="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-extrabold transition cursor-pointer {pathSource === 'plan'
+              disabled={tracking}
+              class="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-extrabold transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed {pathSource === 'plan'
                 ? 'bg-brand-gradient text-white shadow-glow'
                 : 'text-ink-600 hover:bg-brand-50'}"
               onclick={() => selectPathSource('plan')}
@@ -940,7 +761,7 @@
           </div>
         </div>
 
-        {#if pathSource !== 'none'}
+        {#if pathSource !== 'none' && !tracking}
           <button
             type="button"
             class="text-xs font-extrabold text-ink-500 hover:text-brand-600 cursor-pointer"
@@ -1221,6 +1042,12 @@
       elevationGainM={elevationM}
       calories={estimatedCalories}
     />
+
+    {#if liveTracker.statusNote}
+      <p class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-center text-xs font-bold text-amber-800">
+        {liveTracker.statusNote}
+      </p>
+    {/if}
 
     <!-- Action Buttons -->
     <ActivityControls

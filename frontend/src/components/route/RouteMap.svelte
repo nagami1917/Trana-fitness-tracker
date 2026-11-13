@@ -7,6 +7,8 @@
   let {
     points = [],
     path = [],
+    plannedPath = [],
+    live = false,
     height = 260,
     interactive = false,
     autoFit = undefined,
@@ -113,8 +115,9 @@
     clearLayers();
 
     const snapped = Array.isArray(path) && path.length > 1;
+    const hasPlanned = Array.isArray(plannedPath) && plannedPath.length > 1;
     const linePoints = interactive ? [] : snapped ? path : points;
-    if (!interactive && !linePoints.length) return;
+    if (!interactive && !linePoints.length && !hasPlanned) return;
     if (interactive && !points?.length && !snapped) return;
 
     if (interactive) {
@@ -144,29 +147,43 @@
         }).addTo(layerGroup);
       }
     } else {
-      casing = L.polyline(linePoints, {
-        color: '#ffffff',
-        weight: 7.5,
-        opacity: 0.85,
-        lineJoin: 'round',
-        lineCap: 'round',
-      }).addTo(layerGroup);
-      line = L.polyline(linePoints, {
-        color: '#f9569b',
-        weight: 4.5,
-        opacity: 0.96,
-        lineJoin: 'round',
-        lineCap: 'round',
-      }).addTo(layerGroup);
+      if (hasPlanned) {
+        guide = L.polyline(plannedPath, {
+          color: '#a855f7',
+          weight: 3.5,
+          opacity: linePoints.length > 1 ? 0.55 : 0.85,
+          lineJoin: 'round',
+          lineCap: 'round',
+          dashArray: '6 8',
+        }).addTo(layerGroup);
+      }
+      if (linePoints.length > 1) {
+        casing = L.polyline(linePoints, {
+          color: '#ffffff',
+          weight: 7.5,
+          opacity: 0.85,
+          lineJoin: 'round',
+          lineCap: 'round',
+        }).addTo(layerGroup);
+        line = L.polyline(linePoints, {
+          color: '#f9569b',
+          weight: 4.5,
+          opacity: 0.96,
+          lineJoin: 'round',
+          lineCap: 'round',
+        }).addTo(layerGroup);
+      }
     }
 
     // Interactive maps get a draggable marker per waypoint (click to remove).
-    // View-only maps only show Start / Finish.
+    // View-only maps show Start / Finish (or Start only while live-tracking).
     const markerPoints = interactive
       ? points
-      : linePoints.length > 2
-        ? [linePoints[0], linePoints[linePoints.length - 1]]
-        : linePoints;
+      : live && linePoints.length > 0
+        ? [linePoints[0]]
+        : linePoints.length > 2
+          ? [linePoints[0], linePoints[linePoints.length - 1]]
+          : linePoints;
 
     const closed = isClosed(markerPoints);
 
@@ -202,8 +219,11 @@
     // Only auto-fit bounds when autoFit is enabled (default: read-only views)
     // so drawing or pausing to pan never hijacks the athlete's current zoom.
     const shouldFit = autoFit ?? !interactive;
-    if (shouldFit && linePoints.length > 1) {
-      map.fitBounds(L.latLngBounds(linePoints).pad(0.22), { animate: false });
+    const fitTarget = linePoints.length > 0 ? linePoints : hasPlanned ? plannedPath : [];
+    if (shouldFit && fitTarget.length > 1) {
+      map.fitBounds(L.latLngBounds(fitTarget).pad(0.22), { maxZoom: 16, animate: false });
+    } else if (shouldFit && fitTarget.length === 1) {
+      map.setView(fitTarget[0], Math.max(map.getZoom?.() ?? zoom, 15), { animate: false });
     }
   }
 
@@ -232,8 +252,9 @@
     }).addTo(layerGroup);
 
     const snapped = Array.isArray(path) && path.length > 1;
-    const hasRouteView = snapped || (Array.isArray(points) && points.length > 0);
-    if (!hasRouteView && !hasCenteredOnUser) {
+    const hasPlanned = Array.isArray(plannedPath) && plannedPath.length > 1;
+    const hasRouteView = snapped || hasPlanned || (Array.isArray(points) && points.length > 0);
+    if ((!hasRouteView && !hasCenteredOnUser) || (live && !hasRouteView)) {
       hasCenteredOnUser = true;
       map.setView(userLocation, Math.max(zoom, 15), { animate: false });
     }
@@ -281,6 +302,8 @@
   $effect(() => {
     void points;
     void path;
+    void plannedPath;
+    void live;
     void interactive;
     if (map) {
       if (interactive) map.doubleClickZoom.disable();
