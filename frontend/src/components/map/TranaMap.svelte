@@ -11,6 +11,7 @@
 
   import { createMap, applyTranaTheme, fitToPoints, panTo, toLatLng, isStyleInitialized } from '../../services/mapService.js';
   import { reportClientError } from '../../lib/errorMonitor.js';
+  import { theme } from '../../lib/theme.js';
   import PlannedRoute from './PlannedRoute.svelte';
   import ActivityRoute from './ActivityRoute.svelte';
   import ActivityMarker from './ActivityMarker.svelte';
@@ -48,6 +49,7 @@
     // Road snapping
     showRoads = false,        // show nearby roads as a visual reference
     roadSnapping = false,     // snap GPS points to nearest road
+    overlay = null,           // optional floating HUD snippet rendered over the map
   } = $props();
 
   let container;
@@ -201,6 +203,25 @@
     panTo(map, currentPosition, { zoom: Math.max(map.getZoom(), 15) });
   });
 
+  // ── reactive dark/light basemap raster styling ──────────────────────────
+  $effect(() => {
+    if (!map || !styleReady) return;
+    if (typeof map.getLayer !== 'function' || typeof map.setPaintProperty !== 'function') return;
+    const isDark = $theme === 'dark';
+    try {
+      if (map.getLayer('background')) {
+        map.setPaintProperty('background', 'background-color', isDark ? '#131826' : '#eaf3ee');
+      }
+      if (map.getLayer('osm-tiles')) {
+        map.setPaintProperty('osm-tiles', 'raster-brightness-max', isDark ? 0.52 : 1);
+        map.setPaintProperty('osm-tiles', 'raster-contrast', isDark ? 0.25 : 0);
+        map.setPaintProperty('osm-tiles', 'raster-saturation', isDark ? -0.45 : 0);
+      }
+    } catch {
+      // Ignore if custom vector style lacks those layers.
+    }
+  });
+
   // ── fit the whole route into view ──────────────────────────────────────
   $effect(() => {
     if (!map || !styleReady || !fitRoute) return;
@@ -274,6 +295,8 @@
   <div class="absolute top-4 right-4 z-30 flex flex-col gap-2">
     <MapControls {map} {following} onToggleFollow={toggleFollow} />
   </div>
+
+  {@render overlay?.()}
 </div>
 
 <style>

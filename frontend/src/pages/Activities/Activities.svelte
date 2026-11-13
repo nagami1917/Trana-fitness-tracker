@@ -964,24 +964,24 @@
             { label: detail.activity_type === 'ride' ? 'Speed' : 'Pace', value: detail.activity_type === 'ride' ? speed(detail.distance_km / (detail.duration_min / 60), $unitSystem) : pace(detail.duration_min / detail.distance_km, $unitSystem), Icon: Gauge },
             { label: 'Energy', value: `${kcal(detail.calories)} kcal`, Icon: Flame },
           ] as item (item.label)}
-            <div class="rounded-2xl border border-brand-100 bg-white p-3">
+            <div class="card-flat p-3">
               <item.Icon size={15} class="text-brand-500" />
-              <p class="mt-1 text-[10px] font-extrabold uppercase tracking-wide text-ink-400">{item.label}</p>
-              <p class="text-sm font-extrabold text-ink-900">{item.value}</p>
+              <p class="mt-1 text-[11px] font-extrabold uppercase tracking-wide text-ink-400">{item.label}</p>
+              <p class="num-tabular text-sm font-extrabold text-ink-900">{item.value}</p>
             </div>
           {/each}
         </div>
 
         {#if detailSplits.length >= 2}
           <div class="sm:col-span-2 rounded-2xl border border-brand-100 bg-brand-50/40 p-3">
-            <p class="text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-2">
+            <p class="text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-2">
               Estimated {distanceUnit($unitSystem)} splits
             </p>
             <div class="space-y-1.5 max-h-36 overflow-y-auto pr-1">
               {#each detailSplits as split (split.label)}
                 {@const barPct = Math.min(100, Math.max(25, Math.round((detailSplits[0].paceMinKm / Math.max(0.5, split.paceMinKm)) * 80)))}
                 <div class="flex items-center gap-2 text-xs">
-                  <span class="w-10 shrink-0 font-extrabold text-ink-500">{distanceUnit($unitSystem)} {split.label}</span>
+                  <span class="num-tabular w-12 shrink-0 font-extrabold text-ink-500">{distanceUnit($unitSystem)} {split.label}</span>
                   <div class="flex-1 h-2 rounded-full bg-white overflow-hidden">
                     <div class="h-full rounded-full bg-brand-gradient" style="width: {barPct}%"></div>
                   </div>

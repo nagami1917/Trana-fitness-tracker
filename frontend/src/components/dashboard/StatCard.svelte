@@ -15,7 +15,7 @@
   let up = $derived((delta ?? 0) >= 0);
 </script>
 
-<div class="card flex items-center gap-2.5 p-3 transition duration-300 hover:-translate-y-0.5 hover:shadow-card sm:gap-4 sm:p-5">
+<div class="card-flat flex items-center gap-2.5 p-3 transition duration-200 hover:border-brand-200 sm:gap-4 sm:p-5">
   {#if Icon}
     <span class="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-gradient-to-br shadow-inset sm:h-14 sm:w-14 [&>svg]:h-5 [&>svg]:w-5 sm:[&>svg]:h-[26px] sm:[&>svg]:w-[26px] {TONES[tone] ?? TONES.brand}">
       <Icon size={26} strokeWidth={2.1} />
@@ -29,12 +29,12 @@
     </p>
     <div class="mt-1 flex items-center gap-2">
       {#if delta !== null && Number.isFinite(delta)}
-        <span class="inline-flex items-center gap-0.5 text-[11px] font-extrabold {up ? 'text-emerald-500' : 'text-rose-500'}">
+        <span class="num-tabular inline-flex items-center gap-0.5 text-[11px] font-extrabold {up ? 'text-emerald-600' : 'text-rose-500'}">
           {#if up}<ArrowUpRight size={12} strokeWidth={3} />{:else}<ArrowDownRight size={12} strokeWidth={3} />{/if}
           {up ? '+' : ''}{Math.round(delta)}%
         </span>
       {:else if hint}
-        <span class="text-[11px] font-semibold text-ink-400">{hint}</span>
+        <span class="num-tabular text-[11px] font-semibold text-ink-400">{hint}</span>
       {/if}
     </div>
   </div>

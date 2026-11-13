@@ -2,12 +2,14 @@
   import { Mountain } from 'lucide-svelte';
   import { unitSystem } from '../../stores/index.js';
   import { distanceUnit, elevationUnit, toDisplayDistance, toDisplayElevation } from '../../lib/units.js';
+  import Skeleton from '../common/Skeleton.svelte';
 
   let {
     profile = [], // [{ distKm, eleM }]
     gainM = 0,
     lossM = 0,
     source = 'dem', // 'dem' | 'gpx' | 'estimate'
+    loading = false,
   } = $props();
 
   const valid = $derived(Array.isArray(profile) && profile.length >= 2);
@@ -35,17 +37,24 @@
   });
 </script>
 
-{#if valid && stats}
+{#if loading && !valid}
+  <div class="rounded-2xl border border-brand-100 bg-brand-50/40 p-3">
+    <div class="mb-2 flex items-center justify-between">
+      <span class="text-[11px] font-extrabold uppercase tracking-wider text-ink-400">Elevation profile</span>
+    </div>
+    <Skeleton variant="chart" height={64} />
+  </div>
+{:else if valid && stats}
   <div class="rounded-2xl border border-brand-100 bg-brand-50/40 p-3">
     <div class="flex flex-wrap items-center justify-between gap-2">
       <p class="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wider text-ink-500">
         <Mountain size={13} class="text-brand-600" />
         Elevation profile
-        <span class="rounded-full bg-white px-2 py-0.5 text-[9px] font-bold text-brand-600 border border-brand-100">
+        <span class="rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-brand-600 border border-brand-100">
           {source === 'gpx' ? 'GPX' : 'DEM terrain'}
         </span>
       </p>
-      <p class="text-[11px] font-bold text-ink-500 tabular-nums">
+      <p class="num-tabular text-[11px] font-bold text-ink-500">
         +{Math.round(toDisplayElevation(gainM, $unitSystem))} {elevationUnit($unitSystem)}
         {#if lossM > 0}
           · -{Math.round(toDisplayElevation(lossM, $unitSystem))} {elevationUnit($unitSystem)}
@@ -65,7 +74,7 @@
       <path d={stats.linePath} fill="none" stroke="#ea580c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
     </svg>
 
-    <div class="mt-1 flex justify-between text-[10px] font-semibold text-ink-400 tabular-nums">
+    <div class="num-tabular mt-1 flex justify-between text-[11px] font-semibold text-ink-400">
       <span>0 {distanceUnit($unitSystem)}</span>
       <span>{(toDisplayDistance(stats.totalKm, $unitSystem)).toFixed(1)} {distanceUnit($unitSystem)}</span>
     </div>

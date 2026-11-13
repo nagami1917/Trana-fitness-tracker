@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { ChartColumn, Brain, TrendingDown, Flame, Trophy, Gauge, Sparkles, Info, ArrowRight, Scale, LoaderCircle, Trash2 } from 'lucide-svelte';
   import Card from '../../components/common/Card.svelte';
+  import Skeleton from '../../components/common/Skeleton.svelte';
   import BarChart from '../../components/analytics/BarChart.svelte';
   import LineChart from '../../components/analytics/LineChart.svelte';
   import DoughnutChart from '../../components/analytics/DoughnutChart.svelte';
@@ -162,8 +163,8 @@
             { label: '80% band', value: $modelCard?.metrics ? `${$modelCard.metrics.interval_coverage_pct}%` : '—' },
           ] as metric (metric.label)}
             <div class="rounded-2xl bg-brand-50/80 p-2.5 text-center">
-              <p class="text-[10px] font-extrabold uppercase tracking-wide text-ink-400">{metric.label}</p>
-              <p class="font-display text-base font-extrabold text-brand-700">{metric.value}</p>
+              <p class="text-[11px] font-extrabold uppercase tracking-wide text-ink-400">{metric.label}</p>
+              <p class="num-tabular font-display text-base font-extrabold text-brand-700">{metric.value}</p>
             </div>
           {/each}
         </div>
@@ -328,9 +329,7 @@
             {/if}
           </p>
         {:else if weightLoading}
-          <p class="flex items-center justify-center gap-2 py-8 text-sm font-semibold text-ink-400">
-            <LoaderCircle size={15} class="animate-spin" /> Loading trend…
-          </p>
+          <div class="py-4"><Skeleton variant="chart" height={180} /></div>
         {:else}
           <p class="py-8 text-center text-sm font-semibold leading-relaxed text-ink-400">
             Log your weight to start the trend — two weigh-ins are enough for a chart.

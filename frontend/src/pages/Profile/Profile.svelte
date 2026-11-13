@@ -154,25 +154,25 @@
       <div class="grid w-full grid-cols-2 gap-3">
         <div class="rounded-2xl bg-brand-50/70 px-3 py-3">
           <Footprints size={16} class="mx-auto text-brand-500" />
-          <p class="mt-1 text-lg font-extrabold leading-none text-ink-900">{$profile?.total_activities ?? 0}</p>
-          <p class="mt-1 text-[10px] font-bold uppercase tracking-wider text-ink-400">activities</p>
+          <p class="num-tabular mt-1 text-lg font-extrabold leading-none text-ink-900">{$profile?.total_activities ?? 0}</p>
+          <p class="mt-1 text-[11px] font-bold uppercase tracking-wider text-ink-400">activities</p>
         </div>
         <div class="rounded-2xl bg-brand-50/70 px-3 py-3">
           <Flame size={16} class="mx-auto text-brand-500" />
-          <p class="mt-1 text-lg font-extrabold leading-none text-ink-900">{$profile?.daily_calorie_goal ?? '—'}</p>
-          <p class="mt-1 text-[10px] font-bold uppercase tracking-wider text-ink-400">kcal / day goal</p>
+          <p class="num-tabular mt-1 text-lg font-extrabold leading-none text-ink-900">{$profile?.daily_calorie_goal ?? '—'}</p>
+          <p class="mt-1 text-[11px] font-bold uppercase tracking-wider text-ink-400">kcal / day goal</p>
         </div>
         <div class="rounded-2xl bg-brand-50/70 px-3 py-3">
           <CalendarDays size={16} class="mx-auto text-brand-500" />
-          <p class="mt-1 text-lg font-extrabold leading-none text-ink-900">{$profile?.age ?? '—'}</p>
-          <p class="mt-1 text-[10px] font-bold uppercase tracking-wider text-ink-400">age</p>
+          <p class="num-tabular mt-1 text-lg font-extrabold leading-none text-ink-900">{$profile?.age ?? '—'}</p>
+          <p class="mt-1 text-[11px] font-bold uppercase tracking-wider text-ink-400">age</p>
         </div>
         <div class="rounded-2xl bg-brand-50/70 px-3 py-3">
           <Activity size={16} class="mx-auto text-brand-500" />
-          <p class="mt-1 text-lg font-extrabold leading-none text-ink-900">
+          <p class="num-tabular mt-1 text-lg font-extrabold leading-none text-ink-900">
             {$profile?.fitness_level ?? $profile?.experience_level ?? 3}<span class="text-xs">/5</span>
           </p>
-          <p class="mt-1 text-[10px] font-bold uppercase tracking-wider text-ink-400">fitness level</p>
+          <p class="mt-1 text-[11px] font-bold uppercase tracking-wider text-ink-400">fitness level</p>
         </div>
       </div>
       {#if $profile?.activity_experience != null}

@@ -27,9 +27,9 @@
 
 <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3 w-full">
   {#each stats as stat (stat.label)}
-    <div class="rounded-2xl border border-brand-100 bg-white px-3 py-2.5 shadow-soft sm:px-4 sm:py-3">
-      <p class="text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400">{stat.label}</p>
-      <p class="mt-0.5 truncate font-display text-base font-extrabold text-ink-900 tabular-nums sm:text-lg">
+    <div class="card-flat px-3.5 py-3 sm:px-4">
+      <p class="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400">{stat.label}</p>
+      <p class="num-tabular mt-0.5 truncate font-display text-lg font-extrabold text-ink-900 sm:text-xl">
         {stat.value}<span class="text-xs font-bold text-ink-400">{stat.unit}</span>
       </p>
     </div>

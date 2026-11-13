@@ -19,6 +19,8 @@
     Moon,
     Sun,
     CloudUpload,
+    LayoutGrid,
+    X,
   } from 'lucide-svelte';
   import { onMount } from 'svelte';
   import { route, navigate, link, isActive } from '../../lib/router.js';
@@ -38,35 +40,51 @@
   import Logo from './Logo.svelte';
   import Footer from './Footer.svelte';
   import MascotGuide from './MascotGuide.svelte';
+  import Skeleton from './Skeleton.svelte';
 
   let { children } = $props();
 
-  // Desktop nav — the Admin entry exists only for admin sessions (cosmetic
-  // gating: the API re-checks the role server-side on every request).
-  const NAV = $derived([
-    { href: '/', label: 'Dashboard', Icon: House },
-    { href: '/plan', label: 'Plan Activity', Icon: Sparkles },
-    { href: '/calendar', label: 'Week Calendar', Icon: CalendarDays },
-    { href: '/track', label: 'Track Activity', Icon: MapPin },
-    { href: '/activities', label: 'Activities', Icon: Footprints },
-    { href: '/analytics', label: 'Analytics', Icon: ChartColumn },
-    { href: '/fueling', label: 'Fueling', Icon: Salad },
-    { href: '/goals', label: 'Goals', Icon: Target },
-    { href: '/profile', label: 'Profile', Icon: CircleUserRound },
-    { href: '/settings', label: 'Settings', Icon: Settings },
-    ...($session?.role === 'admin' ? [{ href: '/admin', label: 'Admin', Icon: ShieldCheck }] : []),
+  // Desktop nav grouped by athlete workflow (Train, Progress, Account).
+  const NAV_GROUPS = $derived([
+    {
+      heading: 'Train',
+      items: [
+        { href: '/', label: 'Dashboard', Icon: House, exact: true },
+        { href: '/plan', label: 'Plan Activity', Icon: Sparkles },
+        { href: '/track', label: 'Track Activity', Icon: MapPin },
+        { href: '/calendar', label: 'Week Calendar', Icon: CalendarDays },
+        { href: '/fueling', label: 'Fueling', Icon: Salad },
+      ],
+    },
+    {
+      heading: 'Progress',
+      items: [
+        { href: '/activities', label: 'Activities', Icon: Footprints },
+        { href: '/analytics', label: 'Analytics', Icon: ChartColumn },
+        { href: '/goals', label: 'Goals', Icon: Target },
+      ],
+    },
+    {
+      heading: 'Account',
+      items: [
+        { href: '/settings', label: 'Settings', Icon: Settings, matchExtra: ['/profile'] },
+        ...($session?.role === 'admin' ? [{ href: '/admin', label: 'Admin', Icon: ShieldCheck }] : []),
+      ],
+    },
   ]);
 
-  const MOBILE = [
-    { href: '/', label: 'Home', Icon: House },
-    { href: '/track', label: 'Track', Icon: MapPin },
-    { href: '/calendar', label: 'Calendar', Icon: CalendarDays },
-    { href: '/activities', label: 'Activities', Icon: Footprints },
+  const MORE_DRAWER_ITEMS = $derived([
+    { href: '/calendar', label: 'Week Calendar', Icon: CalendarDays },
     { href: '/analytics', label: 'Analytics', Icon: ChartColumn },
+    { href: '/fueling', label: 'Fueling guide', Icon: Salad },
     { href: '/goals', label: 'Goals', Icon: Target },
-  ];
+    { href: '/profile', label: 'Athlete Profile', Icon: CircleUserRound },
+    { href: '/settings', label: 'Settings & Theme', Icon: Settings },
+    ...($session?.role === 'admin' ? [{ href: '/admin', label: 'Admin console', Icon: ShieldCheck }] : []),
+  ]);
 
   let menuOpen = $state(false);
+  let moreOpen = $state(false);
   let searchOpen = $state(false);
   let searchTerm = $state('');
 
@@ -148,6 +166,11 @@
     });
   });
 
+  $effect(() => {
+    // Close mobile drawer automatically on route navigation
+    if ($route) moreOpen = false;
+  });
+
   function submitSearch(event) {
     event.preventDefault();
     const term = searchTerm.trim();
@@ -160,8 +183,14 @@
     navigate('/login', { replace: true });
   }
 
+  function isNavItemActive(item) {
+    if (isActive($route, item.href, Boolean(item.exact))) return true;
+    return Array.isArray(item.matchExtra) && item.matchExtra.some((p) => isActive($route, p, false));
+  }
+
   const upcoming = $derived($plans?.[0] ?? null);
   const initial = $derived(($profile?.name || $session?.name || 'N').slice(0, 1).toUpperCase());
+  const moreActive = $derived(['/calendar', '/analytics', '/fueling', '/goals', '/profile', '/settings', '/admin'].some((p) => isActive($route, p, false)));
 </script>
 
 <div class="relative min-h-full">
@@ -182,34 +211,41 @@
   <!-- full-width shell: fills the screen at any zoom/monitor size -->
   <div class="flex w-full">
     <!-- sidebar (desktop) -->
-    <aside class="sticky top-0 hidden h-screen w-[260px] shrink-0 flex-col gap-6 overflow-y-auto border-r border-white/60 bg-white/45 px-5 py-6 backdrop-blur-xl lg:flex">
+    <aside class="sticky top-0 hidden h-screen w-[260px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-white/60 bg-white/45 px-5 py-6 backdrop-blur-xl lg:flex">
       <Logo />
 
-      <nav class="flex flex-col gap-1">
-        {#each NAV as item (item.href)}
-          <a
-            href={item.href}
-            use:link
-            class="nav-link"
-            class:nav-link-active={isActive($route, item.href, item.href === '/')}
-          >
-            <item.Icon size={19} strokeWidth={2.2} />
-            <span>{item.label}</span>
-            {#if item.href === '/track' && liveTracker.tracking}
-              <span class="ml-auto rounded-full px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide {liveTracker.paused ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-700'}">
-                {liveTracker.paused ? 'Paused' : 'Live'}
-              </span>
-            {/if}
-          </a>
+      <nav class="flex flex-col gap-4" aria-label="Primary navigation">
+        {#each NAV_GROUPS as group (group.heading)}
+          <div class="flex flex-col gap-1">
+            <p class="px-3.5 pb-0.5 text-[11px] font-extrabold uppercase tracking-[0.12em] text-ink-400">
+              {group.heading}
+            </p>
+            {#each group.items as item (item.href)}
+              <a
+                href={item.href}
+                use:link
+                class="nav-link"
+                class:nav-link-active={isNavItemActive(item)}
+              >
+                <item.Icon size={19} strokeWidth={2.2} />
+                <span>{item.label}</span>
+                {#if item.href === '/track' && liveTracker.tracking}
+                  <span class="ml-auto rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide {liveTracker.paused ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-700'}">
+                    {liveTracker.paused ? 'Paused' : 'Live'}
+                  </span>
+                {/if}
+              </a>
+            {/each}
+          </div>
         {/each}
       </nav>
 
-      <!-- dashboard stats, visible on every desktop page -->
-      <div class="rounded-3xl border border-white/70 bg-white/70 p-4 shadow-soft">
+      <!-- Tier 1 flat summary widget -->
+      <div class="card-flat p-4">
         <div class="flex items-center justify-between">
           <p class="text-[11px] font-extrabold uppercase tracking-[0.12em] text-brand-500">Today</p>
           <button
-            class="text-[10px] font-bold text-ink-400 transition hover:text-brand-600"
+            class="text-[11px] font-bold text-ink-400 transition hover:text-brand-600"
             onclick={() => navigate('/')}
           >
             Dashboard →
@@ -217,40 +253,40 @@
         </div>
         <div class="mt-2 grid grid-cols-3 gap-1 text-center">
           <div class="min-w-0">
-            <p class="truncate text-sm font-extrabold text-ink-900">{km($todayStats.distance, $unitSystem)}</p>
-            <p class="text-[9px] font-bold uppercase tracking-wide text-ink-400">{distanceUnit($unitSystem)}</p>
+            <p class="num-tabular truncate text-sm font-extrabold text-ink-900">{km($todayStats.distance, $unitSystem)}</p>
+            <p class="text-[11px] font-bold uppercase tracking-wide text-ink-400">{distanceUnit($unitSystem)}</p>
           </div>
           <div class="min-w-0">
-            <p class="truncate text-sm font-extrabold text-ink-900">{Math.round($todayStats.minutes)}</p>
-            <p class="text-[9px] font-bold uppercase tracking-wide text-ink-400">min</p>
+            <p class="num-tabular truncate text-sm font-extrabold text-ink-900">{Math.round($todayStats.minutes)}</p>
+            <p class="text-[11px] font-bold uppercase tracking-wide text-ink-400">min</p>
           </div>
           <div class="min-w-0">
-            <p class="truncate text-sm font-extrabold text-ink-900">{Math.round($todayStats.calories)}</p>
-            <p class="text-[9px] font-bold uppercase tracking-wide text-ink-400">kcal</p>
+            <p class="num-tabular truncate text-sm font-extrabold text-ink-900">{Math.round($todayStats.calories)}</p>
+            <p class="text-[11px] font-bold uppercase tracking-wide text-ink-400">kcal</p>
           </div>
         </div>
       </div>
 
-      <div class="mt-2 rounded-3xl border border-white/70 bg-gradient-to-br from-white/90 to-brand-100/70 p-4 shadow-soft">
+      <div class="card-flat bg-gradient-to-br from-white/80 to-brand-100/60 p-4">
         <p class="text-[11px] font-extrabold uppercase tracking-[0.12em] text-brand-500">Next up</p>
         {#if upcoming}
-          <p class="mt-1.5 text-sm font-bold leading-snug text-ink-900">
+          <p class="num-tabular mt-1.5 text-sm font-bold leading-snug text-ink-900">
             {km(upcoming.distance_km, $unitSystem)} {distanceUnit($unitSystem)} {upcoming.activity_type}
           </p>
-          <p class="mt-1 text-xs font-semibold text-ink-400">
+          <p class="num-tabular mt-1 text-xs font-semibold text-ink-400">
             ~{Math.round(upcoming.duration.minutes)} min · {upcoming.fueling.carbs.perHourG} g carbs/h
           </p>
-          <button class="btn-primary mt-3 w-full !py-2 !text-xs" onclick={() => navigate(`/plan?plan=${upcoming.id}`)}>
+          <button class="btn-ghost mt-3 w-full !py-2 !text-xs font-extrabold text-brand-600" onclick={() => navigate(`/plan?plan=${upcoming.id}`)}>
             View fueling plan
           </button>
         {:else}
           <p class="mt-1.5 text-sm font-bold leading-snug text-ink-900">Plan your next session</p>
           <p class="mt-1 text-xs font-semibold text-ink-400">Get duration + fueling in one tap.</p>
-          <button class="btn-primary mt-3 w-full !py-2 !text-xs" onclick={() => navigate('/plan')}>Plan now</button>
+          <button class="btn-ghost mt-3 w-full !py-2 !text-xs font-extrabold text-brand-600" onclick={() => navigate('/plan')}>Plan now</button>
         {/if}
       </div>
 
-      <div class="mt-auto flex items-center gap-3 rounded-3xl bg-white/70 p-3 shadow-soft">
+      <div class="mt-auto flex items-center gap-3 rounded-3xl border border-brand-100/70 bg-white/70 p-3">
         <div class="grid h-10 w-10 place-items-center rounded-full bg-brand-gradient font-display text-sm font-extrabold text-white">
           {initial}
         </div>
@@ -258,7 +294,7 @@
           <p class="truncate text-sm font-bold leading-tight">{$profile?.name ?? 'Athlete'}</p>
           <p class="truncate text-[11px] font-semibold text-ink-400">{$profile?.city?.trim() || 'TRANA member'}</p>
         </div>
-        <button class="rounded-xl p-2 text-ink-400 transition hover:bg-brand-100 hover:text-brand-700" onclick={signOut} title="Sign out">
+        <button class="rounded-xl p-2 text-ink-400 transition hover:bg-brand-100 hover:text-brand-700" onclick={signOut} title="Sign out" aria-label="Sign out">
           <LogOut size={16} />
         </button>
       </div>
@@ -310,7 +346,7 @@
               >
                 <Bell size={18} />
                 {#if notifUnread > 0}
-                  <span class="absolute right-1 top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-brand-500 px-1 text-[9px] font-extrabold leading-none text-white ring-2 ring-white">
+                  <span class="num-tabular absolute right-1 top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-brand-500 px-1 text-[10px] font-extrabold leading-none text-white ring-2 ring-white">
                     {notifUnread > 9 ? '9+' : notifUnread}
                   </span>
                 {/if}
@@ -329,9 +365,9 @@
                   <div class="divider mx-3"></div>
                   <div class="max-h-80 overflow-y-auto p-2">
                     {#if notifLoading && !notifLoaded}
-                      <p class="px-3 py-5 text-center text-xs font-semibold text-ink-400">Loading…</p>
+                      <div class="p-2"><Skeleton variant="rows" count={3} /></div>
                     {:else if !notifItems.length}
-                      <p class="px-3 py-6 text-center text-xs font-semibold text-ink-400">You're all caught up 🎉</p>
+                      <p class="px-3 py-6 text-center text-xs font-semibold text-ink-400">You're all caught up</p>
                     {:else}
                       {#each notifItems as item (item.id)}
                         <button
@@ -342,7 +378,7 @@
                           <span class="min-w-0 flex-1">
                             <span class="flex items-baseline justify-between gap-2">
                               <span class="truncate text-xs font-extrabold text-ink-900">{item.title}</span>
-                              <span class="shrink-0 text-[10px] font-semibold text-ink-400">{ago(item.created_at)}</span>
+                              <span class="num-tabular shrink-0 text-[11px] font-semibold text-ink-400">{ago(item.created_at)}</span>
                             </span>
                             <span class="mt-0.5 block text-[11px] font-semibold leading-snug text-ink-500">{item.body}</span>
                           </span>
@@ -454,25 +490,78 @@
     </div>
   </div>
 
-  <!-- bottom nav (mobile) -->
-  <nav class="fixed inset-x-0 bottom-0 z-40 border-t border-white/70 bg-white/85 pb-[max(0.45rem,env(safe-area-inset-bottom))] pt-1.5 backdrop-blur-xl lg:hidden">
-    <div class="mx-auto flex max-w-lg items-center justify-between gap-0.5 px-2">
-      {#each MOBILE as item (item.href)}
-        {@const active = isActive($route, item.href, item.href === '/')}
-        <a href={item.href} use:link class="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl py-1.5 {active ? 'text-brand-600' : 'text-ink-400'}">
-          <span class="relative inline-flex">
-            <item.Icon size={20} strokeWidth={active ? 2.6 : 2.1} />
-            {#if item.href === '/track' && liveTracker.tracking}
-              <span
-                class="absolute -right-1.5 -top-1 h-2.5 w-2.5 rounded-full ring-2 ring-white {liveTracker.paused ? 'bg-amber-400' : 'bg-emerald-500 animate-pulse'}"
-                aria-label={liveTracker.paused ? 'Tracking paused' : 'Tracking live'}
-              ></span>
-            {/if}
-          </span>
-          <span class="max-w-full truncate text-[10px] font-bold">{item.label}</span>
-          <span class="h-1 w-5 rounded-full {active ? 'bg-brand-500' : 'bg-transparent'}"></span>
-        </a>
-      {/each}
+  <!-- Mobile More Drawer -->
+  {#if moreOpen}
+    <div class="fixed inset-0 z-50 flex items-end justify-center lg:hidden">
+      <button type="button" class="absolute inset-0 bg-ink-900/35 backdrop-blur-sm" aria-label="Close navigation drawer" onclick={() => (moreOpen = false)}></button>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="More navigation"
+        class="relative z-10 w-full max-w-lg rounded-t-4xl border border-brand-100 bg-white px-5 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-5 shadow-card animate-slide-up"
+      >
+        <div class="mb-3 flex items-center justify-between">
+          <p class="font-display text-base font-extrabold text-ink-900">Insights & Account</p>
+          <button type="button" class="btn-ghost !p-2" aria-label="Close drawer" onclick={() => (moreOpen = false)}>
+            <X size={16} />
+          </button>
+        </div>
+        <div class="grid grid-cols-2 gap-2.5">
+          {#each MORE_DRAWER_ITEMS as item (item.href)}
+            <a
+              href={item.href}
+              use:link
+              class="flex items-center gap-2.5 rounded-2xl border border-brand-100 bg-brand-50/50 px-3.5 py-3 text-sm font-bold transition {isActive($route, item.href, false) ? 'border-brand-300 bg-brand-gradient text-white shadow-glow' : 'text-ink-700 hover:border-brand-200'}"
+            >
+              <item.Icon size={17} />
+              <span class="truncate">{item.label}</span>
+            </a>
+          {/each}
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  <!-- bottom nav (mobile): Home · Plan · Track (center CTA) · Log · More -->
+  <nav class="fixed inset-x-0 bottom-0 z-40 border-t border-white/70 bg-white/90 pb-[max(0.45rem,env(safe-area-inset-bottom))] pt-1.5 backdrop-blur-xl lg:hidden" aria-label="Mobile navigation">
+    <div class="mx-auto grid max-w-lg grid-cols-5 items-end gap-1 px-2">
+      <a href="/" use:link class="flex min-w-0 flex-col items-center gap-1 rounded-xl py-1.5 {isActive($route, '/', true) ? 'text-brand-600' : 'text-ink-400'}">
+        <House size={20} strokeWidth={isActive($route, '/', true) ? 2.6 : 2.1} />
+        <span class="max-w-full truncate text-[11px] font-bold">Home</span>
+      </a>
+
+      <a href="/plan" use:link class="flex min-w-0 flex-col items-center gap-1 rounded-xl py-1.5 {isActive($route, '/plan', false) ? 'text-brand-600' : 'text-ink-400'}">
+        <Sparkles size={20} strokeWidth={isActive($route, '/plan', false) ? 2.6 : 2.1} />
+        <span class="max-w-full truncate text-[11px] font-bold">Plan</span>
+      </a>
+
+      <a href="/track" use:link class="relative -mt-3 flex min-w-0 flex-col items-center gap-1 rounded-2xl py-1">
+        <span class="relative grid h-11 w-14 place-items-center rounded-2xl bg-brand-gradient text-white shadow-glow transition active:scale-95 {isActive($route, '/track', false) ? 'ring-4 ring-brand-200' : ''}">
+          <MapPin size={21} strokeWidth={2.5} />
+          {#if liveTracker.tracking}
+            <span
+              class="absolute -right-1 -top-1 h-3 w-3 rounded-full ring-2 ring-white {liveTracker.paused ? 'bg-amber-400' : 'bg-emerald-500 animate-pulse'}"
+              aria-label={liveTracker.paused ? 'Tracking paused' : 'Tracking live'}
+            ></span>
+          {/if}
+        </span>
+        <span class="max-w-full truncate text-[11px] font-extrabold {isActive($route, '/track', false) ? 'text-brand-600' : 'text-ink-700'}">Track</span>
+      </a>
+
+      <a href="/activities" use:link class="flex min-w-0 flex-col items-center gap-1 rounded-xl py-1.5 {isActive($route, '/activities', false) ? 'text-brand-600' : 'text-ink-400'}">
+        <Footprints size={20} strokeWidth={isActive($route, '/activities', false) ? 2.6 : 2.1} />
+        <span class="max-w-full truncate text-[11px] font-bold">Log</span>
+      </a>
+
+      <button
+        type="button"
+        class="flex min-w-0 flex-col items-center gap-1 rounded-xl py-1.5 {moreOpen || moreActive ? 'text-brand-600' : 'text-ink-400'}"
+        aria-expanded={moreOpen}
+        onclick={() => (moreOpen = !moreOpen)}
+      >
+        <LayoutGrid size={20} strokeWidth={moreOpen || moreActive ? 2.6 : 2.1} />
+        <span class="max-w-full truncate text-[11px] font-bold">More</span>
+      </button>
     </div>
   </nav>
 

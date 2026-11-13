@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { Target, Flame, MapPin, Timer, Save, LoaderCircle, Trophy, Check, CalendarDays } from 'lucide-svelte';
   import Card from '../../components/common/Card.svelte';
+  import Skeleton from '../../components/common/Skeleton.svelte';
   import DonutRing from '../../components/common/DonutRing.svelte';
   import ProgressBar from '../../components/common/ProgressBar.svelte';
   import { activities, goals, todayStats, weekStats, profile, notify, unitSystem } from '../../stores/index.js';
@@ -281,28 +282,28 @@
         <div class="mt-2 flex items-center justify-between">
           <div class="flex gap-1.5">
             {#each ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as label (label)}
-              <span class="w-5 text-center text-[8px] font-bold text-ink-400">{label.slice(0, 1)}</span>
+              <span class="w-5 text-center text-[11px] font-bold text-ink-400">{label.slice(0, 1)}</span>
             {/each}
           </div>
           <div class="flex items-center gap-1">
-            <span class="text-[9px] font-bold text-ink-400">less</span>
+            <span class="text-[11px] font-bold text-ink-400">less</span>
             {#each ['bg-brand-100/70', 'bg-brand-200', 'bg-brand-300', 'bg-brand-400', 'bg-brand-600'] as cls (cls)}
               <span class="h-3 w-3 rounded {cls}"></span>
             {/each}
-            <span class="text-[9px] font-bold text-ink-400">more</span>
+            <span class="text-[11px] font-bold text-ink-400">more</span>
           </div>
         </div>
 
         <div class="mt-4 grid grid-cols-2 gap-2">
-          <div class="rounded-2xl bg-brand-50/70 p-3">
-            <p class="text-[10px] font-extrabold uppercase tracking-wide text-ink-400">Sessions this month</p>
-            <p class="font-display text-xl font-extrabold text-ink-900">
+          <div class="card-flat p-3">
+            <p class="text-[11px] font-extrabold uppercase tracking-wide text-ink-400">Sessions this month</p>
+            <p class="num-tabular font-display text-xl font-extrabold text-ink-900">
               {$activities.filter((a) => new Date(a.started_at).getMonth() === new Date().getMonth()).length}
             </p>
           </div>
-          <div class="rounded-2xl bg-brand-50/70 p-3">
-            <p class="text-[10px] font-extrabold uppercase tracking-wide text-ink-400">Longest this month</p>
-            <p class="font-display text-xl font-extrabold text-ink-900">
+          <div class="card-flat p-3">
+            <p class="text-[11px] font-extrabold uppercase tracking-wide text-ink-400">Longest this month</p>
+            <p class="num-tabular font-display text-xl font-extrabold text-ink-900">
               {(() => {
                 const rows = $activities.filter((a) => new Date(a.started_at).getMonth() === new Date().getMonth());
                 return rows.length ? `${km(Math.max(...rows.map((r) => r.distance_km)), $unitSystem)} ${distanceUnit($unitSystem)}` : '—';
@@ -343,9 +344,7 @@
     </div>
 
     {#if historyLoading}
-      <div class="mt-4 flex items-center gap-2 text-sm font-semibold text-ink-400">
-        <LoaderCircle size={15} class="animate-spin" /> Loading history…
-      </div>
+      <div class="mt-4"><Skeleton variant="rows" count={3} /></div>
     {:else if !historyGroups.length}
       <p class="mt-4 rounded-2xl bg-brand-50/60 p-4 text-sm font-semibold text-ink-400">
         No achievements yet — finish an activity that pushes a daily or weekly target over the line

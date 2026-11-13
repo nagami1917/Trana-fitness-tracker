@@ -1,9 +1,10 @@
 <script>
   import { onMount } from 'svelte';
-  import { Droplets } from 'lucide-svelte';
+  import { Droplets, Pencil, X } from 'lucide-svelte';
   import { dailySessionApi, formatSessionDate, todayDate } from '../../services/dailySessionService.js';
   import { goals, notify, profile, unitSystem } from '../../stores/index.js';
   import { fluidUnit, toDisplayFluid } from '../../lib/units.js';
+  import Skeleton from '../common/Skeleton.svelte';
 
   let {
     session: sessionProp = undefined,
@@ -70,7 +71,7 @@
     netCalories > 0 ? `+${netCalories} kcal` : netCalories < 0 ? `${netCalories} kcal` : 'Balanced'
   );
   let statusColor = $derived(
-    netCalories > 0 ? 'text-rose-500' : netCalories < 0 ? 'text-emerald-500' : 'text-ink-500'
+    netCalories > 0 ? 'text-rose-500' : netCalories < 0 ? 'text-emerald-600' : 'text-ink-500'
   );
 
   let dailyCalorieGoal = $derived(Number($goals?.daily_calories ?? $profile?.daily_calorie_goal ?? 2400) || 2400);
@@ -80,14 +81,24 @@
   async function quickAddWater(addMl) {
     if (loading) return;
     loading = true;
+    const prevWater = Number(session?.water_ml ?? 0);
+    const targetSessionId = session?.id;
+    const wasToday = isTodaySession;
     try {
-      const currentWater = Number(session?.water_ml ?? 0);
-      const nextWater = currentWater + addMl;
-      const res = isTodaySession
+      const nextWater = prevWater + addMl;
+      const res = wasToday
         ? await dailySessionApi.saveToday({ water_ml: nextWater })
-        : await dailySessionApi.update(session.id, { water_ml: nextWater });
+        : await dailySessionApi.update(targetSessionId, { water_ml: nextWater });
       if (res?.data) applySession(res.data);
-      notify(`+${addMl} ml water logged`, 'success');
+      notify(`+${addMl} ml water logged`, {
+        tone: 'success',
+        onUndo: async () => {
+          const revert = wasToday
+            ? await dailySessionApi.saveToday({ water_ml: prevWater })
+            : await dailySessionApi.update(targetSessionId, { water_ml: prevWater });
+          if (revert?.data) applySession(revert.data);
+        },
+      });
     } catch (error) {
       notify(error.message || 'Could not log water', 'error');
     } finally {
@@ -140,26 +151,26 @@
   }
 </script>
 
-<div class="rounded-2xl border border-brand-100 bg-white shadow-card p-4 sm:p-6">
+<div class="card p-4 sm:p-6">
   <div class="flex items-center justify-between mb-4">
     <div>
-      <p class="text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400">Daily Session</p>
+      <p class="text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink-400">Daily Session</p>
       <p class="text-xl font-display font-extrabold text-ink-900">{displayDate}</p>
     </div>
     {#if session}
       <button
         type="button"
-        class="rounded-xl px-3 py-1.5 text-xs font-bold text-ink-500 hover:bg-brand-50 hover:text-brand-700 transition cursor-pointer"
+        class="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold text-ink-500 hover:bg-brand-50 hover:text-brand-700 transition cursor-pointer"
         onclick={toggleEdit}
         aria-label={editing ? 'Cancel edit' : 'Edit session'}
       >
-        {editing ? '✕ Cancel' : '✎ Edit'}
+        {#if editing}<X size={13} /> Cancel{:else}<Pencil size={13} /> Edit{/if}
       </button>
     {/if}
   </div>
 
   {#if loading && !session}
-    <div class="flex items-center justify-center py-8 text-ink-400 text-sm">Loading session…</div>
+    <Skeleton variant="cards" count={4} />
   {:else if !session}
     <div class="text-center py-8">
       <p class="text-ink-600 text-sm font-semibold">No session tracked yet today.</p>
@@ -168,61 +179,61 @@
         type="button"
         onclick={startToday}
         disabled={loading}
-        class="mt-4 inline-flex items-center justify-center rounded-xl px-5 py-2.5 bg-brand-gradient text-white text-xs font-bold shadow-glow hover:scale-[1.01] transition cursor-pointer disabled:opacity-60"
+        class="btn-primary mt-4 !text-xs"
       >
         Start today's session
       </button>
     </div>
   {:else}
-    <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
-      <div class="rounded-xl border border-brand-100 bg-white p-4 shadow-sm">
-        <p class="text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400">Burned</p>
-        <div class="flex items-baseline gap-1 mt-1">
+    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div class="card-flat p-4">
+        <p class="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400">Burned</p>
+        <div class="num-tabular flex items-baseline gap-1 mt-1">
           <span class="font-display text-2xl font-extrabold text-emerald-600">{session.calories_burned}</span>
           <span class="text-xs font-bold text-ink-400">kcal</span>
         </div>
         <div class="mt-2 w-full bg-brand-100 rounded-full h-2">
           <div class="bg-emerald-500 h-2 rounded-full" style="width:{Math.min(100, (session.calories_burned / dailyBurnTarget) * 100)}%"></div>
         </div>
-        <p class="text-[10px] font-semibold text-ink-400 mt-1">Goal ~{dailyBurnTarget} kcal</p>
+        <p class="num-tabular text-[11px] font-semibold text-ink-400 mt-1">Goal ~{dailyBurnTarget} kcal</p>
       </div>
 
-      <div class="rounded-xl border border-brand-100 bg-white p-4 shadow-sm">
-        <p class="text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400">Eaten</p>
-        <div class="flex items-baseline gap-1 mt-1">
+      <div class="card-flat p-4">
+        <p class="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400">Eaten</p>
+        <div class="num-tabular flex items-baseline gap-1 mt-1">
           <span class="font-display text-2xl font-extrabold text-rose-500">{session.calories_eaten}</span>
           <span class="text-xs font-bold text-ink-400">kcal</span>
         </div>
         <div class="mt-2 w-full bg-brand-100 rounded-full h-2">
           <div class="bg-rose-500 h-2 rounded-full" style="width:{Math.min(100, (session.calories_eaten / dailyCalorieGoal) * 100)}%"></div>
         </div>
-        <p class="text-[10px] font-semibold text-ink-400 mt-1">Target {dailyCalorieGoal} kcal</p>
+        <p class="num-tabular text-[11px] font-semibold text-ink-400 mt-1">Target {dailyCalorieGoal} kcal</p>
       </div>
 
-      <div class="rounded-xl border border-brand-100 bg-white p-4 shadow-sm">
-        <p class="text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400">Water</p>
-        <div class="flex items-baseline gap-1 mt-1">
+      <div class="card-flat p-4">
+        <p class="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400">Water</p>
+        <div class="num-tabular flex items-baseline gap-1 mt-1">
           <span class="font-display text-2xl font-extrabold text-brand-600">
             {$unitSystem === 'imperial' ? Math.round(toDisplayFluid(session.water_ml, 'imperial')) : session.water_ml}
           </span>
           <span class="text-xs font-bold text-ink-400">{fluidUnit($unitSystem)}</span>
         </div>
-        <p class="text-[11px] font-semibold text-ink-400 mt-1">{Math.round((session.water_ml || 0) / 250)} × 250ml cups</p>
+        <p class="num-tabular text-[11px] font-semibold text-ink-400 mt-1">{Math.round((session.water_ml || 0) / 250)} × 250ml cups</p>
         {#if !editing}
           <div class="mt-2 flex gap-1.5">
             <button
               type="button"
               disabled={loading}
               onclick={() => quickAddWater(250)}
-              class="inline-flex items-center gap-0.5 rounded-lg border border-brand-100 bg-brand-50 px-2 py-1 text-[10px] font-extrabold text-brand-700 hover:bg-brand-100 transition cursor-pointer disabled:opacity-50"
+              class="inline-flex items-center gap-0.5 rounded-lg border border-brand-100 bg-white px-2 py-1 text-[11px] font-extrabold text-brand-700 hover:bg-brand-100 transition cursor-pointer disabled:opacity-50"
             >
-              <Droplets size={10} /> +250ml
+              <Droplets size={11} /> +250ml
             </button>
             <button
               type="button"
               disabled={loading}
               onclick={() => quickAddWater(500)}
-              class="inline-flex items-center gap-0.5 rounded-lg border border-brand-100 bg-brand-50 px-2 py-1 text-[10px] font-extrabold text-brand-700 hover:bg-brand-100 transition cursor-pointer disabled:opacity-50"
+              class="inline-flex items-center gap-0.5 rounded-lg border border-brand-100 bg-white px-2 py-1 text-[11px] font-extrabold text-brand-700 hover:bg-brand-100 transition cursor-pointer disabled:opacity-50"
             >
               +500ml
             </button>
@@ -230,9 +241,9 @@
         {/if}
       </div>
 
-      <div class="rounded-xl border border-brand-100 bg-white p-4 shadow-sm">
-        <p class="text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400">Net</p>
-        <div class="flex items-baseline gap-1 mt-1">
+      <div class="card-flat p-4">
+        <p class="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400">Net</p>
+        <div class="num-tabular flex items-baseline gap-1 mt-1">
           <span class="{statusColor} font-display text-xl font-extrabold">{statusLabel}</span>
         </div>
       </div>
@@ -246,42 +257,42 @@
 
     {#if editing}
       <form class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3" onsubmit={(event) => { event.preventDefault(); save(); }}>
-        <div class="rounded-xl border border-brand-100 bg-white p-3 shadow-sm">
-          <label for="ds-burned" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400">Calories Burned</label>
+        <div class="card-flat p-3">
+          <label for="ds-burned" class="block text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400">Calories Burned</label>
           <input
             id="ds-burned"
             type="number"
             min="0"
             bind:value={form.calories_burned}
-            class="w-full mt-1 text-sm font-bold text-ink-900 bg-transparent border-b border-brand-300 focus:border-brand-500 focus:outline-none"
+            class="num-tabular w-full mt-1 text-sm font-bold text-ink-900 bg-transparent border-b border-brand-300 focus:border-brand-500 focus:outline-none"
             placeholder="0"
           />
         </div>
-        <div class="rounded-xl border border-brand-100 bg-white p-3 shadow-sm">
-          <label for="ds-eaten" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400">Calories Eaten</label>
+        <div class="card-flat p-3">
+          <label for="ds-eaten" class="block text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400">Calories Eaten</label>
           <input
             id="ds-eaten"
             type="number"
             min="0"
             bind:value={form.calories_eaten}
-            class="w-full mt-1 text-sm font-bold text-ink-900 bg-transparent border-b border-brand-300 focus:border-brand-500 focus:outline-none"
+            class="num-tabular w-full mt-1 text-sm font-bold text-ink-900 bg-transparent border-b border-brand-300 focus:border-brand-500 focus:outline-none"
             placeholder="0"
           />
         </div>
-        <div class="rounded-xl border border-brand-100 bg-white p-3 shadow-sm">
-          <label for="ds-water" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400">Water (ml)</label>
+        <div class="card-flat p-3">
+          <label for="ds-water" class="block text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400">Water (ml)</label>
           <input
             id="ds-water"
             type="number"
             min="0"
             step="50"
             bind:value={form.water_ml}
-            class="w-full mt-1 text-sm font-bold text-ink-900 bg-transparent border-b border-brand-300 focus:border-brand-500 focus:outline-none"
+            class="num-tabular w-full mt-1 text-sm font-bold text-ink-900 bg-transparent border-b border-brand-300 focus:border-brand-500 focus:outline-none"
             placeholder="0"
           />
         </div>
-        <div class="rounded-xl border border-brand-100 bg-white p-3 shadow-sm sm:col-span-3">
-          <label for="ds-notes" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400">Notes</label>
+        <div class="card-flat p-3 sm:col-span-3">
+          <label for="ds-notes" class="block text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400">Notes</label>
           <textarea
             id="ds-notes"
             bind:value={form.notes}
@@ -293,7 +304,7 @@
         <div class="sm:col-span-3 flex gap-2 mt-1">
           <button
             type="submit"
-            class="flex-1 rounded-xl py-2.5 border border-transparent bg-brand-gradient text-white text-sm font-bold shadow-glow hover:scale-[1.01] transition disabled:opacity-60 cursor-pointer"
+            class="btn-primary flex-1"
             disabled={loading}
           >
             Save Session
@@ -301,7 +312,7 @@
           <button
             type="button"
             onclick={toggleEdit}
-            class="flex-1 rounded-xl py-2.5 border border-brand-100 bg-white text-ink-700 text-sm font-bold hover:bg-brand-50 transition cursor-pointer"
+            class="btn-ghost flex-1"
           >
             Cancel
           </button>

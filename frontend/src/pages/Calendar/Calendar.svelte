@@ -139,10 +139,10 @@
               title="Schedule for {isoDay(day)}"
               onclick={() => navigate(`/plan?date=${isoDay(day)}`)}
             >
-              <p class="text-[10px] font-extrabold uppercase tracking-wider {today ? 'text-brand-500' : 'text-ink-400'}">
+              <p class="text-[11px] font-extrabold uppercase tracking-wider {today ? 'text-brand-500' : 'text-ink-400'}">
                 {weekdayShort[day.getDay()]}
               </p>
-              <p class="text-lg font-extrabold {today ? 'text-brand-700' : 'text-ink-900'}">{day.getDate()}</p>
+              <p class="num-tabular text-lg font-extrabold {today ? 'text-brand-700' : 'text-ink-900'}">{day.getDate()}</p>
             </button>
             <button
               type="button"
@@ -166,9 +166,9 @@
                 <div class="min-w-0 flex-1 leading-tight">
                   <p class="truncate text-[11px] font-extrabold text-ink-900">
                     {activityLabel(plan.activity_type)}
-                    {#if matchedDone}<span class="ml-1 text-[9px] text-emerald-600">· Done</span>{/if}
+                    {#if matchedDone}<span class="ml-1 text-[11px] text-emerald-600">· Done</span>{/if}
                   </p>
-                  <p class="truncate text-[10px] font-semibold text-ink-400">
+                  <p class="num-tabular truncate text-[11px] font-semibold text-ink-400">
                     {timeLabel(plan.planned_for)} · {formatDistance(plan.distance_km, $unitSystem)} {distanceUnit($unitSystem)} · {duration(plan.duration_min ?? plan.duration?.minutes)}
                   </p>
                 </div>
@@ -184,7 +184,7 @@
                 <ActivityIcon type={act.activity_type} size="xs" />
                 <div class="min-w-0 flex-1 leading-tight">
                   <p class="truncate text-[11px] font-extrabold text-brand-700">{activityLabel(act.activity_type)}</p>
-                  <p class="truncate text-[10px] font-semibold text-ink-400">
+                  <p class="num-tabular truncate text-[11px] font-semibold text-ink-400">
                     ✓ {formatDistance(act.distance_km, $unitSystem)} {distanceUnit($unitSystem)} · {duration(act.duration_min)}
                   </p>
                 </div>

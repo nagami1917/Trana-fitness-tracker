@@ -7,6 +7,42 @@
 @layer base {
   :root {
     color-scheme: light;
+    --bg-canvas: #fff8fb;
+    --bg-canvas-accent-1: #ffe3ef;
+    --bg-canvas-accent-2: #ffe9f4;
+    --bg-canvas-end: #ffeaf3;
+    --bg-surface: rgba(255, 255, 255, 0.88);
+    --bg-surface-solid: #ffffff;
+    --bg-subtle: rgba(255, 245, 249, 0.78);
+    --bg-elevated: rgba(255, 255, 255, 0.94);
+    --bg-chrome: rgba(255, 255, 255, 0.72);
+    --border-hairline: #ffdbe9;
+    --border-card: rgba(255, 255, 255, 0.8);
+    --text-primary: #3f2333;
+    --text-secondary: #5c3a4c;
+    --text-muted: #755263;
+    --shadow-surface: 0 10px 30px -12px rgba(236, 72, 153, 0.22);
+    --shadow-elevated: 0 18px 40px -24px rgba(190, 24, 93, 0.3);
+  }
+
+  html.theme-dark {
+    color-scheme: dark;
+    --bg-canvas: #0b0d14;
+    --bg-canvas-accent-1: rgba(219, 39, 119, 0.14);
+    --bg-canvas-accent-2: rgba(168, 85, 247, 0.1);
+    --bg-canvas-end: #0f131d;
+    --bg-surface: #151a28;
+    --bg-surface-solid: #151a28;
+    --bg-subtle: #1c2336;
+    --bg-elevated: #1e263b;
+    --bg-chrome: rgba(15, 19, 29, 0.86);
+    --border-hairline: #2b3550;
+    --border-card: #28324b;
+    --text-primary: #f8fafc;
+    --text-secondary: #cbd5e1;
+    --text-muted: #94a3b8;
+    --shadow-surface: 0 14px 32px -12px rgba(0, 0, 0, 0.65);
+    --shadow-elevated: 0 18px 40px -20px rgba(0, 0, 0, 0.75);
   }
 
   html,
@@ -16,10 +52,12 @@
   }
 
   body {
-    @apply bg-brand-50 font-sans text-ink-900;
-    background-image: radial-gradient(1200px 600px at 10% -10%, #ffe3ef 0%, transparent 60%),
-      radial-gradient(900px 500px at 95% 0%, #ffe9f4 0%, transparent 55%),
-      linear-gradient(180deg, #fff8fb 0%, #fff2f7 40%, #ffeaf3 100%);
+    @apply font-sans;
+    background-color: var(--bg-canvas);
+    color: var(--text-primary);
+    background-image: radial-gradient(1200px 600px at 10% -10%, var(--bg-canvas-accent-1) 0%, transparent 60%),
+      radial-gradient(900px 500px at 95% 0%, var(--bg-canvas-accent-2) 0%, transparent 55%),
+      linear-gradient(180deg, var(--bg-canvas) 0%, var(--bg-canvas-end) 100%);
     background-attachment: fixed;
   }
 
@@ -27,7 +65,8 @@
   h2,
   h3,
   h4 {
-    @apply font-display font-bold tracking-tight text-ink-900;
+    @apply font-display font-bold tracking-tight;
+    color: var(--text-primary);
   }
 
   ::selection {
@@ -52,12 +91,26 @@
 }
 
 @layer components {
+  /* Tier 2: Elevated primary workflow card */
   .card {
-    @apply rounded-3xl border border-white/70 bg-white/85 shadow-soft backdrop-blur-sm;
+    @apply rounded-3xl border backdrop-blur-sm;
+    background-color: var(--bg-surface);
+    border-color: var(--border-card);
+    box-shadow: var(--shadow-surface);
+  }
+
+  /* Tier 1: Flat tinted secondary container (no drop shadow) */
+  .card-flat {
+    @apply rounded-3xl border;
+    background-color: var(--bg-subtle);
+    border-color: var(--border-hairline);
+    box-shadow: none;
   }
 
   .card-soft {
-    @apply rounded-3xl border border-brand-100 bg-white/70 backdrop-blur-sm;
+    @apply rounded-3xl border backdrop-blur-sm;
+    background-color: var(--bg-subtle);
+    border-color: var(--border-hairline);
   }
 
   .btn {
@@ -65,17 +118,24 @@
     @apply focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-200;
   }
 
+  /* Tier 3: Reserved for the primary CTA per view */
   .btn-primary {
     @apply btn bg-brand-gradient text-white shadow-glow hover:brightness-105;
   }
 
   .btn-ghost {
-    @apply btn border border-brand-100 bg-white/80 text-ink-700 hover:border-brand-200 hover:text-brand-700;
+    @apply btn border hover:border-brand-300 hover:text-brand-600;
+    background-color: var(--bg-elevated);
+    border-color: var(--border-hairline);
+    color: var(--text-secondary);
   }
 
   .btn-chip {
-    @apply inline-flex touch-manipulation items-center gap-1.5 rounded-full border border-brand-100 bg-white/70 px-3.5 py-2 text-xs font-bold text-ink-500 transition hover:border-brand-200 hover:text-brand-700;
+    @apply inline-flex touch-manipulation items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-bold transition hover:border-brand-300 hover:text-brand-600;
     @apply focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-200;
+    background-color: var(--bg-subtle);
+    border-color: var(--border-hairline);
+    color: var(--text-secondary);
   }
 
   .btn-chip-active {
@@ -83,11 +143,19 @@
   }
 
   .input {
-    @apply w-full min-w-0 max-w-full rounded-2xl border border-brand-100 bg-white/90 px-4 py-2.5 text-base font-semibold text-ink-900 outline-none transition placeholder:font-medium placeholder:text-ink-400 focus:border-brand-300 focus:ring-4 focus:ring-brand-100 sm:text-sm;
+    @apply w-full min-w-0 max-w-full rounded-2xl border px-4 py-2.5 text-base font-semibold outline-none transition placeholder:font-medium focus:border-brand-300 focus:ring-4 focus:ring-brand-100 sm:text-sm;
+    background-color: var(--bg-elevated);
+    border-color: var(--border-hairline);
+    color: var(--text-primary);
+  }
+
+  .input::placeholder {
+    color: var(--text-muted);
   }
 
   .label {
-    @apply mb-1.5 block text-xs font-bold uppercase tracking-[0.08em] text-ink-400;
+    @apply mb-1.5 block text-xs font-bold uppercase tracking-[0.08em];
+    color: var(--text-muted);
   }
 
   .pill {
@@ -95,8 +163,13 @@
   }
 
   .nav-link {
-    @apply flex items-center gap-3 rounded-2xl px-3.5 py-2.5 text-sm font-bold text-ink-500 transition hover:bg-white/70 hover:text-brand-700;
+    @apply flex items-center gap-3 rounded-2xl px-3.5 py-2.5 text-sm font-bold transition hover:text-brand-600;
     @apply focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-200;
+    color: var(--text-secondary);
+  }
+
+  .nav-link:hover {
+    background-color: var(--bg-elevated);
   }
 
   .nav-link-active {
@@ -104,11 +177,17 @@
   }
 
   .stat-value {
-    @apply font-display text-2xl font-extrabold leading-none tracking-tight text-ink-900;
+    @apply font-display text-2xl font-extrabold leading-none tracking-tight;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-primary);
+  }
+
+  .num-tabular {
+    font-variant-numeric: tabular-nums;
   }
 
   .muted {
-    @apply text-ink-400;
+    color: var(--text-muted);
   }
 
   .divider {
@@ -116,7 +195,20 @@
   }
 
   .glass-soft {
-    @apply bg-white/60 backdrop-blur-md;
+    background-color: var(--bg-chrome);
+    backdrop-filter: blur(12px);
+  }
+
+  .skeleton-bar {
+    @apply relative overflow-hidden rounded-xl;
+    background-color: var(--bg-subtle);
+  }
+
+  .skeleton-bar::after {
+    content: '';
+    @apply absolute inset-0;
+    background: linear-gradient(90deg, transparent 0%, rgba(249, 86, 155, 0.12) 50%, transparent 100%);
+    animation: shimmer 1.5s linear infinite;
   }
 }
 
@@ -126,7 +218,6 @@
   background: #eaf3ee;
 }
 
-/* Zoom control — TRANA's rounded, soft-shadow brand look (was default white box) */
 .leaflet-bar {
   border: none !important;
   border-radius: 14px !important;
@@ -177,74 +268,105 @@
   box-shadow: 0 4px 12px rgba(219, 39, 119, 0.45);
 }
 
-/* Chart.js doughnut center label is drawn with absolute overlays in components */
-
-/* Outdoor high-contrast dark mode (toggled via Settings or account menu) */
-html.theme-dark {
-  color-scheme: dark;
-}
-
-html.theme-dark body {
-  background-color: #0b0d14;
-  background-image: radial-gradient(1200px 600px at 10% -10%, rgba(219, 39, 119, 0.14) 0%, transparent 60%),
-    linear-gradient(180deg, #0b0d14 0%, #111521 55%, #0f131d 100%);
-  color: #f4f5f9;
-}
-
-html.theme-dark .card,
+/* Dark theme adjustments mapped onto semantic tokens + night basemap filter */
 html.theme-dark .bg-white,
+html.theme-dark .bg-white\/95,
 html.theme-dark .bg-white\/90,
 html.theme-dark .bg-white\/85,
 html.theme-dark .bg-white\/80,
-html.theme-dark .bg-white\/70 {
-  background-color: #161b29 !important;
-  border-color: #272f45 !important;
-  color: #f4f5f9;
+html.theme-dark .bg-white\/70,
+html.theme-dark .bg-white\/60,
+html.theme-dark .bg-white\/45 {
+  background-color: var(--bg-surface) !important;
+  border-color: var(--border-card) !important;
+  color: var(--text-primary);
 }
 
-html.theme-dark .card-soft,
 html.theme-dark .bg-brand-50,
+html.theme-dark .bg-brand-50\/80,
+html.theme-dark .bg-brand-50\/70,
 html.theme-dark .bg-brand-50\/60,
 html.theme-dark .bg-brand-50\/50,
 html.theme-dark .bg-brand-50\/40 {
-  background-color: #1d2436 !important;
-  border-color: #2c3650 !important;
+  background-color: var(--bg-subtle) !important;
+  border-color: var(--border-hairline) !important;
 }
 
-html.theme-dark .text-ink-900,
-html.theme-dark h1,
-html.theme-dark h2,
-html.theme-dark h3,
-html.theme-dark h4 {
-  color: #f8fafc !important;
+html.theme-dark [class*='from-brand-50'],
+html.theme-dark [class*='from-white'] {
+  --tw-gradient-from: var(--bg-subtle) var(--tw-gradient-from-position) !important;
+  --tw-gradient-via: var(--bg-surface) var(--tw-gradient-via-position) !important;
+  --tw-gradient-to: var(--bg-surface) var(--tw-gradient-to-position) !important;
+}
+
+html.theme-dark .bg-amber-50,
+html.theme-dark .bg-amber-50\/70 {
+  background-color: rgba(120, 53, 15, 0.28) !important;
+  border-color: rgba(245, 158, 11, 0.35) !important;
+  color: #fde68a !important;
+}
+
+html.theme-dark .bg-emerald-50,
+html.theme-dark .bg-emerald-50\/70,
+html.theme-dark .bg-emerald-50\/60 {
+  background-color: rgba(6, 78, 59, 0.28) !important;
+  border-color: rgba(16, 185, 129, 0.35) !important;
+  color: #a7f3d0 !important;
+}
+
+html.theme-dark .bg-rose-50,
+html.theme-dark .bg-rose-50\/60 {
+  background-color: rgba(136, 19, 55, 0.28) !important;
+  border-color: rgba(244, 63, 94, 0.35) !important;
+  color: #fecdd3 !important;
+}
+
+html.theme-dark .text-ink-900 {
+  color: var(--text-primary) !important;
 }
 
 html.theme-dark .text-ink-700,
 html.theme-dark .text-ink-600 {
-  color: #cbd5e1 !important;
+  color: var(--text-secondary) !important;
 }
 
 html.theme-dark .text-ink-500,
 html.theme-dark .text-ink-400 {
-  color: #94a3b8 !important;
+  color: var(--text-muted) !important;
 }
 
-html.theme-dark .input {
-  background-color: #0f1420 !important;
-  border-color: #2e3854 !important;
-  color: #f8fafc !important;
+html.theme-dark .border-brand-100,
+html.theme-dark .border-brand-100\/70,
+html.theme-dark .border-brand-100\/80,
+html.theme-dark .border-white\/50,
+html.theme-dark .border-white\/60,
+html.theme-dark .border-white\/70,
+html.theme-dark .border-white\/80 {
+  border-color: var(--border-hairline) !important;
 }
 
-html.theme-dark .btn-ghost {
-  background-color: #1a2132 !important;
-  border-color: #2d3752 !important;
-  color: #e2e8f0 !important;
+html.theme-dark .pill {
+  background-color: rgba(236, 72, 153, 0.18);
+  color: #f9a8d4;
 }
 
-html.theme-dark .btn-chip {
-  background-color: #161c2c;
-  border-color: #2b3550;
-  color: #cbd5e1;
+/* Dim & invert ONLY Leaflet daylight map tiles (leave polylines & markers vibrant) */
+html.theme-dark .leaflet-container {
+  background: #131826;
+}
+
+html.theme-dark .leaflet-tile-pane {
+  filter: invert(92%) hue-rotate(180deg) brightness(95%) contrast(92%);
+}
+
+html.theme-dark .leaflet-bar {
+  background: rgba(21, 26, 40, 0.92) !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45) !important;
+}
+
+html.theme-dark .leaflet-bar a {
+  color: #f9a8d4 !important;
+  border-bottom-color: #2b3550 !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

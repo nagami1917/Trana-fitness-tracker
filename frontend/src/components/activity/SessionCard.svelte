@@ -10,18 +10,18 @@
 <a
   href={`/track/session?id=${session.id}`}
   use:link
-  class="block rounded-xl border border-brand-100 bg-white shadow-sm hover:border-brand-300 hover:shadow-soft transition p-4"
+  class="card-flat block p-4 transition hover:border-brand-300"
 >
   <div class="flex items-center justify-between mb-2">
     <span class="text-xs font-extrabold uppercase tracking-[0.1em] text-ink-400">
       {formatSessionDate(session.session_date)}
     </span>
-    <span class="text-xs font-bold {session.net_calories > 0 ? 'text-rose-500' : session.net_calories < 0 ? 'text-emerald-600' : 'text-ink-500'}">
+    <span class="num-tabular text-xs font-bold {session.net_calories > 0 ? 'text-rose-500' : session.net_calories < 0 ? 'text-emerald-600' : 'text-ink-500'}">
       {session.net_calories > 0 ? `+${session.net_calories}` : session.net_calories} kcal
     </span>
   </div>
 
-  <div class="grid grid-cols-2 gap-4 mb-3">
+  <div class="num-tabular grid grid-cols-2 gap-4 mb-3">
     <div>
       <div class="flex items-baseline gap-1">
         <span class="text-lg font-extrabold text-ink-900">{session.calories_burned}</span>
@@ -42,11 +42,11 @@
     </div>
   </div>
 
-  <div class="flex items-center gap-2 text-xs">
-    <span class="px-2 py-0.5 rounded-full bg-brand-50 text-brand-700 text-[10px] font-bold">
+  <div class="num-tabular flex items-center gap-2 text-xs">
+    <span class="px-2 py-0.5 rounded-full bg-white text-brand-700 text-[11px] font-bold">
       {session.foods_count ?? session.foods?.length ?? 0} foods
     </span>
-    <span class="px-2 py-0.5 rounded-full bg-brand-100 text-brand-700 text-[10px] font-bold">
+    <span class="px-2 py-0.5 rounded-full bg-brand-100 text-brand-700 text-[11px] font-bold">
       {ml(session.water_ml, $unitSystem)} water
     </span>
   </div>
