@@ -106,6 +106,7 @@ def predict_fueling(payload: PredictRequest, duration_min: float | None = None) 
         sweat_profile=payload.sweat_profile,
         temperature_c=payload.temperature_c,
         daily_carb_target_g=payload.daily_carb_target_g,
+        energy_calibration_factor=payload.energy_calibration_factor,
     )
     return recommend(inp)
 
@@ -132,6 +133,7 @@ def predict_all(payload: PredictRequest) -> PredictResponse:
             sweat_profile=payload.sweat_profile,
             temperature_c=payload.temperature_c,
             daily_carb_target_g=payload.daily_carb_target_g,
+            energy_calibration_factor=payload.energy_calibration_factor,
         )
     )
 

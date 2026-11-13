@@ -41,6 +41,7 @@ class PredictRequest(BaseModel):
     sweat_profile: SweatProfile = "normal"
     temperature_c: float = Field(default=22, ge=-20, le=55)
     daily_carb_target_g: float | None = Field(default=None, ge=0, le=1200)
+    energy_calibration_factor: float = Field(default=1.0, ge=0.5, le=2.0)
     route: list[tuple[float, float]] | None = Field(
         default=None,
         description="Optional [[lat, lng], ...] polyline; used to derive distance when distance_km is omitted",

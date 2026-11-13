@@ -60,6 +60,7 @@ export async function predictPlan({ activity, profile, activities = [] }) {
       distance_km: Number(a.distance_km),
       duration_min: Number(a.duration_min),
       elevation_gain_m: Number(a.elevation_gain_m) || 0,
+      started_at: a.started_at ?? null,
     }));
 
   const distanceKm = Number(activity.distance_km) || 0;
@@ -84,8 +85,9 @@ export async function predictPlan({ activity, profile, activities = [] }) {
     elevationPerKm: elevationGainM / Math.max(distanceKm, 0.1),
     avgSpeedKmh: duration.speedKmh,
     sweatProfile: profile?.sweat_profile || 'normal',
-    temperatureC: activity.temperature_c ?? profile?.typical_temperature_c ?? 24,
+    temperatureC: activity.temperature_c ?? profile?.typical_temperature_c ?? 26,
     dailyCarbTargetG: profile?.daily_carb_goal_g,
+    energyCalibrationFactor: Number(profile?.energy_calibration_factor) || 1,
   });
 
   return {

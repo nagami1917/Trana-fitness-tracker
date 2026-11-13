@@ -133,7 +133,10 @@ class ActivityService
     {
         $hours = max($minutes, 1) / 60;
         $speed = $km / max($hours, 0.01);
-        $climb = min(2.6, ($km > 0 ? $elevation / $km : 0) * 0.045);
+        $elevPerKm = $km > 0 ? max(0.0, $elevation / $km) : 0.0;
+        $vamMPerH = $elevPerKm * max(0.0, $speed);
+        $climbCoef = $type === 'ride' ? 0.009 : 0.011;
+        $climb = min(10.0, $vamMPerH * $climbCoef);
 
         $met = match ($type) {
             'run' => $speed * 1.03,

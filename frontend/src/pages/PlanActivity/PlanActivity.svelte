@@ -33,7 +33,7 @@
   import ElevationProfile from '../../components/route/ElevationProfile.svelte';
   import FuelingPlan from '../../components/fueling/FuelingPlan.svelte';
   import Segmented from '../../components/common/Segmented.svelte';
-  import { activities, profile, plans, notify, upsertPlan, removePlanById, unitSystem } from '../../stores/index.js';
+  import { activities, goals, profile, plans, notify, upsertPlan, removePlanById, unitSystem } from '../../stores/index.js';
   import { api } from '../../services/client.js';
   import { navigate, query } from '../../lib/router.js';
   import { loadModel, predictPlan } from '../../lib/ml/index.js';
@@ -306,7 +306,11 @@
           temperature_c: Number(form.temperature_c),
           route: plannedRoute,
         },
-        profile: { ...$profile, sweat_profile: form.sweat_profile },
+        profile: {
+          ...$profile,
+          sweat_profile: form.sweat_profile,
+          daily_carb_goal_g: $goals?.carb_target_g ?? $profile?.daily_carb_goal_g,
+        },
         activities: $activities,
       });
     } finally {

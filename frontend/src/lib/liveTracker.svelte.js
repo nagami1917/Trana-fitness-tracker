@@ -26,7 +26,8 @@ let activeUserId = null;
 let userWeightKg = $state(60);
 let userUnits = $state('metric');
 let userSweat = $state('normal');
-let userTempC = $state(24);
+let userTempC = $state(26);
+let userCalibrationFactor = $state(1);
 
 let activityType = $state('run');
 let tracking = $state(false);
@@ -386,7 +387,7 @@ const estimatedCalories = $derived.by(() => {
   if (durationMin <= 0) return 0;
   const elevPerKm = distanceKm > 0 ? elevationM / distanceKm : 0;
   const met = estimateMet(activityType, avgSpeedKmh, elevPerKm);
-  return Math.round(met * (Number(userWeightKg) || 60) * (durationMin / 60));
+  return Math.round(met * (Number(userWeightKg) || 60) * (durationMin / 60) * userCalibrationFactor);
 });
 
 const activeFuelTargets = $derived.by(() => {
@@ -406,6 +407,7 @@ const activeFuelTargets = $derived.by(() => {
     avgSpeedKmh: avgSpeedKmh || 9,
     sweatProfile: userSweat,
     temperatureC: userTempC,
+    energyCalibrationFactor: userCalibrationFactor,
   });
   return {
     fluidPerHourMl: rec.fluid.perHourMl,
@@ -514,7 +516,8 @@ profile.subscribe((p) => {
   userWeightKg = Number(p?.weight_kg) || 60;
   userUnits = p?.units === 'imperial' ? 'imperial' : 'metric';
   userSweat = p?.sweat_profile || 'normal';
-  userTempC = Number(p?.typical_temperature_c) || 24;
+  userTempC = Number(p?.typical_temperature_c ?? 26);
+  userCalibrationFactor = Math.min(2, Math.max(0.5, Number(p?.energy_calibration_factor) || 1));
 });
 
 session.subscribe((user) => {

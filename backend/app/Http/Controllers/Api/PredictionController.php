@@ -7,6 +7,7 @@ use App\Http\Requests\StorePredictionRequest;
 use App\Http\Resources\PredictionResource;
 use App\Models\Prediction;
 use App\Services\ActivityService;
+use App\Services\EnergyExpenditureCalibrationService;
 use App\Services\MlClient;
 use App\Services\PredictionService;
 use App\Services\RouteService;
@@ -21,6 +22,7 @@ class PredictionController extends Controller
         private readonly MlClient $ml,
         private readonly RouteService $routes,
         private readonly ActivityService $activities,
+        private readonly EnergyExpenditureCalibrationService $calibration,
     ) {
     }
 
@@ -91,9 +93,11 @@ class PredictionController extends Controller
             ])['distance_km'];
 
             // Same Step 4 profile context the saved-prediction path sends.
-            $context = $request->user()->ensureProfile()->predictionContext();
+            $user = $request->user();
+            $context = $user->ensureProfile()->predictionContext();
+            $goal = $user->goal ?? $user->ensureGoals();
 
-            $result = $this->ml->predict([
+            $payload = [
                 'activity_type' => $request->input('activity_type'),
                 'distance_km' => $distance,
                 'elevation_gain_m' => (float) $request->input('elevation_gain_m', 0),
@@ -106,8 +110,15 @@ class PredictionController extends Controller
                 'activity_experience' => $context['activity_experience'],
                 'sweat_profile' => $request->input('sweat_profile') ?? $context['sweat_profile'],
                 'temperature_c' => (float) $request->input('temperature_c', $context['typical_temperature_c']),
-                'history' => $this->activities->history($request->user()),
-            ]);
+                'energy_calibration_factor' => $this->calibration->calculateFactor($user),
+                'history' => $this->activities->history($user),
+            ];
+
+            if (! empty($goal->carb_target_g)) {
+                $payload['daily_carb_target_g'] = (int) $goal->carb_target_g;
+            }
+
+            $result = $this->ml->predict($payload);
         } catch (RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 503);
         }

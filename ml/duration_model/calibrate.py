@@ -3,19 +3,21 @@
 The synthetic-trained q10/q90 bands undercover badly on real door-to-door
 durations — 24 % coverage on GeoLife against an 80 % target (see
 docs/ml-methodology.md). This module fits a single multiplicative **width
-factor** on a calibration set of real activities so the band covers the
-target share of them:
+factor** on a calibration set of real activities so the deployed interval
+``[med - k * lo_dev, med + k * hi_dev]`` covers ``target`` share of outcomes:
 
-    k = conformal quantile of |actual − q50| / halfwidth,
-    halfwidth = (q90 − q10) / 2
+    lo_dev = med - low   (falls back to halfwidth if <= 0)
+    hi_dev = high - med  (falls back to halfwidth if <= 0)
+    score  = (actual - med) / hi_dev   if actual >= med
+             (med - actual) / lo_dev   otherwise
+    k      = finite-sample conformal quantile of scores, clipped to [1.0, 6.0]
 
-Rows whose band is degenerate (halfwidth ≤ 0) are skipped. The factor is
-clipped to [1.0, MAX_FACTOR] — calibration only ever *widens* the trained
-band, and never beyond a physically sane multiple.
+When bands are symmetric (``med - low == high - med``), this reduces identically
+to ``|actual - med| / halfwidth``; when bands are skewed, calibration and
+inference evaluate the *exact* same asymmetric interval.
 
-The fitted factor travels with the artifact (joblib bundle, model card and
-the browser JSON export), and both `model_store.predict` (server) and
-`frontend/src/lib/ml/duration.js` (offline PWA preview) apply it identically.
+Both ``model_store.predict`` (server) and ``frontend/src/lib/ml/duration.js``
+(offline PWA preview) apply it identically.
 
 Run
 ---
@@ -53,12 +55,7 @@ def fit_factor(
     high: list[float] | np.ndarray,
     target: float = TARGET_COVERAGE,
 ) -> dict:
-    """Fit the band-width factor so `median ± k·halfwidth` covers `target`.
-
-    Conformal-style: scores = |actual − median| / halfwidth, k is the
-    ⌈(n+1)·target⌉/n empirical quantile (finite-sample corrected), clipped
-    to [1, MAX_FACTOR].
-    """
+    """Fit the band-width factor so ``[med - k*lo_dev, med + k*hi_dev]`` covers ``target``."""
     actual_a = np.asarray(actual, dtype=float)
     low_a = np.asarray(low, dtype=float)
     med_a = np.asarray(median, dtype=float)
@@ -70,7 +67,13 @@ def fit_factor(
     if n == 0:
         raise ValueError("no valid rows to calibrate (empty or degenerate bands)")
 
-    scores = np.abs(actual_a[valid] - med_a[valid]) / halfwidth[valid]
+    act_v = actual_a[valid]
+    med_v = med_a[valid]
+    hw_v = halfwidth[valid]
+    lo_dev = np.where((med_v - low_a[valid]) > 1e-9, med_v - low_a[valid], hw_v)
+    hi_dev = np.where((high_a[valid] - med_v) > 1e-9, high_a[valid] - med_v, hw_v)
+
+    scores = np.where(act_v >= med_v, (act_v - med_v) / hi_dev, (med_v - act_v) / lo_dev)
 
     # Finite-sample conformal quantile, capped at 1.0 so k never extrapolates
     # beyond the worst observed score.
@@ -78,7 +81,7 @@ def fit_factor(
     k = float(np.quantile(scores, q_level))
     k = float(np.clip(k, MIN_FACTOR, MAX_FACTOR))
 
-    covered = np.abs(actual_a[valid] - med_a[valid]) <= k * halfwidth[valid]
+    covered = (act_v >= med_v - k * lo_dev) & (act_v <= med_v + k * hi_dev)
     achieved = float(covered.mean())
 
     return {
@@ -95,7 +98,7 @@ def band_for_frame(bundle: dict, frame: pd.DataFrame) -> tuple[np.ndarray, np.nd
     """q10/q50/q90 minutes for a training frame, using the trained models.
 
     Mirrors `model_store.predict` exactly: exp(log pace factor), clipped to
-    [0.7, 3.0], multiplied by the per-row anchor base.
+    [0.7, 3.0], multiplied by the per-row anchor base, non-crossing enforced.
     """
     from duration_model.preprocess import FEATURE_ORDER
 

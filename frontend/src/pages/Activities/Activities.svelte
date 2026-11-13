@@ -301,7 +301,8 @@
     if (!kmValue || !minutes) return 0;
     const speed = kmValue / (minutes / 60);
     const met = estimateMet(draft.activity_type, speed, (Number(draft.elevation_gain_m) || 0) / kmValue);
-    return Math.round(met * ($profile?.weight_kg ?? 60) * (minutes / 60));
+    const calFactor = Math.min(2, Math.max(0.5, Number($profile?.energy_calibration_factor) || 1));
+    return Math.round(met * ($profile?.weight_kg ?? 60) * (minutes / 60) * calFactor);
   });
 
   /** What would the model have predicted for this session, knowing only the earlier history? */
@@ -314,6 +315,8 @@
         activity_type: a.activity_type,
         distance_km: Number(a.distance_km),
         duration_min: Number(a.duration_min),
+        elevation_gain_m: Number(a.elevation_gain_m) || 0,
+        started_at: a.started_at ?? null,
       }));
     if (!history.length) return null;
     return predictDuration({
