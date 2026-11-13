@@ -32,9 +32,10 @@ export default defineConfig(({ mode }) => {
           clientsClaim: true,
           // Keep index.html and registerSW.js out of the Cache-First precache so
           // normal page loads and refreshes always hit Vercel first for the latest bundle.
-          globPatterns: ['**/*.{js,css,png,svg,woff2,json}'],
-          globIgnores: ['**/registerSW.js'],
-          maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+          // Defer heavy route/map vendor bundles & ML model JSON to runtime caching.
+          globPatterns: ['**/*.{js,css,woff2}'],
+          globIgnores: ['**/registerSW.js', '**/maplibre-gl-worker-*', '**/vendor-maplibre-*'],
+          maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
           navigateFallback: null,
           runtimeCaching: [
             {
@@ -44,6 +45,22 @@ export default defineConfig(({ mode }) => {
                 cacheName: 'html-pages',
                 networkTimeoutSeconds: 3,
                 expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 },
+              },
+            },
+            {
+              urlPattern: /\/assets\/.*\.(?:js|css)$/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'vite-assets',
+                expiration: { maxEntries: 60, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              },
+            },
+            {
+              urlPattern: /\/models\/.*\.json$/i,
+              handler: 'StaleWhileRevalidate',
+              options: {
+                cacheName: 'ml-models',
+                expiration: { maxEntries: 8, maxAgeSeconds: 60 * 60 * 24 * 30 },
               },
             },
             {
@@ -67,6 +84,20 @@ export default defineConfig(({ mode }) => {
         devOptions: { enabled: false },
       }),
     ],
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return undefined;
+            if (id.includes('maplibre-gl')) return 'vendor-maplibre';
+            if (id.includes('leaflet')) return 'vendor-leaflet';
+            if (id.includes('chart.js')) return 'vendor-charts';
+            if (id.includes('lucide-svelte')) return 'vendor-icons';
+            return undefined;
+          },
+        },
+      },
+    },
     server: {
       host: '0.0.0.0',
       allowedHosts: true,

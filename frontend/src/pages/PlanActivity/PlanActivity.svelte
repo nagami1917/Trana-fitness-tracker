@@ -29,7 +29,7 @@
   import TranaMap from '../../components/map/TranaMap.svelte';
   import FuelingPlan from '../../components/fueling/FuelingPlan.svelte';
   import Segmented from '../../components/common/Segmented.svelte';
-  import { activities, profile, plans, notify, refresh } from '../../stores/index.js';
+  import { activities, profile, plans, notify, upsertPlan, removePlanById } from '../../stores/index.js';
   import { api } from '../../services/client.js';
   import { navigate, query } from '../../lib/router.js';
   import { loadModel, predictPlan } from '../../lib/ml/index.js';
@@ -572,7 +572,7 @@
         planned_for: plannedForIso,
       });
       written = true;
-      await refresh();
+      upsertPlan(created);
       if (seq === saveSeq) {
         saved = created;
         prediction = created;
@@ -598,7 +598,7 @@
       deleted = true;
       confirmDeletePlanId = null;
 
-      plans.update((rows) => rows.filter((row) => String(row.id) !== String(plan.id)));
+      removePlanById(plan.id);
       if ($plans.length <= 4) showAllPlans = false;
 
       if (saved && String(saved.id) === String(plan.id)) {
@@ -612,7 +612,6 @@
         }
       }
 
-      await refresh();
       notify('Saved plan deleted.', 'info');
     } catch (error) {
       notify(

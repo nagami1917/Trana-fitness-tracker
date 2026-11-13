@@ -43,7 +43,7 @@ class ProfileResource extends JsonResource
             'weekly_distance_goal_km' => (float) $goal->weekly_distance_km,
             'daily_carb_goal_g' => $goal->carb_target_g,
             'onboarded' => $profile->onboarded_at !== null,
-            'total_activities' => $user->activities()->count(),
+            'total_activities' => $user->activities_count ?? $user->activities()->count(),
         ];
     }
 }

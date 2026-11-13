@@ -84,19 +84,26 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
 // Dashboard metrics use the full account history. Do not silently stop at the
 // server's page limit (200 activities / 30 predictions by default).
 async function listAll(path, limit) {
-  const rows = [];
-  let page = 1;
-  let lastPage;
-  do {
-    const response = await request(`${path}?limit=${limit}&page=${page}`);
-    if (!Array.isArray(response?.data) || response?.meta?.current_page !== page
+  const validatePage = (response, expectedPage) => {
+    if (!Array.isArray(response?.data) || response?.meta?.current_page !== expectedPage
       || !Number.isInteger(response?.meta?.last_page) || response.meta.last_page < 1) {
       throw new Error('The TRANA API is outdated or returned an invalid list. Update the backend and try again.');
     }
-    rows.push(...response.data);
-    lastPage = response.meta.last_page;
-    page += 1;
-  } while (page <= lastPage);
+    return response;
+  };
+
+  const first = validatePage(await request(`${path}?limit=${limit}&page=1`), 1);
+  const rows = [...first.data];
+  const lastPage = first.meta.last_page;
+  if (lastPage > 1) {
+    const rest = await Promise.all(
+      Array.from({ length: lastPage - 1 }, (_, index) => {
+        const page = index + 2;
+        return request(`${path}?limit=${limit}&page=${page}`).then((res) => validatePage(res, page).data);
+      }),
+    );
+    for (const chunk of rest) rows.push(...chunk);
+  }
   return rows;
 }
 
@@ -151,6 +158,7 @@ export const api = {
   },
 
   auth: {
+    hasToken: () => Boolean(getToken()),
     async user() {
       if (!getToken()) return null;
       try {

@@ -162,7 +162,16 @@ class DailySessionTest extends TestCase
 
         $res->assertJsonPath('data.source', 'gps')
             ->assertJsonPath('data.average_speed', 11.3)
-            ->assertJsonPath('data.average_pace', 5.31);
+            ->assertJsonPath('data.average_pace', 5.31)
+            ->assertJsonPath('data.route_geojson.type', 'FeatureCollection');
         $this->assertNotNull($res->json('data.ended_at'));
+
+        $id = $res->json('data.id');
+        // List endpoint omits heavy route_geojson to keep boot payloads small; detail keeps it.
+        $listRes = $this->getJson('/api/activities', $headers)->assertOk();
+        $this->assertArrayNotHasKey('route_geojson', $listRes->json('data.0'));
+        $this->getJson('/api/activities/'.$id, $headers)
+            ->assertOk()
+            ->assertJsonPath('data.route_geojson.type', 'FeatureCollection');
     }
 }

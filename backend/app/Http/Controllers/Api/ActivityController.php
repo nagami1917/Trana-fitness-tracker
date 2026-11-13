@@ -33,6 +33,23 @@ class ActivityController extends Controller
         ]);
 
         $activities = $request->user()->activities()
+            ->select([
+                'id',
+                'user_id',
+                'activity_type',
+                'distance_km',
+                'elevation_gain_m',
+                'duration_min',
+                'calories',
+                'avg_heart_rate',
+                'started_at',
+                'ended_at',
+                'average_speed',
+                'average_pace',
+                'route',
+                'notes',
+                'source',
+            ])
             ->when($validated['type'] ?? null, fn ($query, $type) => $query->where('activity_type', $type))
             ->when($validated['from'] ?? null, fn ($query, $from) => $query->where('started_at', '>=', $from))
             ->when($validated['to'] ?? null, fn ($query, $to) => $query->where('started_at', '<=', $to))

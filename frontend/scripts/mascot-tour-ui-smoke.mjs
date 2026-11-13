@@ -34,6 +34,9 @@ const bundle = await build({
   build: {
     write: false,
     minify: false,
+    rollupOptions: {
+      output: { inlineDynamicImports: true },
+    },
     lib: {
       entry: resolve(root, 'scripts/stubs/mascot-tour-entry.js'),
       name: 'MascotTourTest',
@@ -187,24 +190,48 @@ try {
 
   // 2. Step through all 7 tour stops and verify page navigation + target selectors
   findButton('Show me around').click();
-  await waitFor(() => document.querySelector('#mascot-tour-title')?.textContent.includes('Your daily command center'), 'Dashboard step');
+  await waitFor(
+    () => document.querySelector('#mascot-tour-title')?.textContent.includes('Your daily command center')
+      && document.querySelector('[data-tour="dashboard-overview"]'),
+    'Dashboard step',
+  );
   assert.equal(harness.getRoute(), '/');
   assert.ok(document.querySelector('[data-tour="dashboard-overview"]'), 'Dashboard overview target should exist');
 
   findButton('Next').click();
-  await waitFor(() => harness.getRoute() === '/plan' && document.querySelector('#mascot-tour-title')?.textContent.includes('Build routes & predict fueling'), 'Plan Activity step');
+  await waitFor(
+    () => harness.getRoute() === '/plan'
+      && document.querySelector('#mascot-tour-title')?.textContent.includes('Build routes & predict fueling')
+      && document.querySelector('[data-tour="plan-activity-card"]'),
+    'Plan Activity step',
+  );
   assert.ok(document.querySelector('[data-tour="plan-activity-card"]'), 'Plan Activity card target should exist');
 
   findButton('Next').click();
-  await waitFor(() => harness.getRoute() === '/track' && document.querySelector('#mascot-tour-title')?.textContent.includes('Record live GPS workouts'), 'Track Activity step');
+  await waitFor(
+    () => harness.getRoute() === '/track'
+      && document.querySelector('#mascot-tour-title')?.textContent.includes('Record live GPS workouts')
+      && document.querySelector('[data-tour="track-controls-header"]'),
+    'Track Activity step',
+  );
   assert.ok(document.querySelector('[data-tour="track-controls-header"]'), 'Track Activity header target should exist');
 
   findButton('Next').click();
-  await waitFor(() => harness.getRoute() === '/activities' && document.querySelector('#mascot-tour-title')?.textContent.includes('Logbook & progress trends'), 'Activities step');
+  await waitFor(
+    () => harness.getRoute() === '/activities'
+      && document.querySelector('#mascot-tour-title')?.textContent.includes('Logbook & progress trends')
+      && document.querySelector('[data-tour="activities-header"]'),
+    'Activities step',
+  );
   assert.ok(document.querySelector('[data-tour="activities-header"]'), 'Activities header target should exist');
 
   findButton('Next').click();
-  await waitFor(() => harness.getRoute() === '/goals' && document.querySelector('#mascot-tour-title')?.textContent.includes('Targets & nutrition calculator'), 'Goals step');
+  await waitFor(
+    () => harness.getRoute() === '/goals'
+      && document.querySelector('#mascot-tour-title')?.textContent.includes('Targets & nutrition calculator')
+      && document.querySelector('[data-tour="goals-header"]'),
+    'Goals step',
+  );
   assert.ok(document.querySelector('[data-tour="goals-header"]'), 'Goals header target should exist');
 
   findButton('Next').click();
@@ -300,7 +327,7 @@ try {
     plans: [],
   };
   await harness.rebootstrap();
-  await waitFor(() => harness.getRoute() === '/onboarding', 'Redirect un-onboarded user to /onboarding');
+  await waitFor(() => harness.getRoute() === '/onboarding' && findButton('Continue'), 'Redirect un-onboarded user to /onboarding');
 
   // Step through Onboarding wizard to "Start planning"
   findButton('Continue').click();

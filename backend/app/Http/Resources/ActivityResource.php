@@ -22,7 +22,10 @@ class ActivityResource extends JsonResource
             'average_speed' => $this->average_speed ? (float) $this->average_speed : null,
             'average_pace' => $this->average_pace ? (float) $this->average_pace : null,
             'route' => $this->route,
-            'route_geojson' => $this->route_geojson,
+            'route_geojson' => $this->when(
+                array_key_exists('route_geojson', $this->resource->getAttributes()),
+                fn () => $this->route_geojson
+            ),
             'notes' => $this->notes,
             'source' => $this->source,
         ];

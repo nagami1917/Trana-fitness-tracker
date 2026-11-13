@@ -7,7 +7,7 @@
   import Modal from '../../components/common/Modal.svelte';
   import BusyOverlay from '../../components/common/BusyOverlay.svelte';
   import EmptyState from '../../components/common/EmptyState.svelte';
-  import { activities, profile, plans, notify, refresh } from '../../stores/index.js';
+  import { activities, profile, plans, notify, upsertActivity, removeActivityById } from '../../stores/index.js';
   import { api } from '../../services/client.js';
   import { query } from '../../lib/router.js';
   import { loadModel, predictDuration, routeLengthKm } from '../../lib/ml/index.js';
@@ -340,7 +340,7 @@
     let written = false;
     try {
       const distance = draftRouteKm > 0 ? Number(draftRouteKm.toFixed(2)) : Number(draft.distance_km);
-      await api.activities.create({
+      const created = await api.activities.create({
         activity_type: draft.activity_type,
         distance_km: distance,
         duration_min: Number(draft.duration_min),
@@ -353,7 +353,8 @@
       });
       written = true;
       addOpen = false;
-      await refresh();
+      upsertActivity(created);
+      void api.profile.get().then((p) => p && profile.set(p)).catch(() => {});
       notify('Activity logged — your model just got sharper.');
     } catch (error) {
       notify(written ? 'Activity saved, but the view could not refresh. Reload when connected.' : (error.message || 'Could not save the activity'), 'error');
@@ -369,7 +370,7 @@
       written = true;
       confirmingDelete = null;
       detail = null;
-      await refresh();
+      removeActivityById(id);
       notify('Activity deleted.', 'info');
     } catch (error) {
       notify(written ? 'Activity deleted, but the view could not refresh. Reload when connected.' : (error.message || 'Could not delete'), 'error');

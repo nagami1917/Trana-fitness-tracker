@@ -19,8 +19,8 @@ use App\Http\Controllers\Api\PasswordRecoveryController;
 use App\Http\Controllers\Api\PredictionController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\RouteController;
+use App\Http\Controllers\Api\SystemController;
 use App\Http\Controllers\Api\WeightLogController;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -33,70 +33,9 @@ use Illuminate\Support\Facades\Route;
 
 // The SPA checks both the API and the configured database before loading data.
 // Do not expose database exception messages or credentials to anonymous clients.
-Route::get('/health', function () {
-    try {
-        DB::selectOne('select 1');
-    } catch (\Throwable $exception) {
-        return response()->json([
-            'status' => 'unavailable',
-            'message' => 'The API cannot reach its database. Check the backend database settings.',
-        ], 503);
-    }
+Route::get('/health', [SystemController::class, 'health']);
 
-    return response()->json(['status' => 'ok']);
-});
-
-Route::get('/docs', fn () => response()->json([
-    'name' => 'TRANA API',
-    'version' => '1.0.0',
-    'endpoints' => [
-        'POST /api/auth/register',
-        'POST /api/auth/login',
-        'POST /api/password/forgot',
-        'POST /api/password/reset',
-        'POST /api/email/verify/resend',
-        'GET  /api/email/verify/{id}/{hash}  (signed)',
-        'GET  /api/notifications',
-        'POST /api/notifications/read-all',
-        'POST /api/notifications/{id}/read',
-        'GET  /api/weight-logs',
-        'POST /api/weight-logs',
-        'DEL  /api/weight-logs/{id}',
-        'GET  /api/health',
-        'GET  /api/auth/me',
-        'POST /api/auth/logout',
-        'GET  /api/profile',
-        'POST /api/profile',
-        'PUT  /api/profile',
-        'PATCH /api/profile',
-        'PATCH /api/profile/weight',
-        'PATCH /api/profile/fitness-level',
-        'GET  /api/activities',
-        'POST /api/activities',
-        'GET  /api/activities/{id}',
-        'DEL  /api/activities/{id}',
-        'GET  /api/activities/summary',
-        'GET  /api/activities/export',
-        'DEL  /api/account',
-        'GET  /api/goals',
-        'PUT  /api/goals',
-        'GET  /api/goals/history',
-        'GET  /api/predictions',
-        'POST /api/predictions',
-        'POST /api/predictions/preview',
-        'GET  /api/predictions/{id}',
-        'DEL  /api/predictions/{id}',
-        'GET  /api/model',
-        'POST /api/client-errors',
-        'GET  /api/admin/dashboard',
-        'GET  /api/admin/users?q=&status=',
-        'PAT  /api/admin/users/{id}/suspend',
-        'PAT  /api/admin/users/{id}/reactivate',
-        'GET  /api/admin/model',
-        'GET  /api/admin/errors?status=&kind=',
-        'PAT  /api/admin/errors/{id}',
-    ],
-]));
+Route::get('/docs', [SystemController::class, 'docs']);
 
 // Public intake for browser-side faults (and ML-service forwards).
 // Unauthenticated by design — errors happen before login — but throttled.
