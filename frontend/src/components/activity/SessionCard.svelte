@@ -1,6 +1,8 @@
 <script>
   import { link } from '../../lib/router.js';
   import { formatSessionDate } from '../../services/dailySessionService.js';
+  import { unitSystem } from '../../stores/index.js';
+  import { ml } from '../../lib/format.js';
 
   let { session = null } = $props();
 </script>
@@ -45,7 +47,7 @@
       {session.foods_count ?? session.foods?.length ?? 0} foods
     </span>
     <span class="px-2 py-0.5 rounded-full bg-brand-100 text-brand-700 text-[10px] font-bold">
-      {session.water_ml} ml water
+      {ml(session.water_ml, $unitSystem)} water
     </span>
   </div>
 </a>

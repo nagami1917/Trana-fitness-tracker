@@ -1,5 +1,7 @@
 <script>
   import { clock, formatDistance, formatDuration, formatPace, formatSpeed } from '../../lib/format.js';
+  import { unitSystem } from '../../stores/index.js';
+  import { distanceUnit, elevationUnit, paceUnit, speedUnit, toDisplayElevation } from '../../lib/units.js';
 
   let {
     distanceKm = 0,
@@ -14,11 +16,11 @@
   let timeText = $derived(durationSec !== null ? clock(durationSec) : formatDuration(durationMin));
 
   let stats = $derived([
-    { label: 'Distance', value: formatDistance(distanceKm), unit: ' km' },
+    { label: 'Distance', value: formatDistance(distanceKm, $unitSystem), unit: ` ${distanceUnit($unitSystem)}` },
     { label: 'Time', value: timeText, unit: '' },
-    { label: 'Pace', value: formatPace(avgPaceMinKm), unit: avgPaceMinKm > 0 ? ' /km' : '' },
-    { label: 'Speed', value: formatSpeed(avgSpeedKmh), unit: avgSpeedKmh > 0 ? ' km/h' : '' },
-    { label: 'Elevation', value: String(Math.round(elevationGainM)), unit: ' m' },
+    { label: 'Pace', value: formatPace(avgPaceMinKm, $unitSystem), unit: avgPaceMinKm > 0 ? ` ${paceUnit($unitSystem)}` : '' },
+    { label: 'Speed', value: formatSpeed(avgSpeedKmh, $unitSystem), unit: avgSpeedKmh > 0 ? ` ${speedUnit($unitSystem)}` : '' },
+    { label: 'Elevation', value: String(Math.round(toDisplayElevation(elevationGainM, $unitSystem))), unit: ` ${elevationUnit($unitSystem)}` },
     { label: 'Calories', value: String(Math.round(calories)), unit: ' kcal' },
   ]);
 </script>

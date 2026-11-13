@@ -31,6 +31,42 @@
     { id: 'snack', label: 'Snack', icon: '🍎' },
   ];
 
+  const ATHLETE_PRESETS = [
+    { food_name: 'Banana', meal_type: 'snack', calories: 105, carbs_g: 27, protein_g: 1, fat_g: 0 },
+    { food_name: 'Energy Gel (25g)', meal_type: 'snack', calories: 100, carbs_g: 25, protein_g: 0, fat_g: 0 },
+    { food_name: 'Sports Drink 500ml', meal_type: 'snack', calories: 120, carbs_g: 30, protein_g: 0, fat_g: 0 },
+    { food_name: 'Oatmeal + Honey', meal_type: 'breakfast', calories: 280, carbs_g: 52, protein_g: 8, fat_g: 4 },
+    { food_name: 'Recovery Shake', meal_type: 'snack', calories: 220, carbs_g: 26, protein_g: 22, fat_g: 3 },
+    { food_name: 'Rice + 2 Eggs', meal_type: 'lunch', calories: 360, carbs_g: 48, protein_g: 16, fat_g: 11 },
+  ];
+
+  const RECENT_KEY = 'trana:recent_foods:v1';
+  let recentFoods = $state([]);
+
+  function loadRecents() {
+    try {
+      const raw = globalThis.localStorage?.getItem(RECENT_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  recentFoods = loadRecents();
+
+  function rememberFood(item) {
+    try {
+      const next = [
+        item,
+        ...recentFoods.filter((r) => r.food_name.toLowerCase() !== item.food_name.toLowerCase()),
+      ].slice(0, 6);
+      recentFoods = next;
+      globalThis.localStorage?.setItem(RECENT_KEY, JSON.stringify(next));
+    } catch {
+      // ignore storage failures
+    }
+  }
+
   let session = $derived(sessionProp !== undefined ? sessionProp : internalSession);
 
   function updateSession(next) {
@@ -68,6 +104,38 @@
     }
   }
 
+  async function quickLogFood(item) {
+    if (busy) return;
+    busy = true;
+    try {
+      let targetSession = session;
+      if (!targetSession) {
+        const started = await dailySessionApi.saveToday({});
+        targetSession = started?.data ?? null;
+        if (targetSession) updateSession(targetSession);
+      }
+      if (!targetSession) throw new Error('Start a session first');
+      const payload = {
+        meal_type: item.meal_type || 'snack',
+        food_name: item.food_name,
+        calories: Number(item.calories) || 0,
+        carbs_g: Number(item.carbs_g) || 0,
+        protein_g: Number(item.protein_g) || 0,
+        fat_g: Number(item.fat_g) || 0,
+        quantity: 1,
+        notes: null,
+      };
+      const data = await dailySessionApi.addFood(targetSession.id, payload);
+      if (data?.session) updateSession(data.session);
+      rememberFood(payload);
+      notify(`Logged ${item.food_name}`, 'success');
+    } catch (error) {
+      notify(error.message || 'Failed to add food', 'error');
+    } finally {
+      busy = false;
+    }
+  }
+
   async function addFood() {
     if (!session) {
       notify('Start a session first', 'error');
@@ -80,7 +148,7 @@
     }
     busy = true;
     try {
-      const data = await dailySessionApi.addFood(session.id, {
+      const payload = {
         meal_type: form.meal_type,
         food_name: name,
         calories: Number(form.calories) || 0,
@@ -89,8 +157,10 @@
         fat_g: Number(form.fat_g) || 0,
         quantity: Number(form.quantity) || 1,
         notes: form.notes?.trim() || null,
-      });
+      };
+      const data = await dailySessionApi.addFood(session.id, payload);
       if (data?.session) updateSession(data.session);
+      rememberFood(payload);
       form = {
         meal_type: 'breakfast',
         food_name: '',
@@ -271,6 +341,21 @@
 
     {#if adding}
       <form class="rounded-xl border border-brand-100 bg-brand-50/30 p-4 shadow-sm space-y-3" onsubmit={(event) => { event.preventDefault(); addFood(); }}>
+        <div>
+          <p class="text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1.5">1-tap athlete quick-add</p>
+          <div class="flex flex-wrap gap-1.5">
+            {#each (recentFoods.length ? recentFoods.concat(ATHLETE_PRESETS.filter((p) => !recentFoods.some((r) => r.food_name === p.food_name))).slice(0, 6) : ATHLETE_PRESETS) as preset (preset.food_name)}
+              <button
+                type="button"
+                disabled={busy}
+                onclick={() => quickLogFood(preset)}
+                class="rounded-full border border-brand-100 bg-white px-2.5 py-1 text-[11px] font-bold text-ink-700 hover:border-brand-300 hover:bg-brand-50 transition cursor-pointer disabled:opacity-50"
+              >
+                + {preset.food_name} <span class="text-ink-400">({preset.calories})</span>
+              </button>
+            {/each}
+          </div>
+        </div>
         <div class="grid grid-cols-2 gap-3">
           <div class="col-span-2">
             <label for="food-name" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Food Name</label>
@@ -357,6 +442,28 @@
             <input id="edit-food-calories" type="number" min="0" bind:value={editForm.calories} class="w-full px-3 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" />
           </div>
         </div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div>
+            <label for="edit-food-carbs" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Carbs (g)</label>
+            <input id="edit-food-carbs" type="number" min="0" bind:value={editForm.carbs_g} class="w-full px-2.5 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" />
+          </div>
+          <div>
+            <label for="edit-food-protein" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Protein (g)</label>
+            <input id="edit-food-protein" type="number" min="0" bind:value={editForm.protein_g} class="w-full px-2.5 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" />
+          </div>
+          <div>
+            <label for="edit-food-fat" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Fat (g)</label>
+            <input id="edit-food-fat" type="number" min="0" bind:value={editForm.fat_g} class="w-full px-2.5 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" />
+          </div>
+          <div>
+            <label for="edit-food-qty" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Qty</label>
+            <input id="edit-food-qty" type="number" min="1" bind:value={editForm.quantity} class="w-full px-2.5 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" />
+          </div>
+        </div>
+        <div>
+          <label for="edit-food-notes" class="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-1">Notes</label>
+          <input id="edit-food-notes" bind:value={editForm.notes} class="w-full px-3 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" placeholder="Optional note" />
+        </div>
         <div class="flex flex-wrap gap-2">
           <button type="submit" disabled={busy} class="flex-1 rounded-xl py-2.5 border border-transparent bg-brand-gradient text-white text-xs font-bold cursor-pointer disabled:opacity-60">Save</button>
           <button type="button" onclick={cancelEdit} class="flex-1 rounded-xl py-2.5 border border-brand-100 bg-white text-ink-700 text-xs font-bold cursor-pointer">Cancel</button>
@@ -365,14 +472,26 @@
       </form>
     {/if}
   {:else}
-    <div class="text-center py-8">
+    <div class="text-center py-6 space-y-3">
       <p class="text-ink-500 text-sm font-semibold">No active session yet today.</p>
-      <p class="text-ink-400 text-xs mt-1">Open today's session to start logging meals.</p>
+      <p class="text-ink-400 text-xs">Open today's session or tap any quick snack to start logging right away.</p>
+      <div class="flex flex-wrap justify-center gap-1.5">
+        {#each ATHLETE_PRESETS.slice(0, 4) as preset (preset.food_name)}
+          <button
+            type="button"
+            disabled={busy}
+            onclick={() => quickLogFood(preset)}
+            class="rounded-full border border-brand-100 bg-brand-50 px-2.5 py-1 text-[11px] font-bold text-brand-700 hover:bg-brand-100 transition cursor-pointer disabled:opacity-50"
+          >
+            + {preset.food_name}
+          </button>
+        {/each}
+      </div>
       <button
         type="button"
         disabled={busy}
         onclick={startAndOpenAdd}
-        class="mt-4 inline-flex items-center justify-center rounded-xl px-4 py-2.5 bg-brand-50 text-brand-700 text-xs font-bold hover:bg-brand-100 transition cursor-pointer disabled:opacity-60"
+        class="inline-flex items-center justify-center rounded-xl px-4 py-2.5 bg-brand-50 text-brand-700 text-xs font-bold hover:bg-brand-100 transition cursor-pointer disabled:opacity-60"
       >
         Start &amp; log food
       </button>

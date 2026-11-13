@@ -16,7 +16,7 @@
   import ActivityIcon from '../activities/ActivityIcon.svelte';
   import RouteMap from '../route/RouteMap.svelte';
   import GPSStatus from '../activity/GPSStatus.svelte';
-  import { activities } from '../../stores/index.js';
+  import { activities, unitSystem } from '../../stores/index.js';
   import { navigate } from '../../lib/router.js';
   import { liveTracker } from '../../lib/liveTracker.svelte.js';
   import { livePosition } from '../../lib/liveLocation.svelte.js';
@@ -25,12 +25,14 @@
     clock,
     dayLabel,
     duration as fmtDuration,
+    elevationWithUnit,
     formatDistance,
     formatPace,
     formatSpeed,
     kcal,
     timeLabel,
   } from '../../lib/format.js';
+  import { distanceUnit, paceUnit, speedUnit } from '../../lib/units.js';
 
   let { fallbackCenter = [14.676, 121.0437] } = $props();
 
@@ -147,11 +149,11 @@
     if (!view) return [];
     const timeText = view.duration_sec !== null ? clock(view.duration_sec) : fmtDuration(view.duration_min);
     return [
-      { label: 'Distance', value: `${formatDistance(view.distance_km)} km` },
+      { label: 'Distance', value: `${formatDistance(view.distance_km, $unitSystem)} ${distanceUnit($unitSystem)}` },
       { label: 'Time', value: timeText },
-      { label: 'Pace', value: view.pace_min_km > 0 ? `${formatPace(view.pace_min_km)} /km` : '—:—' },
-      { label: 'Speed', value: view.speed_kmh > 0 ? `${formatSpeed(view.speed_kmh)} km/h` : '—' },
-      { label: 'Elevation', value: `${Math.round(view.elevation_gain_m)} m` },
+      { label: 'Pace', value: view.pace_min_km > 0 ? `${formatPace(view.pace_min_km, $unitSystem)} ${paceUnit($unitSystem)}` : '—:—' },
+      { label: 'Speed', value: view.speed_kmh > 0 ? `${formatSpeed(view.speed_kmh, $unitSystem)} ${speedUnit($unitSystem)}` : '—' },
+      { label: 'Elevation', value: elevationWithUnit(view.elevation_gain_m, $unitSystem) },
       { label: 'Calories', value: `${kcal(view.calories)} kcal` },
     ];
   });

@@ -2,9 +2,10 @@
  * App-wide live Track Activity state & GPS session controller.
  *
  * Lives above individual pages so starting a workout in Track Activity keeps
- * recording GPS points, elapsed time, distance, pace, elevation, and calories
- * even when the athlete switches to Dashboard or another screen — and keeps
- * Dashboard immediately updated with both live status and the latest result.
+ * recording GPS points, elapsed time, distance, pace, elevation, fueling cues,
+ * and calories even when the athlete switches to Dashboard or another screen —
+ * and keeps Dashboard immediately updated with both live status and the latest
+ * result, with Screen Wake Lock + offline save queue durability.
  */
 import { session, profile, upsertActivity, notify } from '../stores/index.js';
 import { api } from '../services/client.js';
@@ -13,13 +14,19 @@ import { dailySessionApi } from '../services/dailySessionService.js';
 import { watch, getCurrentPosition, trackPoint, GpsError } from '../services/gpsService.js';
 import { snapRoute } from '../services/roadSnappingService.js';
 import { haversineKm, elevationGainM } from '../services/mapService.js';
-import { estimateMet } from './ml/fueling.js';
+import { estimateMet, recommendFueling } from './ml/fueling.js';
+import { queueActivitySave } from './offlineQueue.js';
+import { KM_TO_MI, isImperial } from './units.js';
 
 const STORAGE_PREFIX = 'trana:live_tracker:';
+const BACKUP_PREFIX = 'trana:live_tracker_backup:';
 const MAX_STORED_POINTS = 2000;
 
 let activeUserId = null;
 let userWeightKg = $state(60);
+let userUnits = $state('metric');
+let userSweat = $state('normal');
+let userTempC = $state(24);
 
 let activityType = $state('run');
 let tracking = $state(false);
@@ -50,19 +57,88 @@ let pathSource = $state('none'); // 'none' | 'create' | 'plan'
 let plannedPath = $state([]);
 let plannedLabel = $state('Free GPS');
 let plannedPlanKey = $state(null);
+let plannedFueling = $state(null);
+
+// Live fueling & voice coaching state
+let fluidLoggedMl = $state(0);
+let carbsLoggedG = $state(0);
+let lastHydrateSec = $state(0);
+let lastFuelSec = $state(0);
+let voiceCues = $state(false);
+let announcedSplits = $state(0);
+let wakeLockActive = $state(false);
 
 let lastOutcome = $state(null);
 let lastDailySession = $state(null);
 
 let ticker = null;
 let watcher = null;
+let wakeLockSentinel = null;
+let visibilityBound = false;
 
 function storageKey(userId = activeUserId) {
   return userId ? `${STORAGE_PREFIX}${userId}` : null;
 }
 
+function backupKey(userId = activeUserId) {
+  return userId ? `${BACKUP_PREFIX}${userId}` : null;
+}
+
 function canUseStorage() {
   return typeof window !== 'undefined' && typeof sessionStorage !== 'undefined';
+}
+
+function speakCue(text) {
+  if (!voiceCues || typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  if (typeof SpeechSynthesisUtterance === 'undefined') return;
+  try {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 1.02;
+    window.speechSynthesis.speak(u);
+  } catch {
+    // Ignore blocked speech synthesis on unsupported environments
+  }
+}
+
+async function acquireWakeLock() {
+  if (typeof navigator === 'undefined' || !navigator.wakeLock?.request) return;
+  try {
+    if (wakeLockSentinel) return;
+    wakeLockSentinel = await navigator.wakeLock.request('screen');
+    wakeLockActive = true;
+    wakeLockSentinel.addEventListener?.('release', () => {
+      wakeLockSentinel = null;
+      wakeLockActive = false;
+    });
+  } catch {
+    wakeLockActive = false;
+  }
+}
+
+async function releaseWakeLock() {
+  if (!wakeLockSentinel) {
+    wakeLockActive = false;
+    return;
+  }
+  try {
+    await wakeLockSentinel.release();
+  } catch {
+    // ignore
+  } finally {
+    wakeLockSentinel = null;
+    wakeLockActive = false;
+  }
+}
+
+function ensureVisibilityHook() {
+  if (visibilityBound || typeof document === 'undefined' || typeof document.addEventListener !== 'function') return;
+  visibilityBound = true;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && tracking && !paused) {
+      void acquireWakeLock();
+    }
+  });
 }
 
 function downsampleCoords(coords, max = MAX_STORED_POINTS) {
@@ -80,10 +156,12 @@ function downsampleCoords(coords, max = MAX_STORED_POINTS) {
 function persist() {
   if (!canUseStorage()) return;
   const key = storageKey();
+  const bKey = backupKey();
   if (!key) return;
   try {
     if (!tracking && !lastOutcome) {
       sessionStorage.removeItem(key);
+      globalThis.localStorage?.removeItem?.(bKey);
       return;
     }
     const payload = {
@@ -105,10 +183,23 @@ function persist() {
       plannedPath: downsampleCoords(plannedPath, 600),
       plannedLabel,
       plannedPlanKey,
+      plannedFueling,
+      fluidLoggedMl,
+      carbsLoggedG,
+      lastHydrateSec,
+      lastFuelSec,
+      voiceCues,
+      announcedSplits,
       statusNote,
       lastOutcome,
     };
-    sessionStorage.setItem(key, JSON.stringify(payload));
+    const serialized = JSON.stringify(payload);
+    sessionStorage.setItem(key, serialized);
+    if (tracking) {
+      globalThis.localStorage?.setItem?.(bKey, serialized);
+    } else {
+      globalThis.localStorage?.removeItem?.(bKey);
+    }
   } catch {
     // Ignore storage quota / privacy-mode errors.
   }
@@ -119,6 +210,16 @@ function startTicker() {
   nowMs = Date.now();
   ticker = setInterval(() => {
     nowMs = Date.now();
+    // Voice reminder check for hydration & distance splits
+    if (voiceCues && tracking && !paused) {
+      const sec = Math.max(0, Math.round((elapsedBeforePauseMs + (activeSegmentStartMs ? nowMs - activeSegmentStartMs : 0)) / 1000));
+      if (sec - lastHydrateSec === 1200) {
+        speakCue('Hydration reminder: take a sip of water or electrolyte fluid.');
+      }
+      if (sec >= 1800 && sec - lastFuelSec === 1800) {
+        speakCue('Fueling reminder: take 20 to 30 grams of carbohydrates.');
+      }
+    }
   }, 1000);
 }
 
@@ -152,7 +253,13 @@ function resetLiveFields() {
   startedAtIso = null;
   activeSegmentStartMs = null;
   elapsedBeforePauseMs = 0;
+  fluidLoggedMl = 0;
+  carbsLoggedG = 0;
+  lastHydrateSec = 0;
+  lastFuelSec = 0;
+  announcedSplits = 0;
   statusNote = '';
+  void releaseWakeLock();
 }
 
 function appendGpsFix(fix) {
@@ -177,6 +284,20 @@ function appendGpsFix(fix) {
   if (!paused) {
     gpsStatus = 'tracking';
     gpsMessage = pt.accuracyM != null ? `±${Math.round(pt.accuracyM)}m` : 'Active';
+
+    // Check split milestone for optional voice cue
+    if (voiceCues && distanceKm > 0) {
+      const displayDist = isImperial(userUnits) ? distanceKm * KM_TO_MI : distanceKm;
+      const completedSplits = Math.floor(displayDist);
+      if (completedSplits > announcedSplits && completedSplits >= 1) {
+        announcedSplits = completedSplits;
+        const unitWord = isImperial(userUnits) ? 'mile' : 'kilometer';
+        const paceMin = durationMin / Math.max(0.01, displayDist);
+        const mins = Math.floor(paceMin);
+        const secs = Math.round((paceMin - mins) * 60);
+        speakCue(`${completedSplits} ${unitWord}${completedSplits > 1 ? 's' : ''} complete. Average pace ${mins} minutes ${secs} seconds per ${unitWord}.`);
+      }
+    }
   }
   persist();
 }
@@ -268,6 +389,42 @@ const estimatedCalories = $derived.by(() => {
   return Math.round(met * (Number(userWeightKg) || 60) * (durationMin / 60));
 });
 
+const activeFuelTargets = $derived.by(() => {
+  if (plannedFueling?.fluid?.perHourMl) {
+    return {
+      fluidPerHourMl: Number(plannedFueling.fluid.perHourMl) || 600,
+      carbsPerHourG: Number(plannedFueling.carbs?.perHourG) || 0,
+      sodiumPerHourMg: Number(plannedFueling.sodium?.perHourMg) || 450,
+    };
+  }
+  const estMin = Math.max(45, durationMin);
+  const rec = recommendFueling({
+    activityType,
+    durationMin: estMin,
+    weightKg: userWeightKg,
+    elevationPerKm: distanceKm > 0 ? elevationM / distanceKm : 8,
+    avgSpeedKmh: avgSpeedKmh || 9,
+    sweatProfile: userSweat,
+    temperatureC: userTempC,
+  });
+  return {
+    fluidPerHourMl: rec.fluid.perHourMl,
+    carbsPerHourG: rec.carbs.perHourG,
+    sodiumPerHourMg: rec.sodium.perHourMg,
+  };
+});
+
+const hydrateIntervalSec = 1200; // 20 min
+const fuelIntervalSec = 1800; // 30 min
+const nextHydrateInSec = $derived(Math.max(0, hydrateIntervalSec - Math.max(0, Math.round(durationSec) - lastHydrateSec)));
+const nextFuelInSec = $derived(Math.max(0, fuelIntervalSec - Math.max(0, Math.round(durationSec) - lastFuelSec)));
+const hydrateDue = $derived(tracking && !paused && durationSec >= 60 && nextHydrateInSec === 0);
+const fuelDue = $derived(
+  tracking && !paused && (activeFuelTargets.carbsPerHourG > 0 || durationMin >= 45) && durationSec >= 1200 && nextFuelInSec === 0,
+);
+
+const canSaveStationary = $derived(!saving && tracking && durationMin >= 1 && distanceKm < 0.05);
+
 const recordedCoords = $derived(
   points.map((p) => [p.latitude, p.longitude]),
 );
@@ -293,6 +450,7 @@ function clearRuntimeOnly() {
   plannedPath = [];
   plannedLabel = 'Free GPS';
   plannedPlanKey = null;
+  plannedFueling = null;
   lastOutcome = null;
   lastDailySession = null;
 }
@@ -301,7 +459,7 @@ function hydrateForUser(userId) {
   clearRuntimeOnly();
   if (!canUseStorage() || !userId) return;
   try {
-    const raw = sessionStorage.getItem(storageKey(userId));
+    const raw = sessionStorage.getItem(storageKey(userId)) || globalThis.localStorage?.getItem?.(backupKey(userId));
     if (!raw) return;
     const saved = JSON.parse(raw);
     if (!saved || typeof saved !== 'object') return;
@@ -313,6 +471,13 @@ function hydrateForUser(userId) {
     if (Array.isArray(saved.plannedPath)) plannedPath = saved.plannedPath;
     if (typeof saved.plannedLabel === 'string') plannedLabel = saved.plannedLabel;
     plannedPlanKey = saved.plannedPlanKey ?? null;
+    plannedFueling = saved.plannedFueling ?? null;
+    fluidLoggedMl = Number(saved.fluidLoggedMl) || 0;
+    carbsLoggedG = Number(saved.carbsLoggedG) || 0;
+    lastHydrateSec = Number(saved.lastHydrateSec) || 0;
+    lastFuelSec = Number(saved.lastFuelSec) || 0;
+    voiceCues = Boolean(saved.voiceCues);
+    announcedSplits = Number(saved.announcedSplits) || 0;
     if (typeof saved.statusNote === 'string') statusNote = saved.statusNote;
     if (saved.lastOutcome && typeof saved.lastOutcome === 'object') lastOutcome = saved.lastOutcome;
 
@@ -335,6 +500,8 @@ function hydrateForUser(userId) {
         gpsMessage = 'Paused';
       } else {
         startTicker();
+        void acquireWakeLock();
+        ensureVisibilityHook();
         void startGps();
       }
     }
@@ -345,6 +512,9 @@ function hydrateForUser(userId) {
 
 profile.subscribe((p) => {
   userWeightKg = Number(p?.weight_kg) || 60;
+  userUnits = p?.units === 'imperial' ? 'imperial' : 'metric';
+  userSweat = p?.sweat_profile || 'normal';
+  userTempC = Number(p?.typical_temperature_c) || 24;
 });
 
 session.subscribe((user) => {
@@ -354,6 +524,7 @@ session.subscribe((user) => {
     if (canUseStorage() && activeUserId) {
       try {
         sessionStorage.removeItem(storageKey(activeUserId));
+        globalThis.localStorage?.removeItem?.(backupKey(activeUserId));
       } catch {
         // ignore
       }
@@ -387,12 +558,34 @@ function setPathContext({
   path = [],
   label = 'Free GPS',
   planKey = null,
+  fueling = null,
 } = {}) {
   if (tracking) return;
   pathSource = source;
   plannedPath = Array.isArray(path) ? [...path] : [];
   plannedLabel = label;
   plannedPlanKey = planKey;
+  plannedFueling = fueling;
+}
+
+function logHydration(mlAmount = 200) {
+  if (!tracking) return;
+  fluidLoggedMl += Math.max(0, Number(mlAmount) || 0);
+  lastHydrateSec = Math.round(durationSec);
+  persist();
+}
+
+function logFuel(gramsAmount = 25) {
+  if (!tracking) return;
+  carbsLoggedG += Math.max(0, Number(gramsAmount) || 0);
+  lastFuelSec = Math.round(durationSec);
+  persist();
+}
+
+function toggleVoiceCues() {
+  voiceCues = !voiceCues;
+  if (voiceCues) speakCue('Voice coaching enabled.');
+  if (tracking) persist();
 }
 
 function startActivity(overrides = {}) {
@@ -402,6 +595,7 @@ function startActivity(overrides = {}) {
   if (Array.isArray(overrides.plannedPath)) plannedPath = [...overrides.plannedPath];
   if (overrides.plannedLabel !== undefined) plannedLabel = overrides.plannedLabel;
   if (overrides.plannedPlanKey !== undefined) plannedPlanKey = overrides.plannedPlanKey;
+  if (overrides.plannedFueling !== undefined) plannedFueling = overrides.plannedFueling;
 
   points = [];
   snappedPoints = [];
@@ -411,6 +605,11 @@ function startActivity(overrides = {}) {
   startPosition = null;
   finishPosition = null;
   elapsedBeforePauseMs = 0;
+  fluidLoggedMl = 0;
+  carbsLoggedG = 0;
+  lastHydrateSec = 0;
+  lastFuelSec = 0;
+  announcedSplits = 0;
   startedAtIso = new Date().toISOString();
   activeSegmentStartMs = Date.now();
   nowMs = Date.now();
@@ -421,6 +620,8 @@ function startActivity(overrides = {}) {
 
   persist();
   startTicker();
+  ensureVisibilityHook();
+  void acquireWakeLock();
   void startGps();
 }
 
@@ -432,6 +633,7 @@ function pauseActivity() {
   activeSegmentStartMs = null;
   paused = true;
   stopTicker();
+  void releaseWakeLock();
   gpsStatus = 'paused';
   gpsMessage = 'Paused';
   persist();
@@ -444,6 +646,7 @@ function resumeActivity() {
   paused = false;
   statusNote = '';
   startTicker();
+  void acquireWakeLock();
   if (!watcher) {
     void startGps();
   } else {
@@ -484,14 +687,14 @@ function discardActivity() {
   return snapshot;
 }
 
-async function stopActivity({ currentTodaySession = null } = {}) {
+async function stopActivity({ currentTodaySession = null, allowStationary = false } = {}) {
   if (!tracking || saving) return { saved: false, reason: 'not_tracking' };
 
   const finalDurationSec = Math.round(durationSec);
   const finalDurationMin = Math.round(durationMin * 10) / 10;
-  const finalDistanceKm = Math.round(distanceKm * 100) / 100;
+  let finalDistanceKm = Math.round(distanceKm * 100) / 100;
 
-  if (finalDistanceKm < 0.05 || finalDurationMin < 1) {
+  if (finalDurationMin < 1 || (finalDistanceKm < 0.05 && !allowStationary)) {
     if (!paused) pauseActivity();
     statusNote = 'Record at least 0.05 km (50 m) and 1:00 to save — resume moving or tap Discard.';
     persist();
@@ -499,9 +702,15 @@ async function stopActivity({ currentTodaySession = null } = {}) {
     return { saved: false, reason: 'too_short' };
   }
 
+  if (finalDistanceKm < 0.05 && allowStationary) {
+    finalDistanceKm = 0.05;
+  }
+
   saving = true;
   statusNote = '';
   stopTicker();
+
+  let activityPayload = null;
 
   try {
     let routeCoords = points.map((p) => [p.latitude, p.longitude]);
@@ -534,7 +743,13 @@ async function stopActivity({ currentTodaySession = null } = {}) {
       : null;
 
     const endedAt = new Date().toISOString();
-    const activityPayload = {
+    const intakeParts = [];
+    if (allowStationary && distanceKm < 0.05) intakeParts.push('Indoor / stationary session');
+    if (fluidLoggedMl > 0 || carbsLoggedG > 0) {
+      intakeParts.push(`Intake during session: ${fluidLoggedMl} ml fluid, ${carbsLoggedG} g carbs`);
+    }
+
+    activityPayload = {
       activity_type: activityType,
       started_at: startedAtIso ?? new Date(Date.now() - Math.round(durationSec * 1000)).toISOString(),
       ended_at: endedAt,
@@ -546,7 +761,8 @@ async function stopActivity({ currentTodaySession = null } = {}) {
       average_pace: avgPaceMinKm > 0 ? Math.round(avgPaceMinKm * 100) / 100 : null,
       route: routeCoords.length >= 2 ? routeCoords : null,
       route_geojson: routeGeojson,
-      source: 'gps',
+      notes: intakeParts.length ? intakeParts.join(' · ') : null,
+      source: allowStationary && distanceKm < 0.05 ? 'manual' : 'gps',
     };
 
     const savedActivity = await activityApi.create(activityPayload);
@@ -606,6 +822,38 @@ async function stopActivity({ currentTodaySession = null } = {}) {
     notify("Activity saved to today's session", 'success');
     return { saved: true, outcome: completedSnapshot, dailySession: lastDailySession };
   } catch (error) {
+    // Queue locally on connectivity/server failures (never discard an athlete's outdoor run!)
+    const isClientValidation = error?.status >= 400 && error?.status < 500 && error?.status !== 408 && error?.status !== 429;
+    if (!isClientValidation && activityPayload) {
+      queueActivitySave(activityPayload);
+      const offlineOutcome = {
+        status: 'completed',
+        activityId: null,
+        activity_type: activityPayload.activity_type,
+        pathSource,
+        plannedLabel,
+        plannedPath: [...plannedPath],
+        route: activityPayload.route ?? [],
+        distance_km: activityPayload.distance_km,
+        duration_min: activityPayload.duration_min,
+        duration_sec: finalDurationSec,
+        elevation_gain_m: activityPayload.elevation_gain_m,
+        calories: activityPayload.calories,
+        average_speed: activityPayload.average_speed,
+        average_pace: activityPayload.average_pace,
+        started_at: activityPayload.started_at,
+        ended_at: activityPayload.ended_at,
+        updated_at: new Date().toISOString(),
+        note: 'Saved offline on this device — will sync automatically when you reconnect.',
+      };
+      stopGps();
+      resetLiveFields();
+      lastOutcome = offlineOutcome;
+      persist();
+      notify('No connection — workout queued locally and will sync automatically.', 'info');
+      return { saved: true, queuedOffline: true, outcome: offlineOutcome };
+    }
+
     saving = false;
     statusNote = error?.message || 'Failed to save activity — retry or check your connection.';
     persist();
@@ -643,6 +891,17 @@ export const liveTracker = {
   get plannedPath() { return plannedPath; },
   get plannedLabel() { return plannedLabel; },
   get plannedPlanKey() { return plannedPlanKey; },
+  get plannedFueling() { return plannedFueling; },
+  get activeFuelTargets() { return activeFuelTargets; },
+  get fluidLoggedMl() { return fluidLoggedMl; },
+  get carbsLoggedG() { return carbsLoggedG; },
+  get nextHydrateInSec() { return nextHydrateInSec; },
+  get nextFuelInSec() { return nextFuelInSec; },
+  get hydrateDue() { return hydrateDue; },
+  get fuelDue() { return fuelDue; },
+  get voiceCues() { return voiceCues; },
+  get wakeLockActive() { return wakeLockActive; },
+  get canSaveStationary() { return canSaveStationary; },
   get durationSec() { return durationSec; },
   get durationMin() { return durationMin; },
   get distanceKm() { return distanceKm; },
@@ -657,6 +916,9 @@ export const liveTracker = {
   setRoadSnapping,
   setShowRoads,
   setPathContext,
+  logHydration,
+  logFuel,
+  toggleVoiceCues,
   appendGpsFix,
   startActivity,
   pauseActivity,

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreActivityRequest;
+use App\Http\Requests\UpdateActivityRequest;
 use App\Http\Resources\ActivityResource;
 use App\Models\Activity;
 use App\Services\ActivityService;
@@ -95,6 +96,14 @@ class ActivityController extends Controller
         abort_unless($activity->user_id === $request->user()->id, 404);
 
         return response()->json(['data' => (new ActivityResource($activity))->toArray($request)]);
+    }
+
+    public function update(UpdateActivityRequest $request, Activity $activity): JsonResponse
+    {
+        abort_unless($activity->user_id === $request->user()->id, 404);
+        $updated = $this->activities->update($request->user(), $activity, $request->validated());
+
+        return response()->json(['data' => (new ActivityResource($updated))->toArray($request)]);
     }
 
     public function destroy(Request $request, Activity $activity): JsonResponse

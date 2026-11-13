@@ -6,10 +6,20 @@
   import LineChart from '../../components/analytics/LineChart.svelte';
   import DoughnutChart from '../../components/analytics/DoughnutChart.svelte';
   import ActivityIcon from '../../components/activities/ActivityIcon.svelte';
-  import { activities, modelCard, typeBreakdown, paceTrend, weekdayLoad, chartSeries, personalBests, streak, notify } from '../../stores/index.js';
+  import { activities, modelCard, typeBreakdown, paceTrend, weekdayLoad, chartSeries, personalBests, streak, notify, unitSystem } from '../../stores/index.js';
   import { api } from '../../services/client.js';
   import { navigate } from '../../lib/router.js';
   import { nf, pace, kcal, km, duration as fmtDuration, shortDate } from '../../lib/format.js';
+  import {
+    distanceUnit,
+    fromDisplayWeight,
+    paceUnit,
+    toDisplayDistance,
+    toDisplayPace,
+    toDisplayWeight,
+    weightUnit,
+  } from '../../lib/units.js';
+  import Segmented from '../../components/common/Segmented.svelte';
 
   const FEATURE_LABELS = {
     elevation_per_km: 'Climbing per km',
@@ -25,8 +35,10 @@
 
   const TYPE_COLORS = { run: '#f9569b', ride: '#c084fc', walk: '#fdba74', hike: '#38bdf8' };
 
-  const weeklyCalories = $derived($chartSeries['3M'].map((w) => Math.round(w.calories)));
-  const weeklyLabels = $derived($chartSeries['3M'].map((w) => w.label));
+  let energyRange = $state('3M');
+  const energySeries = $derived($chartSeries[energyRange] ?? $chartSeries['3M']);
+  const weeklyCalories = $derived(energySeries.map((w) => Math.round(w.calories)));
+  const weeklyLabels = $derived(energySeries.map((w) => w.label));
   const mixed = $derived($typeBreakdown.filter((t) => t.count > 0));
 
   const importance = $derived(
@@ -80,14 +92,15 @@
   async function logWeight(event) {
     event.preventDefault();
     weightError = '';
-    const kg = Number(weightKg);
-    if (!Number.isFinite(kg) || kg < 30) {
-      weightError = 'Enter your weight in kg.';
+    const entered = Number(weightKg);
+    const kg = fromDisplayWeight(entered, $unitSystem);
+    if (!Number.isFinite(kg) || kg < 30 || kg > 300) {
+      weightError = `Enter your weight in ${weightUnit($unitSystem)}.`;
       return;
     }
     weightSaving = true;
     try {
-      await api.weightLogs.add({ weight_kg: kg, measured_at: weightDate });
+      await api.weightLogs.add({ weight_kg: Math.round(kg * 10) / 10, measured_at: weightDate });
       weightKg = '';
       notify('Weight logged');
       await loadWeights();
@@ -185,12 +198,16 @@
   <div class="grid gap-5 xl:grid-cols-[1.3fr_1fr]">
     <!-- energy per week -->
     <Card>
-      <div class="flex items-center justify-between">
+      <div class="flex flex-wrap items-center justify-between gap-2">
         <div class="flex items-center gap-2">
           <Flame size={17} class="text-brand-500" />
-          <h2 class="text-lg">Weekly energy</h2>
-      </div>
-        <span class="pill">last 13 weeks</span>
+          <h2 class="text-lg">Energy burned</h2>
+        </div>
+        <Segmented
+          options={[{ id: '7D', label: '7D' }, { id: '1M', label: '1M' }, { id: '3M', label: '3M' }]}
+          value={energyRange}
+          onSelect={(v) => (energyRange = v)}
+        />
       </div>
       <div class="mt-3">
         <BarChart
@@ -202,7 +219,7 @@
         />
       </div>
       <p class="mt-2 text-[11px] font-semibold text-ink-400">
-        Average {$chartSeries['3M'].length ? nf(weeklyCalories.reduce((a, b) => a + b, 0) / weeklyCalories.length) : 0} kcal per week.
+        Average {energySeries.length ? nf(weeklyCalories.reduce((a, b) => a + b, 0) / energySeries.length) : 0} kcal per {energyRange === '3M' ? 'week' : 'day'}.
       </p>
     </Card>
 
@@ -215,7 +232,7 @@
       <div class="mt-2">
         <DoughnutChart
           labels={mixed.map((t) => t.type)}
-          values={mixed.map((t) => Math.round(t.distance * 10) / 10)}
+          values={mixed.map((t) => Math.round(toDisplayDistance(t.distance, $unitSystem) * 10) / 10)}
           colors={mixed.map((t) => TYPE_COLORS[t.type] ?? '#ffc2d9')}
           height={172}
         />
@@ -225,7 +242,7 @@
           <div class="flex items-center gap-2 text-[11px] font-bold">
             <span class="h-2.5 w-2.5 rounded-full" style="background:{TYPE_COLORS[item.type]}"></span>
             <span class="capitalize text-ink-500">{item.type}</span>
-            <span class="ml-auto text-ink-400">{nf(item.distance, 1)} km · {Math.round(item.share)}%</span>
+            <span class="ml-auto text-ink-400">{nf(toDisplayDistance(item.distance, $unitSystem), 1)} {distanceUnit($unitSystem)} · {Math.round(item.share)}%</span>
           </div>
         {/each}
       </div>
@@ -246,14 +263,18 @@
         <div class="mt-3">
           <LineChart
             labels={$paceTrend.map((p) => p.label)}
-            series={[{ label: 'pace', data: $paceTrend.map((p) => Number(p.pace.toFixed(2))), color: '#c084fc' }]}
+            series={[{ label: 'pace', data: $paceTrend.map((p) => Number(toDisplayPace(p.pace, $unitSystem).toFixed(2))), color: '#c084fc' }]}
             height={210}
-            tooltipLabel={(ctx) => pace(ctx.parsed.y)}
-            yTicks={(v) => pace(v).replace(' /km', '')}
+            tooltipLabel={(ctx) => pace($paceTrend[ctx.dataIndex]?.pace ?? ctx.parsed.y, $unitSystem)}
+            yTicks={(v) => {
+              const m = Math.floor(v);
+              const s = Math.round((v - m) * 60);
+              return `${m}:${String(s).padStart(2, '0')}`;
+            }}
           />
         </div>
         <p class="mt-2 text-[11px] font-semibold text-ink-400">
-          Average run pace {pace(averages.avgPace)} across {$paceTrend.length} recent runs.
+          Average run pace {pace(averages.avgPace, $unitSystem)} across {$paceTrend.length} recent runs.
         </p>
       {:else}
         <p class="mt-6 text-sm font-semibold text-ink-400">Log at least three runs to see your pace trend.</p>
@@ -295,15 +316,15 @@
         {#if weightLogs.length >= 2}
           <LineChart
             labels={weightTrend.map((w) => shortDate(w.measured_at))}
-            series={[{ label: 'kg', data: weightTrend.map((w) => w.weight_kg), color: '#f9569b' }]}
+            series={[{ label: weightUnit($unitSystem), data: weightTrend.map((w) => Number(toDisplayWeight(w.weight_kg, $unitSystem).toFixed(1))), color: '#f9569b' }]}
             height={210}
-            tooltipLabel={(ctx) => `${Number(ctx.parsed.y).toFixed(1)} kg`}
+            tooltipLabel={(ctx) => `${Number(ctx.parsed.y).toFixed(1)} ${weightUnit($unitSystem)}`}
             yTicks={(v) => Number(v).toFixed(0)}
           />
           <p class="mt-2 text-[11px] font-semibold text-ink-400">
-            {weightLogs.length} weigh-ins · latest {nf(weightLogs[0].weight_kg, 1)} kg
+            {weightLogs.length} weigh-ins · latest {nf(toDisplayWeight(weightLogs[0].weight_kg, $unitSystem), 1)} {weightUnit($unitSystem)}
             {#if weightDelta !== null}
-              · {weightDelta > 0 ? '+' : ''}{nf(weightDelta, 1)} kg vs previous
+              · {weightDelta > 0 ? '+' : ''}{nf(toDisplayWeight(weightDelta, $unitSystem), 1)} {weightUnit($unitSystem)} vs previous
             {/if}
           </p>
         {:else if weightLoading}
@@ -324,9 +345,9 @@
             type="number"
             step="0.1"
             min="30"
-            max="300"
+            max="660"
             class="input w-full flex-1"
-            placeholder="kg"
+            placeholder={weightUnit($unitSystem)}
             bind:value={weightKg}
             required
           />
@@ -349,7 +370,7 @@
       <div class="mt-3 flex flex-wrap gap-1.5">
         {#each weightLogs.slice(0, 6) as w (w.id)}
           <span class="pill !py-1">
-            {shortDate(w.measured_at)} · {nf(w.weight_kg, 1)} kg
+            {shortDate(w.measured_at)} · {nf(toDisplayWeight(w.weight_kg, $unitSystem), 1)} {weightUnit($unitSystem)}
             <button
               type="button"
               class="ml-1 text-ink-400 transition hover:text-rose-500"
@@ -374,15 +395,15 @@
       {#each [
         {
           label: 'Longest distance',
-          value: $personalBests.longest ? `${km($personalBests.longest.distance_km)} km` : '—',
+          value: $personalBests.longest ? `${km($personalBests.longest.distance_km, $unitSystem)} ${distanceUnit($unitSystem)}` : '—',
           sub: $personalBests.longest ? `${$personalBests.longest.activity_type} · ${shortDate($personalBests.longest.started_at)}` : 'No data yet',
           Icon: ActivityIcon,
           type: $personalBests.longest?.activity_type,
         },
         {
           label: 'Fastest run',
-          value: $personalBests.fastestPace ? pace($personalBests.fastestPace) : '—',
-          sub: $personalBests.fastestRun ? `${km($personalBests.fastestRun.distance_km)} km · ${shortDate($personalBests.fastestRun.started_at)}` : 'No data yet',
+          value: $personalBests.fastestPace ? pace($personalBests.fastestPace, $unitSystem) : '—',
+          sub: $personalBests.fastestRun ? `${km($personalBests.fastestRun.distance_km, $unitSystem)} ${distanceUnit($unitSystem)} · ${shortDate($personalBests.fastestRun.started_at)}` : 'No data yet',
           Icon: Gauge,
         },
         {

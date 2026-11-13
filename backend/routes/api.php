@@ -94,6 +94,7 @@ Route::middleware(['auth:sanctum', 'ensure.active'])->group(function () {
     Route::get('/activities/export', [AccountController::class, 'exportCsv'])->middleware('throttle:writes');
     Route::apiResource('activities', ActivityController::class)->only(['index', 'show']);
     Route::post('/activities', [ActivityController::class, 'store'])->middleware('throttle:writes');
+    Route::match(['put', 'patch'], '/activities/{activity}', [ActivityController::class, 'update'])->middleware('throttle:writes');
     Route::delete('/activities/{activity}', [ActivityController::class, 'destroy'])->middleware('throttle:writes');
     Route::post('/activities/{activity}/points', [ActivityPointController::class, 'store'])->middleware('throttle:writes');
 

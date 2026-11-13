@@ -22,14 +22,17 @@
     Lock,
     History,
     Maximize2,
+    Download,
+    Upload,
   } from 'lucide-svelte';
   import Card from '../../components/common/Card.svelte';
   import BusyOverlay from '../../components/common/BusyOverlay.svelte';
   import ActivityIcon from '../../components/activities/ActivityIcon.svelte';
   import TranaMap from '../../components/map/TranaMap.svelte';
+  import ElevationProfile from '../../components/route/ElevationProfile.svelte';
   import FuelingPlan from '../../components/fueling/FuelingPlan.svelte';
   import Segmented from '../../components/common/Segmented.svelte';
-  import { activities, profile, plans, notify, upsertPlan, removePlanById } from '../../stores/index.js';
+  import { activities, profile, plans, notify, upsertPlan, removePlanById, unitSystem } from '../../stores/index.js';
   import { api } from '../../services/client.js';
   import { navigate, query } from '../../lib/router.js';
   import { loadModel, predictPlan } from '../../lib/ml/index.js';
@@ -44,6 +47,19 @@
     isClosedLoop,
     searchPlaces,
   } from '../../services/roadRoutingService.js';
+  import { fetchRouteElevation } from '../../services/elevationService.js';
+  import { fetchRouteWeather } from '../../services/weatherService.js';
+  import { downloadGpx, parseActivityFile } from '../../lib/gpx.js';
+  import {
+    distanceUnit,
+    elevationUnit,
+    fromDisplayElevation,
+    fromDisplayTemp,
+    tempUnit,
+    toDisplayDistance,
+    toDisplayElevation,
+    toDisplayTemp,
+  } from '../../lib/units.js';
   import { readCachedPlace } from '../../lib/location.js';
   import { acquireLivePosition, releaseLivePosition, seedLivePosition, livePosition } from '../../lib/liveLocation.svelte.js';
   import { nf, toDatetimeLocal } from '../../lib/format.js';
@@ -70,6 +86,18 @@
   let customElevation = $state(false);
   let customPlannedFor = $state(false);
   let routeMap = $state(null);
+  let gpxFileInput = $state(null);
+
+  // Real DEM elevation profile & route forecast weather
+  let elevationProfile = $state([]);
+  let elevationLossM = $state(0);
+  let elevationSource = $state('estimate');
+  let loadingElevation = $state(false);
+  let eleSeq = 0;
+  let eleAbort = null;
+
+  let routeWeather = $state(null);
+  let weatherSeq = 0;
 
   let form = $state({
     activity_type: 'run',
@@ -139,10 +167,23 @@
       if (requestedPlan) {
         loadSavedPlan(requestedPlan);
       } else {
-        if (params.get('type')) form.activity_type = params.get('type');
-        form.temperature_c = $profile?.typical_temperature_c ?? 26;
+        const sportParam = params.get('type') || params.get('sport');
+        if (sportParam && TYPES.some((t) => t.id === sportParam)) form.activity_type = sportParam;
+        const tempParam = Number(params.get('temp'));
+        form.temperature_c = Number.isFinite(tempParam) && params.get('temp') !== null
+          ? tempParam
+          : ($profile?.typical_temperature_c ?? 26);
+        const eleParam = Number(params.get('elevation'));
+        if (Number.isFinite(eleParam) && params.get('elevation') !== null && eleParam >= 0) {
+          form.elevation_gain_m = Math.round(eleParam);
+          customElevation = true;
+        }
         form.sweat_profile = $profile?.sweat_profile ?? 'normal';
-        if (!customPlannedFor && !form.planned_for) {
+        const dateParam = params.get('date');
+        if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+          form.planned_for = `${dateParam}T07:00`;
+          customPlannedFor = true;
+        } else if (!customPlannedFor && !form.planned_for) {
           form.planned_for = toDatetimeLocal(new Date());
         }
       }
@@ -150,7 +191,9 @@
     return () => {
       clearTimeout(timer);
       clearTimeout(snapTimer);
+      clearTimeout(eleTimer);
       snapAbort?.abort();
+      eleAbort?.abort();
       searchAbort?.abort();
       releaseLivePosition();
     };
@@ -185,10 +228,59 @@
       }
     } else {
       form.distance_km = 0;
+      elevationProfile = [];
+      elevationLossM = 0;
+      elevationSource = 'estimate';
+      routeWeather = null;
       if (!customElevation) {
         form.elevation_gain_m = 0;
       }
     }
+  });
+
+  // Fetch real DEM elevation profile + local forecast whenever route changes
+  let eleTimer;
+  $effect(() => {
+    const routeRef = plannedRoute;
+    const activeType = form.activity_type;
+    const whenStr = form.planned_for;
+    const kmVal = routeKm;
+    const isRouting = routeMode === 'roads' && routing;
+
+    clearTimeout(eleTimer);
+    eleAbort?.abort();
+
+    if (!Array.isArray(routeRef) || routeRef.length < 2 || kmVal <= 0.05 || isRouting) {
+      loadingElevation = false;
+      return;
+    }
+
+    const seq = ++eleSeq;
+    const wSeq = ++weatherSeq;
+    eleTimer = setTimeout(() => {
+      const ctrl = new AbortController();
+      eleAbort = ctrl;
+      loadingElevation = true;
+
+      void fetchRouteElevation(routeRef, activeType, { signal: ctrl.signal }).then((res) => {
+        if (seq !== eleSeq || ctrl.signal.aborted) return;
+        loadingElevation = false;
+        elevationProfile = res.profile ?? [];
+        elevationLossM = res.lossM ?? 0;
+        elevationSource = res.source ?? 'estimate';
+        if (res.source === 'dem' && !customElevation && !loadedFromSaved) {
+          form.elevation_gain_m = res.gainM;
+        }
+      });
+
+      const first = routeRef[0];
+      if (Array.isArray(first) && Number.isFinite(first[0]) && Number.isFinite(first[1])) {
+        const iso = whenStr ? new Date(whenStr).toISOString() : new Date().toISOString();
+        void fetchRouteWeather(first[0], first[1], iso).then((w) => {
+          if (wSeq === weatherSeq) routeWeather = w;
+        });
+      }
+    }, 320);
   });
 
   function markEdited() {
@@ -263,6 +355,10 @@
     confirmDeletePlanId = null;
     prediction = null;
     computing = false;
+    elevationProfile = [];
+    elevationLossM = 0;
+    elevationSource = 'estimate';
+    routeWeather = null;
     drawing = true;
     placeQuery = '';
     placeResults = [];
@@ -541,12 +637,50 @@
           activity_type: form.activity_type,
           distance_km: Number(effectiveDistance.toFixed(2)),
           route: plannedRoute,
+          fueling: prediction?.fueling ?? null,
         }));
       } catch {
         // ignore storage quota errors
       }
     }
     navigate('/track?plan=draft');
+  }
+
+  async function handleImportGpx(event) {
+    const file = event?.currentTarget?.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = parseActivityFile(text, file.name);
+      markEdited();
+      following = false;
+      form.activity_type = parsed.activityType;
+      form.route = waypointsFromPath(parsed.route);
+      routePath = parsed.route;
+      routeProvider = 'saved';
+      routeProviderLabel = parsed.source.toUpperCase();
+      if (parsed.elevationGainM > 0) {
+        form.elevation_gain_m = parsed.elevationGainM;
+        customElevation = true;
+      }
+      void tick().then(() => routeMap?.fitRouteBounds?.());
+      notify(`Loaded ${parsed.distanceKm} km route from ${file.name}`);
+    } catch (err) {
+      notify(err?.message || 'Could not read GPX/TCX file', 'error');
+    } finally {
+      event.currentTarget.value = '';
+    }
+  }
+
+  function exportCurrentGpx() {
+    if (!plannedRoute?.length) return;
+    downloadGpx({
+      name: `trana-${form.activity_type}-${effectiveDistance.toFixed(1)}km`,
+      activityType: form.activity_type,
+      startedAt: form.planned_for ? new Date(form.planned_for).toISOString() : new Date().toISOString(),
+      route: plannedRoute,
+    });
+    notify('Route GPX downloaded');
   }
 
   async function save() {
@@ -674,12 +808,12 @@
                 type="number"
                 min="0"
                 step="0.1"
-                value={form.distance_km > 0 ? form.distance_km : ''}
+                value={form.distance_km > 0 ? Number(toDisplayDistance(form.distance_km, $unitSystem).toFixed(2)) : ''}
                 placeholder="Add route on map"
                 disabled
                 class:bg-brand-50={routeKm > 0}
               />
-              <span class="grid w-14 shrink-0 place-items-center rounded-2xl border border-brand-100 bg-brand-50 text-xs font-extrabold text-ink-500">km</span>
+              <span class="grid w-14 shrink-0 place-items-center rounded-2xl border border-brand-100 bg-brand-50 text-xs font-extrabold text-ink-500">{distanceUnit($unitSystem)}</span>
             </div>
             {#if routeKm > 0}
               <p class="mt-1 text-[10px] font-bold text-brand-600">Measured along your planned route</p>
@@ -689,26 +823,57 @@
           </div>
 
           <div class="min-w-0">
-            <span class="label">Elevation gain</span>
+            <span class="label">Elevation gain {elevationSource === 'dem' ? '· DEM terrain' : ''}</span>
             <div class="flex gap-2">
               <input
                 class="input"
                 type="number"
                 min="0"
                 step="10"
-                bind:value={form.elevation_gain_m}
-                oninput={() => { customElevation = true; markEdited(); }}
+                value={Math.round(toDisplayElevation(form.elevation_gain_m, $unitSystem))}
+                oninput={(e) => {
+                  const val = Number(e.currentTarget.value);
+                  customElevation = true;
+                  markEdited();
+                  if (Number.isFinite(val)) form.elevation_gain_m = Math.max(0, Math.round(fromDisplayElevation(val, $unitSystem)));
+                }}
               />
-              <span class="grid w-14 shrink-0 place-items-center rounded-2xl border border-brand-100 bg-brand-50 text-xs font-extrabold text-ink-500">m</span>
+              <span class="grid w-14 shrink-0 place-items-center rounded-2xl border border-brand-100 bg-brand-50 text-xs font-extrabold text-ink-500">{elevationUnit($unitSystem)}</span>
             </div>
           </div>
 
           <div class="min-w-0">
             <span class="label"><Thermometer size={11} class="mr-1 inline" /> Expected temperature</span>
             <div class="flex gap-2">
-              <input class="input" type="number" min="-5" max="45" bind:value={form.temperature_c} oninput={markEdited} />
-              <span class="grid w-14 shrink-0 place-items-center rounded-2xl border border-brand-100 bg-brand-50 text-xs font-extrabold text-ink-500">°C</span>
+              <input
+                class="input"
+                type="number"
+                min="-15"
+                max="120"
+                value={Math.round(toDisplayTemp(form.temperature_c, $unitSystem))}
+                oninput={(e) => {
+                  const val = Number(e.currentTarget.value);
+                  markEdited();
+                  if (Number.isFinite(val)) form.temperature_c = Math.round(fromDisplayTemp(val, $unitSystem));
+                }}
+              />
+              <span class="grid w-14 shrink-0 place-items-center rounded-2xl border border-brand-100 bg-brand-50 text-xs font-extrabold text-ink-500">{tempUnit($unitSystem)}</span>
             </div>
+            {#if routeWeather}
+              <div class="mt-1 flex items-center gap-1.5 text-[10px] font-bold text-brand-600">
+                <span>
+                  Forecast ({routeWeather.hourLabel}): {Math.round(toDisplayTemp(routeWeather.tempC, $unitSystem))}{tempUnit($unitSystem)}
+                  {#if routeWeather.humidityPct != null} · {routeWeather.humidityPct}% RH{/if}
+                </span>
+                <button
+                  type="button"
+                  class="rounded-md bg-brand-50 px-1.5 py-0.5 text-[10px] font-extrabold text-brand-700 hover:bg-brand-100"
+                  onclick={() => { markEdited(); form.temperature_c = routeWeather.tempC; }}
+                >
+                  Apply
+                </button>
+              </div>
+            {/if}
           </div>
 
           <div class="min-w-0">
@@ -881,6 +1046,15 @@
             <button type="button" class="btn-chip" onclick={undoPoint}><Undo2 size={12} /> Undo</button>
             <button type="button" class="btn-chip" onclick={clearRoute}><Trash2 size={12} /> Clear</button>
           {/if}
+          <input bind:this={gpxFileInput} type="file" accept=".gpx,.tcx" class="hidden" onchange={handleImportGpx} />
+          <button type="button" class="btn-chip" onclick={() => gpxFileInput?.click()}>
+            <Upload size={12} /> Import GPX
+          </button>
+          {#if plannedRoute?.length >= 2}
+            <button type="button" class="btn-chip" onclick={exportCurrentGpx}>
+              <Download size={12} /> Export GPX
+            </button>
+          {/if}
         </div>
 
         <!-- Live route status pills -->
@@ -893,7 +1067,10 @@
                 ? 'Start set — pick Destination'
                 : `${form.route.length} stops`}
           </span>
-          <span class="pill"><Ruler size={12} /> {routeKm > 0 ? `${nf(routeKm, 2)} km` : '—'}</span>
+          <span class="pill"><Ruler size={12} /> {routeKm > 0 ? `${nf(toDisplayDistance(routeKm, $unitSystem), 2)} ${distanceUnit($unitSystem)}` : '—'}</span>
+          {#if loadingElevation}
+            <span class="pill"><LoaderCircle size={12} class="animate-spin" /> Checking terrain…</span>
+          {/if}
           {#if routing}
             <span class="pill"><LoaderCircle size={12} class="animate-spin" /> Routing along roads…</span>
           {:else if form.route.length >= 2 && routeKm <= 0.05}
@@ -919,6 +1096,17 @@
             </button>
           {/if}
         </div>
+
+        {#if elevationProfile.length >= 2}
+          <div class="mt-3">
+            <ElevationProfile
+              profile={elevationProfile}
+              gainM={form.elevation_gain_m}
+              lossM={elevationLossM}
+              source={elevationSource}
+            />
+          </div>
+        {/if}
 
         {#if drawing && form.route.length}
           <p class="mt-2 text-[11px] font-semibold text-ink-400">
@@ -953,9 +1141,9 @@
             <div class="flex items-center gap-2">
               <ActivityIcon type={form.activity_type} size="sm" />
               <div>
-                <p class="text-sm font-extrabold capitalize">{nf(effectiveDistance, 2)} km {form.activity_type}</p>
+                <p class="text-sm font-extrabold capitalize">{nf(toDisplayDistance(effectiveDistance, $unitSystem), 2)} {distanceUnit($unitSystem)} {form.activity_type}</p>
                 <p class="text-[11px] font-semibold text-ink-400">
-                  {nf(form.elevation_gain_m)} m gain · {form.temperature_c} °C
+                  {nf(Math.round(toDisplayElevation(form.elevation_gain_m, $unitSystem)))} {elevationUnit($unitSystem)} gain · {Math.round(toDisplayTemp(form.temperature_c, $unitSystem))} {tempUnit($unitSystem)}
                 </p>
               </div>
             </div>
@@ -1024,7 +1212,7 @@
                   <ActivityIcon type={plan.activity_type} size="sm" />
                   <div class="min-w-0 flex-1">
                     <p class="truncate text-xs font-extrabold capitalize">
-                      {plan.distance_km} km {plan.activity_type}
+                      {$unitSystem === 'imperial' ? `${Number(toDisplayDistance(plan.distance_km, 'imperial').toFixed(2))} mi` : `${plan.distance_km} km`} {plan.activity_type}
                       {#if plan.route?.length >= 2}
                         <span class="ml-1 text-[10px] font-bold text-brand-500">· Route</span>
                       {/if}
@@ -1077,7 +1265,7 @@
                       type="button"
                       class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-brand-100 bg-white/80 text-ink-400 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
                       title="Delete saved plan"
-                      aria-label="Delete saved plan {plan.distance_km} km {plan.activity_type}"
+                      aria-label="Delete saved plan {$unitSystem === 'imperial' ? `${Number(toDisplayDistance(plan.distance_km, 'imperial').toFixed(2))} mi` : `${plan.distance_km} km`} {plan.activity_type}"
                       disabled={Boolean(deletingPlanId)}
                       onclick={() => (confirmDeletePlanId = plan.id)}
                     >

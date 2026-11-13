@@ -19,6 +19,7 @@ export const ready = writable(false);
 export const booting = writable(true);
 export const bootError = writable(null);
 export const toast = writable(null);
+export const unitSystem = derived(profile, ($p) => ($p?.units === 'imperial' ? 'imperial' : 'metric'));
 
 const BOOT_CACHE_KEY = 'trana:boot_cache:v1';
 const BOOT_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;

@@ -1,7 +1,9 @@
 <script>
   import { onMount } from 'svelte';
+  import { Droplets } from 'lucide-svelte';
   import { dailySessionApi, formatSessionDate, todayDate } from '../../services/dailySessionService.js';
-  import { notify } from '../../stores/index.js';
+  import { goals, notify, profile, unitSystem } from '../../stores/index.js';
+  import { fluidUnit, toDisplayFluid } from '../../lib/units.js';
 
   let {
     session: sessionProp = undefined,
@@ -70,6 +72,28 @@
   let statusColor = $derived(
     netCalories > 0 ? 'text-rose-500' : netCalories < 0 ? 'text-emerald-500' : 'text-ink-500'
   );
+
+  let dailyCalorieGoal = $derived(Number($goals?.daily_calories ?? $profile?.daily_calorie_goal ?? 2400) || 2400);
+  let dailyBurnTarget = $derived(Math.max(400, Math.round(dailyCalorieGoal * 0.35)));
+  let isTodaySession = $derived(!session?.session_date || session.session_date === todayDate());
+
+  async function quickAddWater(addMl) {
+    if (loading) return;
+    loading = true;
+    try {
+      const currentWater = Number(session?.water_ml ?? 0);
+      const nextWater = currentWater + addMl;
+      const res = isTodaySession
+        ? await dailySessionApi.saveToday({ water_ml: nextWater })
+        : await dailySessionApi.update(session.id, { water_ml: nextWater });
+      if (res?.data) applySession(res.data);
+      notify(`+${addMl} ml water logged`, 'success');
+    } catch (error) {
+      notify(error.message || 'Could not log water', 'error');
+    } finally {
+      loading = false;
+    }
+  }
 
   async function startToday() {
     loading = true;
@@ -158,8 +182,9 @@
           <span class="text-xs font-bold text-ink-400">kcal</span>
         </div>
         <div class="mt-2 w-full bg-brand-100 rounded-full h-2">
-          <div class="bg-emerald-500 h-2 rounded-full" style="width:{Math.min(100, (session.calories_burned / 1000) * 100)}%"></div>
+          <div class="bg-emerald-500 h-2 rounded-full" style="width:{Math.min(100, (session.calories_burned / dailyBurnTarget) * 100)}%"></div>
         </div>
+        <p class="text-[10px] font-semibold text-ink-400 mt-1">Goal ~{dailyBurnTarget} kcal</p>
       </div>
 
       <div class="rounded-xl border border-brand-100 bg-white p-4 shadow-sm">
@@ -169,17 +194,40 @@
           <span class="text-xs font-bold text-ink-400">kcal</span>
         </div>
         <div class="mt-2 w-full bg-brand-100 rounded-full h-2">
-          <div class="bg-rose-500 h-2 rounded-full" style="width:{Math.min(100, (session.calories_eaten / 2500) * 100)}%"></div>
+          <div class="bg-rose-500 h-2 rounded-full" style="width:{Math.min(100, (session.calories_eaten / dailyCalorieGoal) * 100)}%"></div>
         </div>
+        <p class="text-[10px] font-semibold text-ink-400 mt-1">Target {dailyCalorieGoal} kcal</p>
       </div>
 
       <div class="rounded-xl border border-brand-100 bg-white p-4 shadow-sm">
         <p class="text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400">Water</p>
         <div class="flex items-baseline gap-1 mt-1">
-          <span class="font-display text-2xl font-extrabold text-brand-600">{session.water_ml}</span>
-          <span class="text-xs font-bold text-ink-400">ml</span>
+          <span class="font-display text-2xl font-extrabold text-brand-600">
+            {$unitSystem === 'imperial' ? Math.round(toDisplayFluid(session.water_ml, 'imperial')) : session.water_ml}
+          </span>
+          <span class="text-xs font-bold text-ink-400">{fluidUnit($unitSystem)}</span>
         </div>
         <p class="text-[11px] font-semibold text-ink-400 mt-1">{Math.round((session.water_ml || 0) / 250)} × 250ml cups</p>
+        {#if !editing}
+          <div class="mt-2 flex gap-1.5">
+            <button
+              type="button"
+              disabled={loading}
+              onclick={() => quickAddWater(250)}
+              class="inline-flex items-center gap-0.5 rounded-lg border border-brand-100 bg-brand-50 px-2 py-1 text-[10px] font-extrabold text-brand-700 hover:bg-brand-100 transition cursor-pointer disabled:opacity-50"
+            >
+              <Droplets size={10} /> +250ml
+            </button>
+            <button
+              type="button"
+              disabled={loading}
+              onclick={() => quickAddWater(500)}
+              class="inline-flex items-center gap-0.5 rounded-lg border border-brand-100 bg-brand-50 px-2 py-1 text-[10px] font-extrabold text-brand-700 hover:bg-brand-100 transition cursor-pointer disabled:opacity-50"
+            >
+              +500ml
+            </button>
+          </div>
+        {/if}
       </div>
 
       <div class="rounded-xl border border-brand-100 bg-white p-4 shadow-sm">

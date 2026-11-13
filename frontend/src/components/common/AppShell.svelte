@@ -16,14 +16,25 @@
     CalendarDays,
     ShieldCheck,
     Compass,
+    Moon,
+    Sun,
+    CloudUpload,
   } from 'lucide-svelte';
   import { onMount } from 'svelte';
   import { route, navigate, link, isActive } from '../../lib/router.js';
-  import { profile, session, logout, plans, activities, todayStats } from '../../stores/index.js';
+  import { profile, session, logout, plans, activities, todayStats, unitSystem } from '../../stores/index.js';
   import { liveTracker } from '../../lib/liveTracker.svelte.js';
   import { mascotTour } from '../../lib/mascotTour.svelte.js';
   import { api } from '../../services/client.js';
-  import { nf } from '../../lib/format.js';
+  import { nf, km } from '../../lib/format.js';
+  import { distanceUnit } from '../../lib/units.js';
+  import {
+    pendingActivities,
+    syncingOfflineQueue,
+    bindOfflineSyncListener,
+    flushPendingActivities,
+  } from '../../lib/offlineQueue.js';
+  import { theme, toggleTheme } from '../../lib/theme.js';
   import Logo from './Logo.svelte';
   import Footer from './Footer.svelte';
   import MascotGuide from './MascotGuide.svelte';
@@ -122,6 +133,8 @@
 
   onMount(() => {
     void loadNotifications(); // badge value as soon as the shell mounts
+    bindOfflineSyncListener();
+    void flushPendingActivities({ silent: true });
   });
 
   $effect(() => {
@@ -204,8 +217,8 @@
         </div>
         <div class="mt-2 grid grid-cols-3 gap-1 text-center">
           <div class="min-w-0">
-            <p class="truncate text-sm font-extrabold text-ink-900">{nf($todayStats.distance, 1)}</p>
-            <p class="text-[9px] font-bold uppercase tracking-wide text-ink-400">km</p>
+            <p class="truncate text-sm font-extrabold text-ink-900">{km($todayStats.distance, $unitSystem)}</p>
+            <p class="text-[9px] font-bold uppercase tracking-wide text-ink-400">{distanceUnit($unitSystem)}</p>
           </div>
           <div class="min-w-0">
             <p class="truncate text-sm font-extrabold text-ink-900">{Math.round($todayStats.minutes)}</p>
@@ -222,12 +235,12 @@
         <p class="text-[11px] font-extrabold uppercase tracking-[0.12em] text-brand-500">Next up</p>
         {#if upcoming}
           <p class="mt-1.5 text-sm font-bold leading-snug text-ink-900">
-            {upcoming.distance_km} km {upcoming.activity_type}
+            {km(upcoming.distance_km, $unitSystem)} {distanceUnit($unitSystem)} {upcoming.activity_type}
           </p>
           <p class="mt-1 text-xs font-semibold text-ink-400">
             ~{Math.round(upcoming.duration.minutes)} min · {upcoming.fueling.carbs.perHourG} g carbs/h
           </p>
-          <button class="btn-primary mt-3 w-full !py-2 !text-xs" onclick={() => navigate('/plan')}>
+          <button class="btn-primary mt-3 w-full !py-2 !text-xs" onclick={() => navigate(`/plan?plan=${upcoming.id}`)}>
             View fueling plan
           </button>
         {:else}
@@ -381,6 +394,17 @@
                   <button
                     type="button"
                     class="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-ink-500 hover:bg-brand-50 hover:text-brand-700"
+                    onclick={() => { toggleTheme(); menuOpen = false; }}
+                  >
+                    {#if $theme === 'dark'}
+                      <Sun size={15} /> Light mode
+                    {:else}
+                      <Moon size={15} /> Outdoor dark mode
+                    {/if}
+                  </button>
+                  <button
+                    type="button"
+                    class="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-ink-500 hover:bg-brand-50 hover:text-brand-700"
                     onclick={() => { menuOpen = false; mascotTour.start({ reset: true, userId: $session?.id }); }}
                   >
                     <Compass size={15} /> Tour with mascot
@@ -406,6 +430,22 @@
       </header>
 
       <main class="px-3 pb-4 pt-4 sm:px-6 sm:pt-5">
+        {#if $pendingActivities.length > 0}
+          <div class="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs font-bold text-amber-900">
+            <span class="flex items-center gap-2">
+              <CloudUpload size={15} class="text-amber-600" />
+              {$pendingActivities.length} offline workout{$pendingActivities.length > 1 ? 's' : ''} waiting to sync
+            </span>
+            <button
+              type="button"
+              class="rounded-xl bg-white px-3 py-1 text-[11px] font-extrabold text-amber-800 border border-amber-200 transition hover:bg-amber-100 disabled:opacity-60"
+              disabled={$syncingOfflineQueue}
+              onclick={() => flushPendingActivities()}
+            >
+              {$syncingOfflineQueue ? 'Syncing…' : 'Sync now'}
+            </button>
+          </div>
+        {/if}
         {@render children?.()}
       </main>
       <div class="px-3 pb-[calc(5.25rem+env(safe-area-inset-bottom))] sm:px-6 lg:pb-6">

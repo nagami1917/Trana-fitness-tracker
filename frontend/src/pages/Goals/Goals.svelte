@@ -4,9 +4,16 @@
   import Card from '../../components/common/Card.svelte';
   import DonutRing from '../../components/common/DonutRing.svelte';
   import ProgressBar from '../../components/common/ProgressBar.svelte';
-  import { activities, goals, todayStats, weekStats, profile, notify } from '../../stores/index.js';
+  import { activities, goals, todayStats, weekStats, profile, notify, unitSystem } from '../../stores/index.js';
   import { api } from '../../services/client.js';
   import { nf, km, duration as fmtDuration, pct, startOfWeek, weekdayShort, kcal } from '../../lib/format.js';
+  import {
+    distanceUnit,
+    fromDisplayDistance,
+    toDisplayDistance,
+    toDisplayWeight,
+    weightUnit,
+  } from '../../lib/units.js';
 
   let form = $state({
     daily_calories: $goals?.daily_calories ?? 2700,
@@ -30,13 +37,13 @@
     }
   });
 
-  const GOAL_META = {
+  const GOAL_META = $derived({
     daily_calories: { label: 'Calories burned', Icon: Flame, dec: 0, unit: 'kcal' },
-    daily_distance_km: { label: 'Distance', Icon: MapPin, dec: 1, unit: 'km' },
+    daily_distance_km: { label: 'Distance', Icon: MapPin, dec: 1, unit: distanceUnit($unitSystem), isDist: true },
     daily_active_min: { label: 'Active time', Icon: Timer, dec: 0, unit: 'min' },
     weekly_calories: { label: 'Weekly energy', Icon: Flame, dec: 0, unit: 'kcal' },
-    weekly_distance_km: { label: 'Weekly distance', Icon: MapPin, dec: 1, unit: 'km' },
-  };
+    weekly_distance_km: { label: 'Weekly distance', Icon: MapPin, dec: 1, unit: distanceUnit($unitSystem), isDist: true },
+  });
 
   /** Rows from the API are newest-first; group consecutive rows per date. */
   const historyGroups = $derived.by(() => {
@@ -64,7 +71,8 @@
   function formatGoalValue(goalKey, value) {
     const meta = GOAL_META[goalKey];
     if (!meta) return nf(Math.round(value));
-    return meta.dec ? nf(value, meta.dec) : nf(Math.round(value));
+    const v = meta.isDist ? toDisplayDistance(value, $unitSystem) : value;
+    return meta.dec ? nf(v, meta.dec) : nf(Math.round(v));
   }
 
   $effect(() => {
@@ -81,13 +89,13 @@
 
   const daily = $derived([
     { key: 'daily_calories', label: 'Calories', value: $todayStats.calories, unit: 'kcal', Icon: Flame, tone: 'brand', step: 50 },
-    { key: 'daily_distance_km', label: 'Distance', value: $todayStats.distance, unit: 'km', Icon: MapPin, tone: 'sky', step: 1, decimals: 1 },
+    { key: 'daily_distance_km', label: 'Distance', value: $todayStats.distance, unit: distanceUnit($unitSystem), Icon: MapPin, tone: 'sky', step: 1, decimals: 1, isDist: true },
     { key: 'daily_active_min', label: 'Active time', value: $todayStats.minutes, unit: 'min', Icon: Timer, tone: 'amber', step: 5 },
   ]);
 
   const weekly = $derived([
     { key: 'weekly_calories', label: 'Weekly energy', value: $weekStats.calories, unit: 'kcal', tone: 'brand' },
-    { key: 'weekly_distance_km', label: 'Weekly distance', value: $weekStats.distance, unit: 'km', tone: 'sky' },
+    { key: 'weekly_distance_km', label: 'Weekly distance', value: $weekStats.distance, unit: distanceUnit($unitSystem), tone: 'sky', isDist: true },
   ]);
 
   const overall = $derived(pct($todayStats.calories, form.daily_calories));
@@ -181,13 +189,29 @@
               <item.Icon size={14} class="text-brand-500" />
               <span class="text-[11px] font-extrabold uppercase tracking-wide text-ink-400">{item.label}</span>
               <span class="ml-auto text-[11px] font-extrabold text-ink-900">
-                {item.decimals ? km(item.value) : nf(Math.round(item.value))} / {nf(form[item.key], item.decimals ? 1 : 0)} {item.unit}
+                {item.isDist ? km(item.value, $unitSystem) : nf(Math.round(item.value))} / {item.isDist ? km(form[item.key], $unitSystem) : nf(form[item.key], item.decimals ? 1 : 0)} {item.unit}
               </span>
             </div>
             <div class="mt-1.5"><ProgressBar value={item.value} max={Number(form[item.key]) || 1} tone={item.tone} height="h-2" /></div>
             <div class="mt-2 flex items-center gap-2">
               <span class="text-[10px] font-bold uppercase tracking-wide text-ink-400">Target</span>
-              <input class="input !py-1.5 !text-xs max-w-[110px]" type="number" step={item.step} bind:value={form[item.key]} oninput={() => (dirty = true)} />
+              {#if item.isDist}
+                <input
+                  class="input !py-1.5 !text-xs max-w-[110px]"
+                  type="number"
+                  step={item.step}
+                  value={Number(toDisplayDistance(form[item.key], $unitSystem).toFixed(1))}
+                  oninput={(e) => {
+                    const v = Number(e.currentTarget.value);
+                    if (Number.isFinite(v)) {
+                      form[item.key] = Math.round(fromDisplayDistance(v, $unitSystem) * 10) / 10;
+                      dirty = true;
+                    }
+                  }}
+                />
+              {:else}
+                <input class="input !py-1.5 !text-xs max-w-[110px]" type="number" step={item.step} bind:value={form[item.key]} oninput={() => (dirty = true)} />
+              {/if}
               <span class="text-[10px] font-bold text-ink-400">{item.unit}</span>
             </div>
           </div>
@@ -207,11 +231,26 @@
               <div class="flex items-baseline justify-between">
                 <span class="text-[11px] font-extrabold uppercase tracking-wide text-ink-400">{item.label}</span>
                 <span class="text-[11px] font-extrabold text-ink-900">
-                  {item.unit === 'km' ? nf(item.value, 1) : nf(Math.round(item.value))} / {nf(form[item.key])} {item.unit}
+                  {item.isDist ? nf(toDisplayDistance(item.value, $unitSystem), 1) : nf(Math.round(item.value))} / {item.isDist ? nf(toDisplayDistance(form[item.key], $unitSystem), 1) : nf(form[item.key])} {item.unit}
                 </span>
               </div>
               <div class="mt-1.5"><ProgressBar value={item.value} max={Number(form[item.key]) || 1} tone={item.tone} /></div>
-              <input class="input mt-2 !py-1.5 !text-xs max-w-[130px]" type="number" bind:value={form[item.key]} oninput={() => (dirty = true)} />
+              {#if item.isDist}
+                <input
+                  class="input mt-2 !py-1.5 !text-xs max-w-[130px]"
+                  type="number"
+                  value={Number(toDisplayDistance(form[item.key], $unitSystem).toFixed(1))}
+                  oninput={(e) => {
+                    const v = Number(e.currentTarget.value);
+                    if (Number.isFinite(v)) {
+                      form[item.key] = Math.round(fromDisplayDistance(v, $unitSystem) * 10) / 10;
+                      dirty = true;
+                    }
+                  }}
+                />
+              {:else}
+                <input class="input mt-2 !py-1.5 !text-xs max-w-[130px]" type="number" bind:value={form[item.key]} oninput={() => (dirty = true)} />
+              {/if}
             </div>
           {/each}
         </div>
@@ -266,7 +305,7 @@
             <p class="font-display text-xl font-extrabold text-ink-900">
               {(() => {
                 const rows = $activities.filter((a) => new Date(a.started_at).getMonth() === new Date().getMonth());
-                return rows.length ? `${km(Math.max(...rows.map((r) => r.distance_km)))} km` : '—';
+                return rows.length ? `${km(Math.max(...rows.map((r) => r.distance_km)), $unitSystem)} ${distanceUnit($unitSystem)}` : '—';
               })()}
             </p>
           </div>
@@ -279,11 +318,11 @@
           <div>
             <p class="text-sm font-extrabold">Daily carbs target: {nf(form.daily_calories ? Math.round(($profile?.weight_kg ?? 60) * 6) : 0)} g</p>
             <p class="mt-1 text-[11px] font-semibold leading-relaxed text-white/80">
-              Based on {$profile?.weight_kg ?? 60} kg body mass and 6 g/kg for your training load. TRANA splits this into
+              Based on {Math.round(toDisplayWeight($profile?.weight_kg ?? 60, $unitSystem))} {weightUnit($unitSystem)} body mass and 6 g/kg for your training load. TRANA splits this into
               pre-, during- and post-session fuel on every plan.
             </p>
             <p class="mt-2 text-[11px] font-bold text-white/70">
-              This week: {kcal($weekStats.calories)} kcal · {fmtDuration($weekStats.minutes)} · {nf($weekStats.distance, 1)} km
+              This week: {kcal($weekStats.calories)} kcal · {fmtDuration($weekStats.minutes)} · {nf(toDisplayDistance($weekStats.distance, $unitSystem), 1)} {distanceUnit($unitSystem)}
             </p>
           </div>
         </div>

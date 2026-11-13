@@ -1,8 +1,25 @@
 /** Formatting helpers shared across the app. */
 
-/** 5.42 km → "5.42 km" */
-export function formatDistance(km) {
-  const n = Number(km ?? 0);
+import {
+  distanceUnit,
+  elevationUnit,
+  isImperial,
+  paceUnit,
+  speedUnit,
+  tempUnit,
+  toDisplayDistance,
+  toDisplayElevation,
+  toDisplayFluid,
+  toDisplayPace,
+  toDisplaySpeed,
+  toDisplayTemp,
+  toDisplayWeight,
+  weightUnit,
+} from './units.js';
+
+/** 5.42 km → "5.42" (or "3.37" when units === 'imperial') */
+export function formatDistance(kmValue, units = 'metric') {
+  const n = toDisplayDistance(kmValue ?? 0, units);
   return n < 10 ? n.toFixed(2) : n.toFixed(n < 100 ? 1 : 0);
 }
 
@@ -14,9 +31,9 @@ export function formatDuration(minutes) {
   return h > 0 ? `${h}:${String(m).padStart(2, '0')}` : `${m}:00`;
 }
 
-/** 6.15 min/km → "6:09" */
-export function formatPace(minPerKm) {
-  const n = Number(minPerKm ?? 0);
+/** 6.15 min/km → "6:09" (or min/mi when units === 'imperial') */
+export function formatPace(minPerKm, units = 'metric') {
+  const n = toDisplayPace(minPerKm ?? 0, units);
   if (!n || !Number.isFinite(n)) return '—:—';
   const totalSec = Math.round(n * 60);
   const m = Math.floor(totalSec / 60);
@@ -24,9 +41,9 @@ export function formatPace(minPerKm) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-/** 9.2 km/h → "9.2" */
-export function formatSpeed(kmh) {
-  const n = Number(kmh ?? 0);
+/** 9.2 km/h → "9.2" (or mph when units === 'imperial') */
+export function formatSpeed(kmh, units = 'metric') {
+  const n = toDisplaySpeed(kmh ?? 0, units);
   return n && Number.isFinite(n) ? n.toFixed(1) : '—';
 }
 
@@ -37,10 +54,20 @@ export const nf = (n, digits = 0) =>
   });
 
 export const kcal = (n) => `${nf(Math.round(n))}`;
-export const km = (n) => `${nf(n, Number(n) < 10 ? 1 : 0)}`;
+export const km = (n, units = 'metric') => {
+  const val = toDisplayDistance(n, units);
+  return `${nf(val, Number(val) < 10 ? 1 : 0)}`;
+};
+export const distanceWithUnit = (n, units = 'metric') => `${formatDistance(n, units)} ${distanceUnit(units)}`;
+export const elevationWithUnit = (m, units = 'metric') => `${nf(Math.round(toDisplayElevation(m, units)))} ${elevationUnit(units)}`;
+export const weightWithUnit = (kg, units = 'metric') => `${nf(toDisplayWeight(kg, units), 1)} ${weightUnit(units)}`;
+export const tempWithUnit = (c, units = 'metric') => `${Math.round(toDisplayTemp(c, units))}${tempUnit(units)}`;
 export const grams = (n) => `${nf(Math.round(n))} g`;
 export const mg = (n) => `${nf(Math.round(n))} mg`;
-export const ml = (n) => (n >= 1000 ? `${nf(n / 1000, 1)} L` : `${nf(Math.round(n))} ml`);
+export const ml = (n, units = 'metric') => {
+  if (isImperial(units)) return `${nf(Math.round(toDisplayFluid(n, 'imperial')))} fl oz`;
+  return n >= 1000 ? `${nf(n / 1000, 1)} L` : `${nf(Math.round(n))} ml`;
+};
 
 /** 96 → "1h 36m", 42 → "42 min" */
 export function duration(minutes) {
@@ -51,17 +78,19 @@ export function duration(minutes) {
   return m === 0 ? `${h}h` : `${h}h ${m}m`;
 }
 
-/** 5.5 min/km → "5:30 /km" */
-export function pace(minPerKm) {
-  if (!minPerKm || !Number.isFinite(minPerKm)) return '—';
-  const totalSec = Math.round(minPerKm * 60);
+/** 5.5 min/km → "5:30 /km" (or "8:51 /mi") */
+export function pace(minPerKm, units = 'metric') {
+  const converted = toDisplayPace(minPerKm, units);
+  if (!converted || !Number.isFinite(converted)) return '—';
+  const totalSec = Math.round(converted * 60);
   const m = Math.floor(totalSec / 60);
   const s = totalSec % 60;
-  return `${m}:${String(s).padStart(2, '0')} /km`;
+  return `${m}:${String(s).padStart(2, '0')} ${paceUnit(units)}`;
 }
 
-export function speed(kmh) {
-  return kmh ? `${nf(kmh, 1)} km/h` : '—';
+export function speed(kmh, units = 'metric') {
+  const converted = toDisplaySpeed(kmh, units);
+  return converted ? `${nf(converted, 1)} ${speedUnit(units)}` : '—';
 }
 
 export function clock(seconds) {

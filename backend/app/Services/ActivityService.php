@@ -78,6 +78,56 @@ class ActivityService
         return $activity;
     }
 
+    /**
+     * Update an existing activity, recalculating calories and pace/speed
+     * cleanly when metrics change unless overridden explicitly.
+     *
+     * @param  array<string, mixed>  $validated
+     */
+    public function update(User $user, Activity $activity, array $validated): Activity
+    {
+        $type = $validated['activity_type'] ?? $activity->activity_type;
+        $distanceKm = (float) ($validated['distance_km'] ?? $activity->distance_km);
+        $durationMin = (float) ($validated['duration_min'] ?? $activity->duration_min);
+        $elevationM = (int) ($validated['elevation_gain_m'] ?? $activity->elevation_gain_m ?? 0);
+
+        $metricsChanged = array_key_exists('activity_type', $validated)
+            || array_key_exists('distance_km', $validated)
+            || array_key_exists('duration_min', $validated)
+            || array_key_exists('elevation_gain_m', $validated);
+
+        if (array_key_exists('calories', $validated) && $validated['calories'] !== null) {
+            $calories = (int) $validated['calories'];
+        } elseif ($metricsChanged || (array_key_exists('calories', $validated) && $validated['calories'] === null)) {
+            $rawCalories = $this->estimateCalories(
+                $type,
+                $distanceKm,
+                $durationMin,
+                $elevationM,
+                (float) ($user->fitnessProfile?->weight_kg ?? 60),
+            );
+            $calories = (int) round($this->calibration->applyCalibration((float) $rawCalories, $user));
+        } else {
+            $calories = (int) $activity->calories;
+        }
+
+        $updates = array_merge($validated, [
+            'calories' => $calories,
+            'elevation_gain_m' => $elevationM,
+        ]);
+
+        if ($metricsChanged && ! array_key_exists('average_speed', $validated) && $durationMin > 0) {
+            $updates['average_speed'] = round($distanceKm / ($durationMin / 60), 2);
+        }
+        if ($metricsChanged && ! array_key_exists('average_pace', $validated) && $distanceKm > 0) {
+            $updates['average_pace'] = round($durationMin / $distanceKm, 2);
+        }
+
+        $activity->update($updates);
+
+        return $activity->fresh();
+    }
+
     /** Mirror of the client and the Python fueling module's MET estimate. */
     public function estimateCalories(string $type, float $km, float $minutes, int $elevation, float $weightKg): int
     {

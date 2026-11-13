@@ -2,9 +2,11 @@ import './app.css';
 import { mount } from 'svelte';
 import App from './App.svelte';
 import { installErrorMonitor } from './lib/errorMonitor.js';
+import { initTheme } from './lib/theme.js';
 
 // Capture uncaught faults app-wide before anything else can throw.
 installErrorMonitor();
+initTheme();
 
 // Ensure returning visitors automatically refresh into newly deployed PWA
 // builds instead of remaining on an older precached bundle.

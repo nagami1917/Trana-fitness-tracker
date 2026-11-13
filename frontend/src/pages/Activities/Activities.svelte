@@ -1,17 +1,33 @@
 <script>
   import { onMount, tick } from 'svelte';
-  import { Plus, Search, LoaderCircle, Trash2, MapPin, Flame, Timer, Gauge, Route as RouteIcon, Sparkles, TrendingUp, X, Undo2, Download, ArrowLeftRight, Repeat, Pencil } from 'lucide-svelte';
+  import { Plus, Search, LoaderCircle, Trash2, MapPin, Flame, Timer, Gauge, Route as RouteIcon, Sparkles, TrendingUp, X, Undo2, Download, Upload, ArrowLeftRight, Repeat, Pencil } from 'lucide-svelte';
   import Card from '../../components/common/Card.svelte';
   import ActivityIcon from '../../components/activities/ActivityIcon.svelte';
   import RouteMap from '../../components/route/RouteMap.svelte';
+  import ElevationProfile from '../../components/route/ElevationProfile.svelte';
   import Modal from '../../components/common/Modal.svelte';
   import BusyOverlay from '../../components/common/BusyOverlay.svelte';
   import EmptyState from '../../components/common/EmptyState.svelte';
-  import { activities, profile, plans, notify, upsertActivity, removeActivityById } from '../../stores/index.js';
+  import { activities, profile, plans, notify, upsertActivity, removeActivityById, unitSystem } from '../../stores/index.js';
   import { api } from '../../services/client.js';
+  import { activityApi } from '../../services/activityService.js';
   import { query } from '../../lib/router.js';
   import { loadModel, predictDuration, routeLengthKm } from '../../lib/ml/index.js';
   import { estimateMet } from '../../lib/ml/fueling.js';
+  import { downloadGpx, parseActivityFile } from '../../lib/gpx.js';
+  import { fetchRouteElevation } from '../../services/elevationService.js';
+  import { haversineKm } from '../../services/mapService.js';
+  import {
+    distanceUnit,
+    elevationUnit,
+    fromDisplayDistance,
+    fromDisplayElevation,
+    isImperial,
+    KM_TO_MI,
+    speedUnit,
+    toDisplayDistance,
+    toDisplayElevation,
+  } from '../../lib/units.js';
   import {
     routeThroughRoads,
     waypointsFromPath,
@@ -20,7 +36,7 @@
     isClosedLoop,
   } from '../../services/roadRoutingService.js';
   import { acquireLivePosition, releaseLivePosition, livePosition } from '../../lib/liveLocation.svelte.js';
-  import { duration as fmtDuration, pace, kcal, km, nf, fullDate, timeLabel, dayLabel, activityLabel, shortDate } from '../../lib/format.js';
+  import { duration as fmtDuration, pace, speed, kcal, km, nf, fullDate, timeLabel, dayLabel, activityLabel, shortDate, toDatetimeLocal } from '../../lib/format.js';
 
   const TYPES = [
     { id: 'all', label: 'All' },
@@ -34,6 +50,13 @@
   let term = $state('');
   let addOpen = $state(false);
   let detail = $state(null);
+  let detailElevation = $state(null);
+  let editingDetail = $state(false);
+  let editDraft = $state(null);
+  let updatingDetail = $state(false);
+  let gpxInput = $state(null);
+  let importedSource = $state(null);
+  let importedGeojson = $state(null);
   let saving = $state(false);
   let exporting = $state(false);
 
@@ -103,6 +126,114 @@
     };
   });
 
+  // Open ?id=<activityId> deep link cleanly (from Dashboard or Calendar).
+  let lastOpenedIdParam = null;
+  $effect(() => {
+    const idParam = $query.get('id');
+    if (!idParam || idParam === lastOpenedIdParam) return;
+    const found = $activities.find((a) => String(a.id) === String(idParam));
+    if (found) {
+      lastOpenedIdParam = idParam;
+      openDetail(found);
+    }
+  });
+
+  function openDetail(activity) {
+    editingDetail = false;
+    editDraft = null;
+    confirmingDelete = null;
+    detailElevation = null;
+    detail = activity;
+    if (activity?.id && !activity.route_geojson && activity.source === 'gps') {
+      void activityApi.get(activity.id).then((full) => {
+        if (detail?.id === full?.id) detail = full;
+      }).catch(() => {});
+    }
+    if (Array.isArray(activity?.route) && activity.route.length >= 2) {
+      void fetchRouteElevation(activity.route, activity.activity_type).then((res) => {
+        if (detail?.id === activity.id && res?.profile?.length >= 2) detailElevation = res;
+      });
+    }
+  }
+
+  function startEditDetail() {
+    if (!detail) return;
+    editingDetail = true;
+    editDraft = {
+      activity_type: detail.activity_type,
+      distance_km: Number(detail.distance_km) || 0.5,
+      duration_min: Number(detail.duration_min) || 10,
+      elevation_gain_m: Number(detail.elevation_gain_m) || 0,
+      calories: detail.calories != null ? String(detail.calories) : '',
+      avg_heart_rate: detail.avg_heart_rate != null ? String(detail.avg_heart_rate) : '',
+      started_at: toDatetimeLocal(detail.started_at),
+      notes: detail.notes || '',
+    };
+  }
+
+  async function saveEditDetail() {
+    if (!detail || !editDraft || updatingDetail) return;
+    updatingDetail = true;
+    try {
+      const payload = {
+        activity_type: editDraft.activity_type,
+        distance_km: Math.max(0.05, Number(editDraft.distance_km) || 0.05),
+        duration_min: Math.max(1, Number(editDraft.duration_min) || 1),
+        elevation_gain_m: Math.max(0, Math.round(Number(editDraft.elevation_gain_m) || 0)),
+        calories: editDraft.calories !== '' ? Math.max(0, Math.round(Number(editDraft.calories))) : null,
+        avg_heart_rate: editDraft.avg_heart_rate !== '' ? Math.round(Number(editDraft.avg_heart_rate)) : null,
+        started_at: new Date(editDraft.started_at).toISOString(),
+        notes: editDraft.notes?.trim() || null,
+      };
+      const updated = await api.activities.update(detail.id, payload);
+      upsertActivity(updated);
+      detail = updated;
+      editingDetail = false;
+      editDraft = null;
+      notify('Activity updated.');
+    } catch (error) {
+      notify(error.message || 'Could not update activity', 'error');
+    } finally {
+      updatingDetail = false;
+    }
+  }
+
+  const detailSplits = $derived.by(() => {
+    if (!detail) return [];
+    const totalKm = Number(detail.distance_km) || 0;
+    const totalMin = Number(detail.duration_min) || 0;
+    if (totalKm < 0.8 || totalMin <= 0) return [];
+    const stepKm = isImperial($unitSystem) ? 1 / KM_TO_MI : 1;
+    const count = Math.min(25, Math.ceil(totalKm / stepKm));
+    const avgPaceMinPerKm = totalMin / totalKm;
+    const pts = Array.isArray(detail.route) ? detail.route : [];
+
+    // Estimate split pace variance lightly from route elevation slope if available
+    const eles = detailElevation?.profile ?? [];
+    const out = [];
+    for (let i = 0; i < count; i += 1) {
+      const startKm = i * stepKm;
+      const endKm = Math.min(totalKm, (i + 1) * stepKm);
+      const frac = (endKm - startKm) / stepKm;
+      if (frac < 0.1) continue;
+      let gradeFactor = 1;
+      if (eles.length >= 2) {
+        const eStart = eles.find((p) => p.distKm >= startKm) ?? eles[0];
+        const eEnd = [...eles].reverse().find((p) => p.distKm <= endKm) ?? eles.at(-1);
+        const dEle = (eEnd?.eleM ?? 0) - (eStart?.eleM ?? 0);
+        const segLenM = Math.max(100, (endKm - startKm) * 1000);
+        gradeFactor = Math.max(0.8, Math.min(1.35, 1 + (dEle / segLenM) * 3.2));
+      }
+      out.push({
+        label: i + 1,
+        frac,
+        paceMinKm: avgPaceMinPerKm * gradeFactor,
+        hasRoute: pts.length >= 2,
+      });
+    }
+    return out;
+  });
+
   function blankDraft() {
     const now = new Date();
     const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
@@ -111,6 +242,7 @@
       distance_km: 5,
       duration_min: 30,
       elevation_gain_m: 40,
+      avg_heart_rate: '',
       started_at: local,
       route: [],
       notes: '',
@@ -201,10 +333,44 @@
     draftRouteOpen = false;
     routeSource = 'none';
     selectedPlanId = null;
+    importedSource = null;
+    importedGeojson = null;
     draftPlan = readDraftPlan();
     routeMode = 'roads';
     resetSnap();
     addOpen = true;
+  }
+
+  async function handleImportActivityFile(event) {
+    const file = event?.currentTarget?.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = parseActivityFile(text, file.name);
+      draft = blankDraft();
+      draft.activity_type = parsed.activityType;
+      draft.distance_km = Math.max(0.05, parsed.distanceKm);
+      draft.duration_min = parsed.durationMin ?? Math.max(1, Math.round(parsed.distanceKm * 6));
+      draft.elevation_gain_m = parsed.elevationGainM;
+      draft.avg_heart_rate = parsed.avgHeartRate != null ? String(parsed.avgHeartRate) : '';
+      draft.started_at = toDatetimeLocal(parsed.startedAt);
+      draft.route = waypointsFromPath(parsed.route);
+      draft.notes = parsed.name || `Imported from ${file.name}`;
+      importedSource = parsed.source;
+      importedGeojson = parsed.routeGeojson;
+      routeSource = 'create';
+      draftRouteOpen = true;
+      resetSnap();
+      routePath = parsed.route;
+      addOpen = true;
+      await tick();
+      routeMap?.fitRouteBounds?.();
+      notify(`Parsed ${file.name} (${parsed.distanceKm} km) — review and save.`);
+    } catch (err) {
+      notify(err?.message || 'Could not import GPX / TCX file', 'error');
+    } finally {
+      event.currentTarget.value = '';
+    }
   }
 
   function selectRouteSource(mode) {
@@ -340,15 +506,18 @@
     let written = false;
     try {
       const distance = draftRouteKm > 0 ? Number(draftRouteKm.toFixed(2)) : Number(draft.distance_km);
+      const finalRoute = routePath.length > 1 ? routePath : draft.route.length > 1 ? draft.route : null;
       const created = await api.activities.create({
         activity_type: draft.activity_type,
         distance_km: distance,
         duration_min: Number(draft.duration_min),
         elevation_gain_m: Number(draft.elevation_gain_m) || 0,
         calories: draftCalories,
-        avg_heart_rate: null,
+        avg_heart_rate: draft.avg_heart_rate !== '' ? Math.round(Number(draft.avg_heart_rate)) : null,
         started_at: new Date(draft.started_at).toISOString(),
-        route: routePath.length > 1 ? routePath : draft.route.length > 1 ? draft.route : null,
+        route: finalRoute,
+        route_geojson: importedGeojson,
+        source: importedSource || 'manual',
         notes: draft.notes || null,
       });
       written = true;
@@ -405,6 +574,10 @@
       </p>
     </div>
     <div class="flex flex-wrap items-center gap-2 self-start">
+      <input bind:this={gpxInput} type="file" accept=".gpx,.tcx" class="hidden" onchange={handleImportActivityFile} />
+      <button class="btn-ghost" onclick={() => gpxInput?.click()} title="Import a .gpx or .tcx workout from Garmin, Apple Watch, or Strava">
+        <Upload size={15} /> Import GPX / TCX
+      </button>
       <button class="btn-ghost" onclick={exportCsv} disabled={exporting} title="Download your full history as CSV">
         {#if exporting}<LoaderCircle size={15} class="animate-spin" /> Exporting…{:else}<Download size={15} /> Export CSV{/if}
       </button>
@@ -431,7 +604,7 @@
   <!-- totals strip -->
   <div class="grid grid-cols-3 gap-2 sm:gap-3">
     {#each [
-      { label: 'Distance', value: `${nf(totals.distance, 1)} km`, Icon: MapPin },
+      { label: 'Distance', value: `${nf(toDisplayDistance(totals.distance, $unitSystem), 1)} ${distanceUnit($unitSystem)}`, Icon: MapPin },
       { label: 'Time', value: fmtDuration(totals.minutes), Icon: Timer },
       { label: 'Energy', value: `${kcal(totals.calories)} kcal`, Icon: Flame },
     ] as item (item.label)}
@@ -464,7 +637,7 @@
           {#each rows as activity (activity.id)}
             <button
               class="card group flex items-center gap-3 p-3.5 text-left transition hover:-translate-y-0.5 hover:shadow-card"
-              onclick={() => (detail = activity)}
+              onclick={() => openDetail(activity)}
             >
               <ActivityIcon type={activity.activity_type} size="md" />
               <div class="min-w-0 flex-1">
@@ -475,7 +648,7 @@
                   </span>
                 </div>
                 <p class="truncate text-[11px] font-semibold text-ink-400">
-                  {km(activity.distance_km)} km · {fmtDuration(activity.duration_min)} · {kcal(activity.calories)} kcal
+                  {km(activity.distance_km, $unitSystem)} {distanceUnit($unitSystem)} · {fmtDuration(activity.duration_min)} · {kcal(activity.calories)} kcal
                 </p>
               </div>
             </button>
@@ -509,13 +682,17 @@
     </div>
 
     <div>
-      <span class="label">Distance (km) {draftRouteKm > 0 ? '(from route)' : ''}</span>
+      <span class="label">Distance ({distanceUnit($unitSystem)}) {draftRouteKm > 0 ? '(from route)' : ''}</span>
       <input
         class="input"
         type="number"
         min="0.1"
         step="0.1"
-        bind:value={draft.distance_km}
+        value={Number(toDisplayDistance(draft.distance_km, $unitSystem).toFixed(2))}
+        oninput={(e) => {
+          const val = Number(e.currentTarget.value);
+          if (Number.isFinite(val)) draft.distance_km = fromDisplayDistance(val, $unitSystem);
+        }}
         disabled={draftRouteKm > 0}
         class:bg-brand-50={draftRouteKm > 0}
       />
@@ -530,8 +707,18 @@
     </div>
 
     <div>
-      <span class="label">Elevation gain (m)</span>
-      <input class="input" type="number" min="0" step="10" bind:value={draft.elevation_gain_m} />
+      <span class="label">Elevation gain ({elevationUnit($unitSystem)})</span>
+      <input
+        class="input"
+        type="number"
+        min="0"
+        step="10"
+        value={Math.round(toDisplayElevation(draft.elevation_gain_m, $unitSystem))}
+        oninput={(e) => {
+          const val = Number(e.currentTarget.value);
+          if (Number.isFinite(val)) draft.elevation_gain_m = Math.max(0, Math.round(fromDisplayElevation(val, $unitSystem)));
+        }}
+      />
     </div>
 
     <div>
@@ -675,66 +862,189 @@
 </Modal>
 
 <!-- detail modal -->
-<Modal open={Boolean(detail)} title={detail ? `${detail.activity_type === 'ride' ? 'Bike ride' : detail.activity_type} · ${km(detail.distance_km)} km` : ''} subtitle={detail ? `${fullDate(detail.started_at)} · ${timeLabel(detail.started_at)}` : ''} onclose={() => { detail = null; confirmingDelete = null; }} wide>
+<Modal open={Boolean(detail)} title={detail ? `${activityLabel(detail.activity_type)} · ${km(detail.distance_km, $unitSystem)} ${distanceUnit($unitSystem)}` : ''} subtitle={detail ? `${fullDate(detail.started_at)} · ${timeLabel(detail.started_at)}` : ''} onclose={() => { detail = null; confirmingDelete = null; editingDetail = false; }} wide>
   {#if detail}
     {@const predicted = predictedFor(detail)}
-    <div class="grid gap-4 sm:grid-cols-2">
-      {#if detail.route?.length}
+    {#if editingDetail && editDraft}
+      <div class="grid gap-3 sm:grid-cols-2">
         <div class="sm:col-span-2">
-          <RouteMap points={detail.route} height={230} />
-        </div>
-      {/if}
-
-      <div class="grid grid-cols-2 gap-2 sm:col-span-2 sm:grid-cols-4">
-        {#each [
-          { label: 'Distance', value: `${km(detail.distance_km)} km`, Icon: MapPin },
-          { label: 'Duration', value: fmtDuration(detail.duration_min), Icon: Timer },
-          { label: 'Pace', value: detail.activity_type === 'ride' ? `${nf(detail.distance_km / (detail.duration_min / 60), 1)} km/h` : pace(detail.duration_min / detail.distance_km), Icon: Gauge },
-          { label: 'Energy', value: `${kcal(detail.calories)} kcal`, Icon: Flame },
-        ] as item (item.label)}
-          <div class="rounded-2xl border border-brand-100 bg-white p-3">
-            <item.Icon size={15} class="text-brand-500" />
-            <p class="mt-1 text-[10px] font-extrabold uppercase tracking-wide text-ink-400">{item.label}</p>
-            <p class="text-sm font-extrabold text-ink-900">{item.value}</p>
+          <span class="label">Activity type</span>
+          <div class="grid grid-cols-4 gap-2">
+            {#each TYPES.filter((t) => t.id !== 'all') as type (type.id)}
+              <button
+                type="button"
+                class="flex items-center justify-center rounded-2xl border py-2 text-xs font-extrabold transition {editDraft.activity_type === type.id
+                  ? 'border-transparent bg-brand-gradient text-white shadow-glow'
+                  : 'border-brand-100 bg-white text-ink-500 hover:border-brand-200'}"
+                onclick={() => (editDraft.activity_type = type.id)}
+              >
+                {type.label}
+              </button>
+            {/each}
           </div>
-        {/each}
+        </div>
+        <div>
+          <span class="label">Distance ({distanceUnit($unitSystem)})</span>
+          <input
+            class="input"
+            type="number"
+            min="0.05"
+            step="0.05"
+            value={Number(toDisplayDistance(editDraft.distance_km, $unitSystem).toFixed(2))}
+            oninput={(e) => {
+              const val = Number(e.currentTarget.value);
+              if (Number.isFinite(val)) editDraft.distance_km = fromDisplayDistance(val, $unitSystem);
+            }}
+          />
+        </div>
+        <div>
+          <span class="label">Duration (min)</span>
+          <input class="input" type="number" min="1" step="0.5" bind:value={editDraft.duration_min} />
+        </div>
+        <div>
+          <span class="label">Elevation gain ({elevationUnit($unitSystem)})</span>
+          <input
+            class="input"
+            type="number"
+            min="0"
+            step="5"
+            value={Math.round(toDisplayElevation(editDraft.elevation_gain_m, $unitSystem))}
+            oninput={(e) => {
+              const val = Number(e.currentTarget.value);
+              if (Number.isFinite(val)) editDraft.elevation_gain_m = Math.max(0, Math.round(fromDisplayElevation(val, $unitSystem)));
+            }}
+          />
+        </div>
+        <div>
+          <span class="label">Calories (optional override)</span>
+          <input class="input" type="number" min="0" bind:value={editDraft.calories} />
+        </div>
+        <div>
+          <span class="label">Avg Heart Rate (bpm)</span>
+          <input class="input" type="number" min="30" max="240" placeholder="Optional" bind:value={editDraft.avg_heart_rate} />
+        </div>
+        <div>
+          <span class="label">Started at</span>
+          <input class="input" type="datetime-local" bind:value={editDraft.started_at} />
+        </div>
+        <div class="sm:col-span-2">
+          <span class="label">Notes</span>
+          <input class="input" placeholder="How did this session go?" bind:value={editDraft.notes} />
+        </div>
+      </div>
+      <div class="mt-4 flex gap-2">
+        <button type="button" class="btn-ghost flex-1" onclick={() => { editingDetail = false; editDraft = null; }}>Cancel</button>
+        <button type="button" class="btn-primary flex-1" disabled={updatingDetail} onclick={saveEditDetail}>
+          {#if updatingDetail}<LoaderCircle size={15} class="animate-spin" /> Saving…{:else}Save changes{/if}
+        </button>
+      </div>
+    {:else}
+      <div class="grid gap-4 sm:grid-cols-2">
+        {#if detail.route?.length}
+          <div class="sm:col-span-2">
+            <RouteMap points={detail.route} height={230} />
+          </div>
+        {/if}
+
+        {#if detailElevation?.profile?.length >= 2}
+          <div class="sm:col-span-2">
+            <ElevationProfile
+              profile={detailElevation.profile}
+              gainM={detailElevation.gainM}
+              lossM={detailElevation.lossM}
+              source={detailElevation.source}
+            />
+          </div>
+        {/if}
+
+        <div class="grid grid-cols-2 gap-2 sm:col-span-2 sm:grid-cols-4">
+          {#each [
+            { label: 'Distance', value: `${km(detail.distance_km, $unitSystem)} ${distanceUnit($unitSystem)}`, Icon: MapPin },
+            { label: 'Duration', value: fmtDuration(detail.duration_min), Icon: Timer },
+            { label: detail.activity_type === 'ride' ? 'Speed' : 'Pace', value: detail.activity_type === 'ride' ? speed(detail.distance_km / (detail.duration_min / 60), $unitSystem) : pace(detail.duration_min / detail.distance_km, $unitSystem), Icon: Gauge },
+            { label: 'Energy', value: `${kcal(detail.calories)} kcal`, Icon: Flame },
+          ] as item (item.label)}
+            <div class="rounded-2xl border border-brand-100 bg-white p-3">
+              <item.Icon size={15} class="text-brand-500" />
+              <p class="mt-1 text-[10px] font-extrabold uppercase tracking-wide text-ink-400">{item.label}</p>
+              <p class="text-sm font-extrabold text-ink-900">{item.value}</p>
+            </div>
+          {/each}
+        </div>
+
+        {#if detailSplits.length >= 2}
+          <div class="sm:col-span-2 rounded-2xl border border-brand-100 bg-brand-50/40 p-3">
+            <p class="text-[10px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-2">
+              Estimated {distanceUnit($unitSystem)} splits
+            </p>
+            <div class="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+              {#each detailSplits as split (split.label)}
+                {@const barPct = Math.min(100, Math.max(25, Math.round((detailSplits[0].paceMinKm / Math.max(0.5, split.paceMinKm)) * 80)))}
+                <div class="flex items-center gap-2 text-xs">
+                  <span class="w-10 shrink-0 font-extrabold text-ink-500">{distanceUnit($unitSystem)} {split.label}</span>
+                  <div class="flex-1 h-2 rounded-full bg-white overflow-hidden">
+                    <div class="h-full rounded-full bg-brand-gradient" style="width: {barPct}%"></div>
+                  </div>
+                  <span class="w-20 shrink-0 text-right font-extrabold text-ink-900 tabular-nums">{pace(split.paceMinKm, $unitSystem)}</span>
+                </div>
+              {/each}
+            </div>
+          </div>
+        {/if}
+
+        {#if predicted}
+          {@const error = ((detail.duration_min - predicted.minutes) / predicted.minutes) * 100}
+          <div class="sm:col-span-2 rounded-2xl border border-brand-100 bg-gradient-to-r from-brand-50 to-white p-3.5">
+            <div class="flex items-center gap-2">
+              <Sparkles size={14} class="text-brand-500" />
+              <p class="text-[11px] font-extrabold uppercase tracking-wide text-brand-600">Model vs reality</p>
+            </div>
+            <div class="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+              <p class="text-sm font-bold text-ink-700">
+                Predicted <span class="text-brand-600">{fmtDuration(predicted.minutes)}</span>
+              </p>
+              <p class="text-sm font-bold text-ink-700">
+                Actual <span class="text-ink-900">{fmtDuration(detail.duration_min)}</span>
+              </p>
+              <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-extrabold {Math.abs(error) < 10 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">
+                <TrendingUp size={11} /> {error > 0 ? '+' : ''}{Math.round(error)}% error
+              </span>
+            </div>
+          </div>
+        {/if}
+
+        {#if detail.notes}
+          <p class="sm:col-span-2 rounded-2xl bg-brand-50/70 p-3 text-[12px] font-semibold text-ink-500">“{detail.notes}”</p>
+        {/if}
       </div>
 
-      {#if predicted}
-        {@const error = ((detail.duration_min - predicted.minutes) / predicted.minutes) * 100}
-        <div class="sm:col-span-2 rounded-2xl border border-brand-100 bg-gradient-to-r from-brand-50 to-white p-3.5">
-          <div class="flex items-center gap-2">
-            <Sparkles size={14} class="text-brand-500" />
-            <p class="text-[11px] font-extrabold uppercase tracking-wide text-brand-600">Model vs reality</p>
-          </div>
-          <div class="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-1">
-            <p class="text-sm font-bold text-ink-700">
-              Predicted <span class="text-brand-600">{fmtDuration(predicted.minutes)}</span>
-            </p>
-            <p class="text-sm font-bold text-ink-700">
-              Actual <span class="text-ink-900">{fmtDuration(detail.duration_min)}</span>
-            </p>
-            <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-extrabold {Math.abs(error) < 10 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">
-              <TrendingUp size={11} /> {error > 0 ? '+' : ''}{Math.round(error)}% error
-            </span>
-          </div>
-        </div>
-      {/if}
-
-      {#if detail.notes}
-        <p class="sm:col-span-2 rounded-2xl bg-brand-50/70 p-3 text-[12px] font-semibold text-ink-500">“{detail.notes}”</p>
-      {/if}
-    </div>
-
-    <div class="mt-4 flex items-center gap-2">
-      {#if confirmingDelete === detail.id}
-        <span class="text-[11px] font-bold text-rose-600">Delete this activity?</span>
-        <button class="btn-ghost !border-rose-200 !text-rose-600 ml-auto" onclick={() => remove(detail.id)}>Yes, delete</button>
-        <button class="btn-ghost" onclick={() => (confirmingDelete = null)}>Cancel</button>
-      {:else}
-        <button class="btn-ghost !text-rose-500" onclick={() => (confirmingDelete = detail.id)}><Trash2 size={14} /> Delete</button>
-        <button class="btn-primary ml-auto" onclick={() => { detail = null; }}>Done</button>
-      {/if}
-    </div>
+      <div class="mt-4 flex flex-wrap items-center gap-2">
+        {#if confirmingDelete === detail.id}
+          <span class="text-[11px] font-bold text-rose-600">Delete this activity?</span>
+          <button class="btn-ghost !border-rose-200 !text-rose-600 ml-auto" onclick={() => remove(detail.id)}>Yes, delete</button>
+          <button class="btn-ghost" onclick={() => (confirmingDelete = null)}>Cancel</button>
+        {:else}
+          <button class="btn-ghost !text-rose-500" onclick={() => (confirmingDelete = detail.id)}><Trash2 size={14} /> Delete</button>
+          <button class="btn-ghost" onclick={startEditDetail}><Pencil size={14} /> Edit</button>
+          {#if detail.route?.length >= 2}
+            <button
+              class="btn-ghost"
+              onclick={() => {
+                downloadGpx({
+                  name: `${detail.activity_type}-${detail.distance_km}km`,
+                  activityType: detail.activity_type,
+                  startedAt: detail.started_at,
+                  route: detail.route,
+                });
+                notify('GPX downloaded');
+              }}
+            >
+              <Download size={14} /> GPX
+            </button>
+          {/if}
+          <button class="btn-primary ml-auto" onclick={() => { detail = null; }}>Done</button>
+        {/if}
+      </div>
+    {/if}
   {/if}
 </Modal>

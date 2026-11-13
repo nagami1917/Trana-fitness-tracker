@@ -18,8 +18,8 @@
   const isRegisterRoute = $derived($route === '/register');
   // Sign-in pages: only meaningful while signed out.
   const isAuthRoute = $derived(isLoginRoute || isRegisterRoute);
-  // Legal + recovery pages: viewable signed-in or signed-out, outside the shell.
-  const GUEST_PAGES = ['/privacy', '/terms', '/forgot-password', '/reset-password', '/verify-email'];
+  // Legal + recovery + interactive preview pages: viewable signed-in or signed-out, outside the shell.
+  const GUEST_PAGES = ['/preview', '/privacy', '/terms', '/forgot-password', '/reset-password', '/verify-email'];
   const isGuestPage = $derived(GUEST_PAGES.includes($route));
   const isPublicRoute = $derived(isAuthRoute || isGuestPage);
   const isOnboardingRoute = $derived($route === '/onboarding');

@@ -24,14 +24,22 @@
   import ProgressBar from '../../components/common/ProgressBar.svelte';
   import Segmented from '../../components/common/Segmented.svelte';
   import LineChart from '../../components/analytics/LineChart.svelte';
-  import { activities, profile, goals, todayStats, weekStats, trends, chartSeries, modelCard, plans } from '../../stores/index.js';
+  import { activities, profile, goals, todayStats, weekStats, trends, chartSeries, modelCard, plans, unitSystem } from '../../stores/index.js';
   import { navigate } from '../../lib/router.js';
   import { api } from '../../services/client.js';
   import { detectPlace, readCachedPlace, writeCachedPlace } from '../../lib/location.js';
   import { acquireLivePosition, releaseLivePosition, seedLivePosition, livePosition } from '../../lib/liveLocation.svelte.js';
   import { loadModel, predictDuration } from '../../lib/ml/duration.js';
   import { recommendFueling, INTENSITY_COPY } from '../../lib/ml/fueling.js';
-  import { duration as fmtDuration, kcal, km, nf, dayLabel, timeLabel, greeting, pct, shortDate, activityLabel } from '../../lib/format.js';
+  import { duration as fmtDuration, kcal, km, ml, nf, dayLabel, timeLabel, greeting, pct, shortDate, activityLabel } from '../../lib/format.js';
+  import {
+    distanceUnit,
+    elevationUnit,
+    fromDisplayDistance,
+    fromDisplayElevation,
+    toDisplayDistance,
+    toDisplayElevation,
+  } from '../../lib/units.js';
 
   let model = $state(null);
   let loadingModel = $state(true);
@@ -139,11 +147,11 @@
     { id: 'hike', label: 'Hike' },
   ];
 
-  const METRICS = [
+  const METRICS = $derived([
     { id: 'calories', label: 'Calories', unit: 'kcal' },
-    { id: 'distance', label: 'Distance', unit: 'km' },
+    { id: 'distance', label: 'Distance', unit: distanceUnit($unitSystem) },
     { id: 'minutes', label: 'Time', unit: 'min' },
-  ];
+  ]);
 
   const previewRoute = $derived($activities.find((a) => a.route?.length)?.route ?? $plans[0]?.route ?? []);
 
@@ -174,7 +182,12 @@
 
   const series = $derived($chartSeries[range] ?? []);
   const labels = $derived(series.map((s) => s.label));
-  const values = $derived(series.map((s) => Math.round(s[metric] ?? 0)));
+  const values = $derived(
+    series.map((s) => {
+      if (metric === 'distance') return Math.round(toDisplayDistance(s.distance ?? 0, $unitSystem) * 10) / 10;
+      return Math.round(s[metric] ?? 0);
+    }),
+  );
   const spark = $derived(($chartSeries['7D'] ?? []).map((d) => d.calories));
 
   const summaryRows = $derived([
@@ -189,9 +202,10 @@
       label: 'Distance',
       value: $todayStats.distance,
       goal: $goals?.daily_distance_km ?? 10,
-      unit: 'km',
+      unit: distanceUnit($unitSystem),
       tone: 'sky',
       decimals: 1,
+      isDistance: true,
     },
     {
       label: 'Active time',
@@ -269,8 +283,8 @@
       />
       <StatCard
         label="Distance"
-        value={km($todayStats.distance)}
-        unit="km"
+        value={km($todayStats.distance, $unitSystem)}
+        unit={distanceUnit($unitSystem)}
         delta={$trends.distance}
         icon={Footprints}
         tone="brand"
@@ -336,16 +350,36 @@
             <div>
               <span class="label">Distance</span>
               <div class="flex gap-2">
-                <input class="input" type="number" min="0.5" step="0.5" bind:value={draft.distance} />
-                <span class="grid w-16 shrink-0 place-items-center rounded-2xl border border-brand-100 bg-brand-50 text-xs font-extrabold text-ink-500">km</span>
+                <input
+                  class="input"
+                  type="number"
+                  min="0.5"
+                  step="0.5"
+                  value={Math.round(toDisplayDistance(draft.distance, $unitSystem) * 10) / 10}
+                  oninput={(e) => {
+                    const val = Number(e.currentTarget.value);
+                    if (Number.isFinite(val)) draft.distance = fromDisplayDistance(val, $unitSystem);
+                  }}
+                />
+                <span class="grid w-16 shrink-0 place-items-center rounded-2xl border border-brand-100 bg-brand-50 text-xs font-extrabold text-ink-500">{distanceUnit($unitSystem)}</span>
               </div>
             </div>
 
             <div>
               <span class="label">Elevation gain</span>
               <div class="flex gap-2">
-                <input class="input" type="number" min="0" step="5" bind:value={draft.elevation} />
-                <span class="grid w-16 shrink-0 place-items-center rounded-2xl border border-brand-100 bg-brand-50 text-xs font-extrabold text-ink-500">m</span>
+                <input
+                  class="input"
+                  type="number"
+                  min="0"
+                  step="5"
+                  value={Math.round(toDisplayElevation(draft.elevation, $unitSystem))}
+                  oninput={(e) => {
+                    const val = Number(e.currentTarget.value);
+                    if (Number.isFinite(val)) draft.elevation = fromDisplayElevation(val, $unitSystem);
+                  }}
+                />
+                <span class="grid w-16 shrink-0 place-items-center rounded-2xl border border-brand-100 bg-brand-50 text-xs font-extrabold text-ink-500">{elevationUnit($unitSystem)}</span>
               </div>
             </div>
 
@@ -468,8 +502,8 @@
                 <div class="flex items-baseline justify-between gap-2">
                   <span class="text-[11px] font-bold text-ink-500">{row.label}</span>
                   <span class="text-[11px] font-extrabold text-ink-900">
-                    {row.decimals ? km(row.value) : nf(Math.round(row.value))}
-                    <span class="font-bold text-ink-400">/ {row.decimals ? row.goal : nf(row.goal)} {row.unit}</span>
+                    {row.isDistance ? km(row.value, $unitSystem) : nf(Math.round(row.value))}
+                    <span class="font-bold text-ink-400">/ {row.isDistance ? km(row.goal, $unitSystem) : nf(row.goal)} {row.unit}</span>
                   </span>
                 </div>
                 <div class="mt-1"><ProgressBar value={row.value} max={row.goal} tone={row.tone} height="h-2" /></div>
@@ -516,12 +550,12 @@
 
         <div class="mt-3 divide-y divide-brand-100/70">
           {#each recent as activity (activity.id)}
-            <button class="flex w-full items-center gap-3 py-3 text-left transition hover:opacity-80" onclick={() => navigate('/activities')}>
+            <button class="flex w-full items-center gap-3 py-3 text-left transition hover:opacity-80" onclick={() => navigate(`/activities?id=${activity.id}`)}>
               <ActivityIcon type={activity.activity_type} size="md" />
               <div class="min-w-0 flex-1">
                 <p class="truncate text-sm font-extrabold text-ink-900">{activityLabel(activity.activity_type)}</p>
                 <p class="truncate text-[11px] font-semibold text-ink-400">
-                  {km(activity.distance_km)} km · {fmtDuration(activity.duration_min)} · {kcal(activity.calories)} kcal
+                  {km(activity.distance_km, $unitSystem)} {distanceUnit($unitSystem)} · {fmtDuration(activity.duration_min)} · {kcal(activity.calories)} kcal
                 </p>
               </div>
               <span class="shrink-0 text-[11px] font-bold text-ink-400">{dayLabel(activity.started_at)}</span>
@@ -536,13 +570,13 @@
         <Card class="!p-0 overflow-hidden">
           <div class="flex items-center justify-between bg-gradient-to-r from-brand-50 to-white px-5 py-3">
             <p class="text-[11px] font-extrabold uppercase tracking-[0.12em] text-brand-600">Next planned session</p>
-            <button class="text-[11px] font-extrabold text-brand-600" onclick={() => navigate('/plan')}>Open</button>
+            <button class="text-[11px] font-extrabold text-brand-600" onclick={() => navigate(`/plan?plan=${plan.id}`)}>Open</button>
           </div>
           <div class="space-y-3 p-5 pt-3">
             <div class="flex items-center gap-3">
               <ActivityIcon type={plan.activity_type} size="md" />
               <div>
-                <p class="text-sm font-extrabold capitalize">{plan.distance_km} km {plan.activity_type}</p>
+                <p class="text-sm font-extrabold capitalize">{km(plan.distance_km, $unitSystem)} {distanceUnit($unitSystem)} {plan.activity_type}</p>
                 <p class="text-[11px] font-semibold text-ink-400">
                   ~{fmtDuration(plan.duration.minutes)} · {kcal(plan.fueling.calories.total)} kcal
                 </p>
@@ -553,7 +587,7 @@
               {#each [
                 { label: 'Carbs/h', value: `${plan.fueling.carbs.perHourG} g` },
                 { label: 'Sodium/h', value: `${plan.fueling.sodium.perHourMg} mg` },
-                { label: 'Fluid/h', value: `${nf(plan.fueling.fluid.perHourMl)} ml` },
+                { label: 'Fluid/h', value: ml(plan.fueling.fluid.perHourMl, $unitSystem) },
               ] as chip (chip.label)}
                 <div class="rounded-xl bg-brand-50/80 py-2">
                   <p class="text-[10px] font-bold uppercase tracking-wide text-ink-400">{chip.label}</p>
