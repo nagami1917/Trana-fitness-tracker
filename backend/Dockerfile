@@ -20,7 +20,8 @@ RUN composer install \
     --prefer-dist
 
 # Copy the application, then build authoritative autoloader and precompile
-# routes/views/events (config stays dynamic so Vercel runtime env vars apply).
+# routes (and views/events when present). Config stays dynamic so Vercel
+# runtime environment variables always take effect.
 COPY . .
 RUN mkdir -p \
         storage/framework/cache \
@@ -30,8 +31,10 @@ RUN mkdir -p \
     && composer dump-autoload --no-dev --classmap-authoritative \
     && APP_ENV=production APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
        php artisan route:cache \
-    && APP_ENV=production APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
-       php artisan view:cache \
+    && if [ -d resources/views ]; then \
+         APP_ENV=production APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
+         php artisan view:cache; \
+       fi \
     && APP_ENV=production APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
        php artisan event:cache
 
