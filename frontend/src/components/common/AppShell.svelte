@@ -243,9 +243,9 @@
       <!-- Tier 1 flat summary widget -->
       <div class="card-flat p-4">
         <div class="flex items-center justify-between">
-          <p class="text-[11px] font-extrabold uppercase tracking-[0.12em] text-brand-500">Today</p>
+          <p class="text-[11px] font-extrabold uppercase tracking-[0.12em] text-brand-700">Today</p>
           <button
-            class="text-[11px] font-bold text-ink-400 transition hover:text-brand-600"
+            class="text-[11px] font-bold text-ink-400 transition hover:text-brand-700"
             onclick={() => navigate('/')}
           >
             Dashboard →
@@ -268,7 +268,7 @@
       </div>
 
       <div class="card-flat bg-gradient-to-br from-white/80 to-brand-100/60 p-4">
-        <p class="text-[11px] font-extrabold uppercase tracking-[0.12em] text-brand-500">Next up</p>
+        <p class="text-[11px] font-extrabold uppercase tracking-[0.12em] text-brand-700">Next up</p>
         {#if upcoming}
           <p class="num-tabular mt-1.5 text-sm font-bold leading-snug text-ink-900">
             {km(upcoming.distance_km, $unitSystem)} {distanceUnit($unitSystem)} {upcoming.activity_type}
@@ -276,13 +276,13 @@
           <p class="num-tabular mt-1 text-xs font-semibold text-ink-400">
             ~{Math.round(upcoming.duration.minutes)} min · {upcoming.fueling.carbs.perHourG} g carbs/h
           </p>
-          <button class="btn-ghost mt-3 w-full !py-2 !text-xs font-extrabold text-brand-600" onclick={() => navigate(`/plan?plan=${upcoming.id}`)}>
+          <button class="btn-ghost mt-3 w-full !py-2 !text-xs font-extrabold text-brand-700" onclick={() => navigate(`/plan?plan=${upcoming.id}`)}>
             View fueling plan
           </button>
         {:else}
           <p class="mt-1.5 text-sm font-bold leading-snug text-ink-900">Plan your next session</p>
           <p class="mt-1 text-xs font-semibold text-ink-400">Get duration + fueling in one tap.</p>
-          <button class="btn-ghost mt-3 w-full !py-2 !text-xs font-extrabold text-brand-600" onclick={() => navigate('/plan')}>Plan now</button>
+          <button class="btn-ghost mt-3 w-full !py-2 !text-xs font-extrabold text-brand-700" onclick={() => navigate('/plan')}>Plan now</button>
         {/if}
       </div>
 
@@ -525,12 +525,12 @@
   <!-- bottom nav (mobile): Home · Plan · Track (center CTA) · Log · More -->
   <nav class="fixed inset-x-0 bottom-0 z-40 border-t border-white/70 bg-white/90 pb-[max(0.45rem,env(safe-area-inset-bottom))] pt-1.5 backdrop-blur-xl lg:hidden" aria-label="Mobile navigation">
     <div class="mx-auto grid max-w-lg grid-cols-5 items-end gap-1 px-2">
-      <a href="/" use:link class="flex min-w-0 flex-col items-center gap-1 rounded-xl py-1.5 {isActive($route, '/', true) ? 'text-brand-600' : 'text-ink-400'}">
+      <a href="/" use:link class="flex min-w-0 flex-col items-center gap-1 rounded-xl py-1.5 {isActive($route, '/', true) ? 'text-brand-700' : 'text-ink-400'}">
         <House size={20} strokeWidth={isActive($route, '/', true) ? 2.6 : 2.1} />
         <span class="max-w-full truncate text-[11px] font-bold">Home</span>
       </a>
 
-      <a href="/plan" use:link class="flex min-w-0 flex-col items-center gap-1 rounded-xl py-1.5 {isActive($route, '/plan', false) ? 'text-brand-600' : 'text-ink-400'}">
+      <a href="/plan" use:link class="flex min-w-0 flex-col items-center gap-1 rounded-xl py-1.5 {isActive($route, '/plan', false) ? 'text-brand-700' : 'text-ink-400'}">
         <Sparkles size={20} strokeWidth={isActive($route, '/plan', false) ? 2.6 : 2.1} />
         <span class="max-w-full truncate text-[11px] font-bold">Plan</span>
       </a>
@@ -545,17 +545,17 @@
             ></span>
           {/if}
         </span>
-        <span class="max-w-full truncate text-[11px] font-extrabold {isActive($route, '/track', false) ? 'text-brand-600' : 'text-ink-700'}">Track</span>
+        <span class="max-w-full truncate text-[11px] font-extrabold {isActive($route, '/track', false) ? 'text-brand-700' : 'text-ink-700'}">Track</span>
       </a>
 
-      <a href="/activities" use:link class="flex min-w-0 flex-col items-center gap-1 rounded-xl py-1.5 {isActive($route, '/activities', false) ? 'text-brand-600' : 'text-ink-400'}">
+      <a href="/activities" use:link class="flex min-w-0 flex-col items-center gap-1 rounded-xl py-1.5 {isActive($route, '/activities', false) ? 'text-brand-700' : 'text-ink-400'}">
         <Footprints size={20} strokeWidth={isActive($route, '/activities', false) ? 2.6 : 2.1} />
         <span class="max-w-full truncate text-[11px] font-bold">Log</span>
       </a>
 
       <button
         type="button"
-        class="flex min-w-0 flex-col items-center gap-1 rounded-xl py-1.5 {moreOpen || moreActive ? 'text-brand-600' : 'text-ink-400'}"
+        class="flex min-w-0 flex-col items-center gap-1 rounded-xl py-1.5 {moreOpen || moreActive ? 'text-brand-700' : 'text-ink-400'}"
         aria-expanded={moreOpen}
         onclick={() => (moreOpen = !moreOpen)}
       >

@@ -3,9 +3,9 @@
   import { toast, dismissToast } from '../../stores/index.js';
 
   const TONES = {
-    success: { cls: 'border-emerald-200 bg-emerald-50 text-emerald-800', Icon: Check },
-    error: { cls: 'border-rose-200 bg-rose-50 text-rose-800', Icon: TriangleAlert },
-    info: { cls: 'border-sky-200 bg-sky-50 text-sky-800', Icon: Info },
+    success: { cls: 'border-emerald-200 bg-emerald-50 text-emerald-900', Icon: Check },
+    error: { cls: 'border-red-200 bg-red-50 text-red-900', Icon: TriangleAlert },
+    info: { cls: 'border-sky-200 bg-sky-50 text-sky-900', Icon: Info },
   };
 
   let undoing = $state(false);

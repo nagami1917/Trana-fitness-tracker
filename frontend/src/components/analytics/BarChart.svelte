@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import Chart from 'chart.js/auto';
   import { baseOptions, PINK } from './theme.js';
+  import { theme } from '../../lib/theme.js';
 
   let {
     labels = [],
@@ -44,6 +45,7 @@
   });
 
   $effect(() => {
+    void $theme;
     if (!chart) return;
     chart.data.labels = labels;
     chart.data.datasets = build();

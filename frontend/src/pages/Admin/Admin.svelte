@@ -149,7 +149,7 @@
     {:else}
       <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <Card>
-          <p class="text-[11px] font-extrabold uppercase tracking-[0.12em] text-brand-500">Accounts</p>
+          <p class="text-[11px] font-extrabold uppercase tracking-[0.12em] text-brand-700">Accounts</p>
           <div class="mt-3 grid grid-cols-2 gap-3">
             <div><p class="font-display text-2xl font-extrabold text-ink-500">{dash(kpis.users?.total)}</p><p class="text-[11px] font-bold text-ink-400">total</p></div>
             <div><p class="font-display text-2xl font-extrabold text-ink-500">{dash(kpis.users?.new_7d)}</p><p class="text-[11px] font-bold text-ink-400">new 7 d</p></div>
@@ -158,7 +158,7 @@
           </div>
         </Card>
         <Card>
-          <p class="text-[11px] font-extrabold uppercase tracking-[0.12em] text-brand-500">Content</p>
+          <p class="text-[11px] font-extrabold uppercase tracking-[0.12em] text-brand-700">Content</p>
           <div class="mt-3 grid grid-cols-3 gap-3">
             <div><p class="font-display text-2xl font-extrabold text-ink-500">{dash(kpis.content?.activities)}</p><p class="text-[11px] font-bold text-ink-400">activities</p></div>
             <div><p class="font-display text-2xl font-extrabold text-ink-500">{dash(kpis.content?.predictions)}</p><p class="text-[11px] font-bold text-ink-400">predictions</p></div>
@@ -166,7 +166,7 @@
           </div>
         </Card>
         <Card>
-          <p class="text-[11px] font-extrabold uppercase tracking-[0.12em] text-brand-500">Error groups</p>
+          <p class="text-[11px] font-extrabold uppercase tracking-[0.12em] text-brand-700">Error groups</p>
           <div class="mt-3 grid grid-cols-3 gap-3">
             <div><p class="font-display text-2xl font-extrabold {kpis.errors?.open_groups ? 'text-rose-500' : 'text-ink-500'}">{dash(kpis.errors?.open_groups)}</p><p class="text-[11px] font-bold text-ink-400">open</p></div>
             <div><p class="font-display text-2xl font-extrabold text-ink-500">{dash(kpis.errors?.groups_24h)}</p><p class="text-[11px] font-bold text-ink-400">24 h</p></div>
@@ -333,7 +333,7 @@
         <Card>
           <div class="flex items-center gap-2">
             <Brain size={18} class="text-brand-500" />
-            <p class="text-[11px] font-extrabold uppercase tracking-[0.12em] text-brand-500">Deployed artifact</p>
+            <p class="text-[11px] font-extrabold uppercase tracking-[0.12em] text-brand-700">Deployed artifact</p>
           </div>
           <p class="mt-3 font-display text-xl font-extrabold text-ink-500">{model.version ?? 'unknown'}</p>
           <p class="text-xs font-bold text-ink-400">
@@ -350,7 +350,7 @@
         <Card>
           <div class="flex items-center gap-2">
             <Activity size={18} class="text-brand-500" />
-            <p class="text-[11px] font-extrabold uppercase tracking-[0.12em] text-brand-500">Feature importances</p>
+            <p class="text-[11px] font-extrabold uppercase tracking-[0.12em] text-brand-700">Feature importances</p>
           </div>
           <div class="mt-3 space-y-2.5">
             {#each featureEntries as [name, weight] (name)}

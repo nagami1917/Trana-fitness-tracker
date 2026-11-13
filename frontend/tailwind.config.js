@@ -19,9 +19,14 @@ export default {
         cream: '#fffaf8',
         ink: {
           900: '#3f2333',
+          800: '#4d2e40',
           700: '#5c3a4c',
+          600: '#603e50',
           500: '#644253',
           400: '#755263',
+          300: '#9a7788',
+          200: '#e7d3dd',
+          100: '#f6ebf0',
         },
       },
       fontFamily: {
@@ -29,9 +34,9 @@ export default {
         display: ['Poppins', 'Quicksand', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
       boxShadow: {
-        soft: '0 10px 30px -12px rgba(236, 72, 153, 0.25)',
+        soft: '0 10px 30px -12px rgba(219, 39, 119, 0.24)',
         card: '0 18px 40px -24px rgba(190, 24, 93, 0.35)',
-        glow: '0 12px 28px -10px rgba(236, 72, 153, 0.55)',
+        glow: '0 12px 28px -10px rgba(219, 39, 119, 0.50)',
         inset: 'inset 0 1px 0 0 rgba(255,255,255,0.7)',
       },
       borderRadius: {
@@ -39,7 +44,7 @@ export default {
       },
       backgroundImage: {
         'pink-fade': 'linear-gradient(160deg, #fff7fa 0%, #ffe9f2 45%, #ffdcea 100%)',
-        'brand-gradient': 'linear-gradient(135deg, #ff8fbe 0%, #f9569b 55%, #ec4899 100%)',
+        'brand-gradient': 'linear-gradient(135deg, #e11d74 0%, #db2777 55%, #be185d 100%)',
       },
       keyframes: {
         float: {

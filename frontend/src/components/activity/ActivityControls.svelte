@@ -38,7 +38,7 @@
     {:else}
       <button
         type="button"
-        class="inline-flex min-h-[44px] touch-manipulation items-center justify-center gap-2 rounded-2xl px-5 py-3 border border-brand-200 bg-white text-ink-800 text-sm font-bold shadow-sm hover:bg-brand-50 transition disabled:opacity-60 cursor-pointer"
+        class="btn-ghost min-h-[44px] px-5 py-3 shadow-sm cursor-pointer"
         onclick={onPause}
         disabled={saving}
       >
@@ -59,7 +59,7 @@
 
     <button
       type="button"
-      class="col-span-2 inline-flex min-h-[44px] touch-manipulation items-center justify-center gap-1.5 rounded-2xl px-4 py-3 border border-rose-200 bg-white text-rose-600 text-sm font-bold hover:bg-rose-50 transition disabled:opacity-60 cursor-pointer sm:col-span-1"
+      class="col-span-2 inline-flex min-h-[44px] touch-manipulation items-center justify-center gap-1.5 rounded-2xl px-4 py-3 border border-red-200 bg-white text-red-700 text-sm font-bold hover:bg-red-50 transition disabled:opacity-60 cursor-pointer sm:col-span-1"
       onclick={onDiscard}
       disabled={saving}
       aria-label="Discard tracking session"

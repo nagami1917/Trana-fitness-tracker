@@ -11,6 +11,6 @@
   let percent = $derived(Math.min(100, Math.max(0, (value / (max || 1)) * 100)));
 </script>
 
-<div class="w-full overflow-hidden rounded-full bg-brand-100/80 {height}">
+<div class="w-full overflow-hidden rounded-full {height}" style="background-color: var(--track-bar)">
   <div class="{TONES[tone] ?? TONES.brand} h-full rounded-full transition-all duration-700 ease-out" style="width:{percent}%"></div>
 </div>

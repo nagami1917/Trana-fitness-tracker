@@ -175,7 +175,7 @@
     </Card>
 
     <Card class="p-5">
-      <p class="text-[11px] font-extrabold uppercase tracking-[0.12em] text-brand-500">Timeline</p>
+      <p class="text-[11px] font-extrabold uppercase tracking-[0.12em] text-brand-700">Timeline</p>
       <ol class="mt-3 space-y-3">
         {#each plan.timeline as step}
           <li class="flex items-start gap-3">

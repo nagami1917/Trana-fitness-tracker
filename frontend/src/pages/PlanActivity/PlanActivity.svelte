@@ -1241,7 +1241,7 @@
                     <p class="truncate text-xs font-extrabold capitalize">
                       {$unitSystem === 'imperial' ? `${Number(toDisplayDistance(plan.distance_km, 'imperial').toFixed(2))} mi` : `${plan.distance_km} km`} {plan.activity_type}
                       {#if plan.route?.length >= 2}
-                        <span class="ml-1 text-[10px] font-bold text-brand-500">· Route</span>
+                        <span class="ml-1 text-[10px] font-bold text-brand-700">· Route</span>
                       {/if}
                     </p>
                     <p class="text-[10px] font-semibold text-ink-400">
