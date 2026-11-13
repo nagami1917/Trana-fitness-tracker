@@ -178,7 +178,7 @@
 </script>
 
 {#if !view}
-  <Card cls="!p-4 sm:!p-5">
+  <Card class="!p-4 sm:!p-5">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div class="flex items-start gap-3">
         <span class="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-brand-50 text-brand-500">
@@ -199,7 +199,7 @@
 
       <button
         type="button"
-        class="btn-primary shrink-0 !py-2.5 !text-xs"
+        class="btn-primary w-full shrink-0 !py-2.5 !text-xs sm:w-auto"
         onclick={() => navigate('/track')}
       >
         <Play size={14} fill="currentColor" /> Start in Track Activity
@@ -207,7 +207,7 @@
     </div>
   </Card>
 {:else}
-  <Card cls="!p-4 sm:!p-5 border {view.isLive ? 'border-emerald-200 bg-gradient-to-br from-white via-white to-emerald-50/40' : view.status === 'discarded' ? 'border-rose-100 bg-white' : 'border-brand-100 bg-white'}">
+  <Card class="!p-4 sm:!p-5 border {view.isLive ? 'border-emerald-200 bg-gradient-to-br from-white via-white to-emerald-50/40' : view.status === 'discarded' ? 'border-rose-100 bg-white' : 'border-brand-100 bg-white'}">
     <!-- header row -->
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div class="flex items-start gap-3 min-w-0">
@@ -349,11 +349,11 @@
         {/if}
 
         {#if view.isLive}
-          <div class="flex flex-wrap items-center gap-2">
+          <div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
             {#if view.status === 'paused'}
               <button
                 type="button"
-                class="btn-primary !py-2.5 !px-4 !text-xs"
+                class="btn-primary min-h-[40px] !py-2.5 !px-4 !text-xs"
                 disabled={liveTracker.saving}
                 onclick={() => liveTracker.resumeActivity()}
               >
@@ -362,7 +362,7 @@
             {:else}
               <button
                 type="button"
-                class="btn-ghost !py-2.5 !px-4 !text-xs"
+                class="btn-ghost min-h-[40px] !py-2.5 !px-4 !text-xs"
                 disabled={liveTracker.saving}
                 onclick={() => liveTracker.pauseActivity()}
               >
@@ -372,7 +372,7 @@
 
             <button
               type="button"
-              class="inline-flex items-center justify-center gap-1.5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs font-extrabold text-emerald-800 transition hover:bg-emerald-100 disabled:opacity-60 cursor-pointer"
+              class="inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs font-extrabold text-emerald-800 transition hover:bg-emerald-100 disabled:opacity-60 cursor-pointer"
               disabled={liveTracker.saving}
               onclick={() => liveTracker.stopActivity()}
             >
@@ -382,7 +382,7 @@
 
             <button
               type="button"
-              class="inline-flex items-center justify-center gap-1.5 rounded-2xl border border-rose-200 bg-white px-3.5 py-2.5 text-xs font-extrabold text-rose-600 transition hover:bg-rose-50 disabled:opacity-60 cursor-pointer"
+              class="col-span-2 inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-2xl border border-rose-200 bg-white px-3.5 py-2.5 text-xs font-extrabold text-rose-600 transition hover:bg-rose-50 disabled:opacity-60 cursor-pointer sm:col-span-1"
               disabled={liveTracker.saving}
               onclick={() => liveTracker.discardActivity()}
             >

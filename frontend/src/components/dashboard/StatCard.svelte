@@ -15,17 +15,17 @@
   let up = $derived((delta ?? 0) >= 0);
 </script>
 
-<div class="card flex items-center gap-4 p-4 transition duration-300 hover:-translate-y-0.5 hover:shadow-card sm:p-5">
+<div class="card flex items-center gap-2.5 p-3 transition duration-300 hover:-translate-y-0.5 hover:shadow-card sm:gap-4 sm:p-5">
   {#if Icon}
-    <span class="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-gradient-to-br shadow-inset {TONES[tone] ?? TONES.brand}">
+    <span class="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-gradient-to-br shadow-inset sm:h-14 sm:w-14 [&>svg]:h-5 [&>svg]:w-5 sm:[&>svg]:h-[26px] sm:[&>svg]:w-[26px] {TONES[tone] ?? TONES.brand}">
       <Icon size={26} strokeWidth={2.1} />
     </span>
   {/if}
   <div class="min-w-0 flex-1">
-    <p class="truncate text-[13px] font-bold text-ink-500">{label}</p>
-    <p class="mt-0.5 flex items-baseline gap-1">
-      <span class="stat-value">{value}</span>
-      {#if unit}<span class="text-xs font-bold text-ink-400">{unit}</span>{/if}
+    <p class="truncate text-[11px] font-bold text-ink-500 sm:text-[13px]">{label}</p>
+    <p class="mt-0.5 flex flex-wrap items-baseline gap-x-1">
+      <span class="stat-value !text-lg sm:!text-2xl">{value}</span>
+      {#if unit}<span class="text-[11px] font-bold text-ink-400 sm:text-xs">{unit}</span>{/if}
     </p>
     <div class="mt-1 flex items-center gap-2">
       {#if delta !== null && Number.isFinite(delta)}

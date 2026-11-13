@@ -14,7 +14,7 @@
   {#if !compact}
     <span class="leading-none">
       <span class="block font-display text-lg font-extrabold tracking-tight text-brand-700">TRANA</span>
-      <span class="block text-[10px] font-bold uppercase tracking-[0.16em] text-ink-400">fuel your next move</span>
+      <span class="hidden text-[10px] font-bold uppercase tracking-[0.16em] text-ink-400 min-[420px]:block">fuel your next move</span>
     </span>
   {/if}
 </a>

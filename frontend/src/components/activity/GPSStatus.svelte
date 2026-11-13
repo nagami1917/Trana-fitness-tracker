@@ -32,10 +32,10 @@
   };
 </script>
 
-<div class="inline-flex items-center gap-2 rounded-full border border-brand-100 bg-white px-3.5 py-1.5 text-xs font-bold shadow-sm">
+<div class="inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-0.5 rounded-full border border-brand-100 bg-white px-3 py-1.5 text-xs font-bold shadow-sm sm:px-3.5">
   <span class={COLORS[status] ?? 'text-ink-400'} aria-hidden="true">{DOTS[status] ?? '○'}</span>
   <span class="text-ink-700">{LABELS[status] ?? message}</span>
   {#if message}
-    <span class="text-ink-400 font-semibold">· {message}</span>
+    <span class="min-w-0 break-words font-semibold text-ink-400">· {message}</span>
   {/if}
 </div>

@@ -13,11 +13,11 @@
   } = $props();
 </script>
 
-<div class="flex flex-wrap items-center justify-center gap-3 w-full">
+<div class="w-full {tracking ? 'grid grid-cols-2 gap-2.5 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-3' : 'flex flex-wrap items-center justify-center gap-3'}">
   {#if !tracking}
     <button
       type="button"
-      class="inline-flex items-center justify-center gap-2 rounded-2xl px-7 py-3.5 border border-transparent bg-brand-gradient text-white text-sm font-bold shadow-glow hover:scale-[1.01] transition active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+      class="inline-flex w-full min-h-[46px] touch-manipulation items-center justify-center gap-2 rounded-2xl px-7 py-3.5 border border-transparent bg-brand-gradient text-white text-sm font-bold shadow-glow hover:scale-[1.01] transition active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer sm:w-auto"
       onclick={onStart}
       disabled={saving}
     >
@@ -28,7 +28,7 @@
     {#if paused}
       <button
         type="button"
-        class="inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 border border-transparent bg-brand-gradient text-white text-sm font-bold shadow-glow hover:scale-[1.01] transition active:scale-95 disabled:opacity-60 cursor-pointer"
+        class="inline-flex min-h-[44px] touch-manipulation items-center justify-center gap-2 rounded-2xl px-5 py-3 border border-transparent bg-brand-gradient text-white text-sm font-bold shadow-glow hover:scale-[1.01] transition active:scale-95 disabled:opacity-60 cursor-pointer"
         onclick={onResume}
         disabled={saving}
       >
@@ -38,7 +38,7 @@
     {:else}
       <button
         type="button"
-        class="inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 border border-brand-200 bg-white text-ink-800 text-sm font-bold shadow-sm hover:bg-brand-50 transition disabled:opacity-60 cursor-pointer"
+        class="inline-flex min-h-[44px] touch-manipulation items-center justify-center gap-2 rounded-2xl px-5 py-3 border border-brand-200 bg-white text-ink-800 text-sm font-bold shadow-sm hover:bg-brand-50 transition disabled:opacity-60 cursor-pointer"
         onclick={onPause}
         disabled={saving}
       >
@@ -49,7 +49,7 @@
 
     <button
       type="button"
-      class="inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 border border-emerald-200 bg-emerald-50 text-emerald-800 text-sm font-bold shadow-sm hover:bg-emerald-100 transition disabled:opacity-60 cursor-pointer"
+      class="inline-flex min-h-[44px] touch-manipulation items-center justify-center gap-2 rounded-2xl px-5 py-3 border border-emerald-200 bg-emerald-50 text-emerald-800 text-sm font-bold shadow-sm hover:bg-emerald-100 transition disabled:opacity-60 cursor-pointer"
       onclick={onStop}
       disabled={saving}
     >
@@ -59,7 +59,7 @@
 
     <button
       type="button"
-      class="inline-flex items-center justify-center gap-1.5 rounded-2xl px-4 py-3 border border-rose-200 bg-white text-rose-600 text-sm font-bold hover:bg-rose-50 transition disabled:opacity-60 cursor-pointer"
+      class="col-span-2 inline-flex min-h-[44px] touch-manipulation items-center justify-center gap-1.5 rounded-2xl px-4 py-3 border border-rose-200 bg-white text-rose-600 text-sm font-bold hover:bg-rose-50 transition disabled:opacity-60 cursor-pointer sm:col-span-1"
       onclick={onDiscard}
       disabled={saving}
       aria-label="Discard tracking session"

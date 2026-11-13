@@ -337,12 +337,12 @@
       </div>
     </div>
   {:else if interactive && points.length === 1}
-    <div class="pointer-events-none absolute left-3 top-3 z-10">
-      <div class="inline-flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-bold text-ink-600 shadow-soft">
-        <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
-        {routeMode === 'roads'
+    <div class="pointer-events-none absolute left-3 top-3 right-14 z-10">
+      <div class="inline-flex max-w-full items-center gap-1.5 rounded-2xl bg-white/95 px-3 py-1.5 text-[11px] font-bold text-ink-600 shadow-soft sm:rounded-full">
+        <span class="h-2 w-2 shrink-0 rounded-full bg-emerald-500"></span>
+        <span>{routeMode === 'roads'
           ? 'Now tap your Destination to auto-follow roads'
-          : 'Now tap your next point'}
+          : 'Now tap your next point'}</span>
       </div>
     </div>
   {/if}

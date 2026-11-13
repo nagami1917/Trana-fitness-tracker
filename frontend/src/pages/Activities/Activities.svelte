@@ -395,7 +395,7 @@
 </script>
 
 <div class="space-y-5">
-  <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between" data-tour="activities-header">
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between scroll-mt-20" data-tour="activities-header">
     <div>
       <span class="pill mb-2"><RouteIcon size={12} /> Your history</span>
       <h1 class="font-display text-2xl sm:text-3xl">Activities</h1>
@@ -428,17 +428,17 @@
   </div>
 
   <!-- totals strip -->
-  <div class="grid grid-cols-3 gap-3">
+  <div class="grid grid-cols-3 gap-2 sm:gap-3">
     {#each [
       { label: 'Distance', value: `${nf(totals.distance, 1)} km`, Icon: MapPin },
       { label: 'Time', value: fmtDuration(totals.minutes), Icon: Timer },
       { label: 'Energy', value: `${kcal(totals.calories)} kcal`, Icon: Flame },
     ] as item (item.label)}
-      <div class="card flex items-center gap-2.5 p-3.5">
-        <span class="grid h-9 w-9 place-items-center rounded-xl bg-brand-100/80 text-brand-600"><item.Icon size={16} /></span>
-        <div class="min-w-0">
+      <div class="card flex flex-col items-start gap-1.5 p-2.5 sm:flex-row sm:items-center sm:gap-2.5 sm:p-3.5">
+        <span class="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-brand-100/80 text-brand-600 sm:h-9 sm:w-9"><item.Icon size={15} /></span>
+        <div class="min-w-0 w-full">
           <p class="text-[10px] font-extrabold uppercase tracking-wide text-ink-400">{item.label}</p>
-          <p class="truncate text-sm font-extrabold text-ink-900">{item.value}</p>
+          <p class="truncate text-xs font-extrabold text-ink-900 sm:text-sm">{item.value}</p>
         </div>
       </div>
     {/each}
@@ -547,10 +547,10 @@
       <div class="flex flex-wrap items-center justify-between gap-2">
         <span class="label !mb-0">Route (optional)</span>
         <div class="flex flex-wrap items-center gap-1.5">
-          <div class="inline-flex rounded-2xl border border-brand-100 bg-brand-50/70 p-0.5" role="group" aria-label="Activity route source">
+          <div class="flex max-w-full flex-wrap rounded-2xl border border-brand-100 bg-brand-50/70 p-0.5 sm:inline-flex" role="group" aria-label="Activity route source">
             <button
               type="button"
-              class="rounded-xl px-2.5 py-1 text-[11px] font-extrabold transition {routeSource === 'none'
+              class="flex-1 whitespace-nowrap rounded-xl px-2.5 py-1 text-[11px] font-extrabold transition sm:flex-initial {routeSource === 'none'
                 ? 'bg-white text-brand-600 shadow-soft'
                 : 'text-ink-500 hover:text-ink-900'}"
               onclick={() => selectRouteSource('none')}
@@ -559,7 +559,7 @@
             </button>
             <button
               type="button"
-              class="inline-flex items-center gap-1 rounded-xl px-2.5 py-1 text-[11px] font-extrabold transition {routeSource === 'create'
+              class="inline-flex flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-xl px-2.5 py-1 text-[11px] font-extrabold transition sm:flex-initial {routeSource === 'create'
                 ? 'bg-white text-brand-600 shadow-soft'
                 : 'text-ink-500 hover:text-ink-900'}"
               onclick={() => selectRouteSource('create')}
@@ -568,7 +568,7 @@
             </button>
             <button
               type="button"
-              class="inline-flex items-center gap-1 rounded-xl px-2.5 py-1 text-[11px] font-extrabold transition {routeSource === 'plan'
+              class="inline-flex flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-xl px-2.5 py-1 text-[11px] font-extrabold transition sm:flex-initial {routeSource === 'plan'
                 ? 'bg-white text-brand-600 shadow-soft'
                 : 'text-ink-500 hover:text-ink-900'}"
               onclick={() => selectRouteSource('plan')}

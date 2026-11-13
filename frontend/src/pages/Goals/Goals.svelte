@@ -143,7 +143,7 @@
 </script>
 
 <div class="space-y-5">
-  <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between" data-tour="goals-header">
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between scroll-mt-20" data-tour="goals-header">
     <div>
       <span class="pill mb-2"><Target size={12} /> Goals</span>
       <h1 class="font-display text-2xl sm:text-3xl">What you’re aiming for</h1>
@@ -322,9 +322,9 @@
             <div class="mt-2 space-y-1.5">
               {#each group.events as event (event.goal_key + event.created_at)}
                 {@const meta = GOAL_META[event.goal_key]}
-                <div class="flex items-center gap-2 rounded-xl bg-white px-2.5 py-1.5">
+                <div class="flex flex-wrap items-center gap-2 rounded-xl bg-white px-2.5 py-1.5">
                   {#if meta}
-                    <meta.Icon size={13} class="text-brand-500" />
+                    <meta.Icon size={13} class="shrink-0 text-brand-500" />
                     <span class="text-[11px] font-bold text-ink-700">{meta.label}</span>
                     <span class="ml-auto text-[11px] font-extrabold text-ink-900">
                       {formatGoalValue(event.goal_key, event.achieved_value)} /
@@ -333,7 +333,7 @@
                   {:else}
                     <span class="text-[11px] font-bold text-ink-700">{event.goal_key}</span>
                   {/if}
-                  <Check size={13} class="text-emerald-500" />
+                  <Check size={13} class="shrink-0 text-emerald-500" />
                 </div>
               {/each}
             </div>
