@@ -15,15 +15,18 @@
     MapPin,
     CalendarDays,
     ShieldCheck,
+    Compass,
   } from 'lucide-svelte';
   import { onMount } from 'svelte';
   import { route, navigate, link, isActive } from '../../lib/router.js';
-  import { profile, session, logout, plans, todayStats } from '../../stores/index.js';
+  import { profile, session, logout, plans, activities, todayStats } from '../../stores/index.js';
   import { liveTracker } from '../../lib/liveTracker.svelte.js';
+  import { mascotTour } from '../../lib/mascotTour.svelte.js';
   import { api } from '../../services/client.js';
   import { nf } from '../../lib/format.js';
   import Logo from './Logo.svelte';
   import Footer from './Footer.svelte';
+  import MascotGuide from './MascotGuide.svelte';
 
   let { children } = $props();
 
@@ -119,6 +122,17 @@
 
   onMount(() => {
     void loadNotifications(); // badge value as soon as the shell mounts
+  });
+
+  $effect(() => {
+    if (!$session?.id || !$profile) return;
+    mascotTour.maybeAutoStart({
+      userId: $session.id,
+      onboarded: $profile.onboarded,
+      activitiesCount: $activities.length,
+      totalActivities: $profile.total_activities,
+      plansCount: $plans.length,
+    });
   });
 
   function submitSearch(event) {
@@ -257,6 +271,17 @@
 
           <div class="ml-auto flex items-center gap-1.5">
             <button
+              type="button"
+              data-tour="tour-replay"
+              class="inline-flex h-10 items-center gap-1.5 rounded-2xl border border-brand-100/80 bg-white/80 px-2.5 text-xs font-extrabold text-brand-600 shadow-soft transition hover:border-brand-200 hover:bg-white hover:text-brand-700"
+              onclick={() => mascotTour.start({ reset: true, userId: $session?.id })}
+              aria-label="Open cat mascot guide"
+              title="Show me around"
+            >
+              <img src="/mascot-cat.png" alt="" class="h-6 w-auto" />
+              <span class="hidden sm:inline">Guide</span>
+            </button>
+            <button
               class="grid h-10 w-10 place-items-center rounded-2xl text-ink-500 transition hover:bg-white hover:text-brand-700 lg:hidden"
               onclick={() => (searchOpen = !searchOpen)}
               aria-label="Search"
@@ -350,6 +375,13 @@
                   <a href="/plan" use:link class="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-ink-500 hover:bg-brand-50 hover:text-brand-700">
                     <Sparkles size={15} /> New prediction
                   </a>
+                  <button
+                    type="button"
+                    class="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-ink-500 hover:bg-brand-50 hover:text-brand-700"
+                    onclick={() => { menuOpen = false; mascotTour.start({ reset: true, userId: $session?.id }); }}
+                  >
+                    <Compass size={15} /> Tour with mascot
+                  </button>
                   <button class="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-rose-500 hover:bg-rose-50" onclick={signOut}>
                     <LogOut size={15} /> Sign out
                   </button>
@@ -392,4 +424,6 @@
       {/each}
     </div>
   </nav>
+
+  <MascotGuide />
 </div>

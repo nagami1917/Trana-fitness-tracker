@@ -673,7 +673,7 @@
 
   <!-- Sport selector + GPS status + Map options -->
   <div class="rounded-3xl border border-brand-100 bg-white shadow-card p-4 sm:p-6 space-y-4">
-    <div class="flex flex-wrap items-center justify-between gap-3">
+    <div class="flex flex-wrap items-center justify-between gap-3" data-tour="track-controls-header">
       <div class="flex flex-wrap items-center gap-2" role="group" aria-label="Activity type">
         {#each SPORTS as sport (sport.id)}
           <button

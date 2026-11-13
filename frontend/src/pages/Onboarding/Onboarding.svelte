@@ -3,6 +3,7 @@
   import { profile, notify, refresh, session } from '../../stores/index.js';
   import { api } from '../../services/client.js';
   import { navigate } from '../../lib/router.js';
+  import { mascotTour } from '../../lib/mascotTour.svelte.js';
   import Segmented from '../../components/common/Segmented.svelte';
   import CityRegionInput from '../../components/common/CityRegionInput.svelte';
 
@@ -53,6 +54,7 @@
       });
       written = true;
       profile.set(updated);
+      mascotTour.queueForUser($session?.id);
       await refresh();
       if (target === '/plan') notify(`All set, ${$session?.name ?? 'athlete'}! Let’s plan your first session.`);
       navigate(target, { replace: true });
