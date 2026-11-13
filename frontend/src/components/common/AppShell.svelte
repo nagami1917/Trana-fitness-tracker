@@ -255,8 +255,8 @@
     <div class="min-w-0 flex-1">
       <!-- top bar -->
       <header class="sticky top-0 z-30 border-b border-white/50 bg-white/60 backdrop-blur-xl">
-        <div class="flex items-center gap-3 px-4 py-3 sm:px-6">
-          <div class="lg:hidden"><Logo size={38} /></div>
+        <div class="flex items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-6 sm:py-3">
+          <div class="min-w-0 shrink-0 lg:hidden"><Logo size={36} /></div>
 
           <form class="hidden flex-1 lg:block" onsubmit={submitSearch}>
             <label class="flex max-w-md items-center gap-2 rounded-2xl border border-brand-100 bg-white/90 px-4 py-2.5 focus-within:border-brand-300 focus-within:ring-4 focus-within:ring-brand-100">
@@ -269,20 +269,20 @@
             </label>
           </form>
 
-          <div class="ml-auto flex items-center gap-1.5">
+          <div class="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
             <button
               type="button"
               data-tour="tour-replay"
-              class="inline-flex h-10 items-center gap-1.5 rounded-2xl border border-brand-100/80 bg-white/80 px-2.5 text-xs font-extrabold text-brand-600 shadow-soft transition hover:border-brand-200 hover:bg-white hover:text-brand-700"
+              class="inline-flex h-9 items-center gap-1.5 rounded-2xl border border-brand-100/80 bg-white/80 px-2 text-xs font-extrabold text-brand-600 shadow-soft transition hover:border-brand-200 hover:bg-white hover:text-brand-700 sm:h-10 sm:px-2.5"
               onclick={() => mascotTour.start({ reset: true, userId: $session?.id })}
               aria-label="Open cat mascot guide"
               title="Show me around"
             >
-              <img src="/mascot-cat.png" alt="" class="h-6 w-auto" />
+              <img src="/mascot-cat.png" alt="" class="h-5 w-auto sm:h-6" />
               <span class="hidden sm:inline">Guide</span>
             </button>
             <button
-              class="grid h-10 w-10 place-items-center rounded-2xl text-ink-500 transition hover:bg-white hover:text-brand-700 lg:hidden"
+              class="grid h-9 w-9 place-items-center rounded-2xl text-ink-500 transition hover:bg-white hover:text-brand-700 sm:h-10 sm:w-10 lg:hidden"
               onclick={() => (searchOpen = !searchOpen)}
               aria-label="Search"
             >
@@ -290,7 +290,7 @@
             </button>
             <div class="relative">
               <button
-                class="relative grid h-10 w-10 place-items-center rounded-2xl text-ink-500 transition hover:bg-white hover:text-brand-700"
+                class="relative grid h-9 w-9 place-items-center rounded-2xl text-ink-500 transition hover:bg-white hover:text-brand-700 sm:h-10 sm:w-10"
                 onclick={toggleNotif}
                 aria-label="Notifications"
                 aria-expanded={notifOpen}
@@ -304,7 +304,7 @@
               </button>
 
               {#if notifOpen}
-                <div class="absolute right-0 top-12 z-40 w-80 overflow-hidden rounded-2xl border border-brand-100 bg-white shadow-card animate-pop">
+                <div class="absolute right-0 top-12 z-40 w-[min(20rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-brand-100 bg-white shadow-card animate-pop">
                   <div class="flex items-center justify-between px-4 pb-2 pt-3">
                     <p class="text-sm font-extrabold text-ink-900">Notifications</p>
                     {#if notifUnread > 0}
@@ -355,7 +355,7 @@
               </button>
 
               {#if menuOpen}
-                <div class="absolute right-0 top-12 z-40 w-56 overflow-hidden rounded-2xl border border-brand-100 bg-white p-1.5 shadow-card animate-pop">
+                <div class="absolute right-0 top-12 z-40 w-56 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-2xl border border-brand-100 bg-white p-1.5 shadow-card animate-pop">
                   <div class="px-3 py-2">
                     <p class="truncate text-sm font-bold">{$profile?.name ?? 'Athlete'}</p>
                     <p class="truncate text-[11px] font-semibold text-ink-400">{$session?.email ?? ''}</p>
@@ -369,11 +369,14 @@
                       <ShieldCheck size={15} /> Admin console
                     </a>
                   {/if}
+                  <a href="/plan" use:link class="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-ink-500 hover:bg-brand-50 hover:text-brand-700">
+                    <Sparkles size={15} /> Plan Activity
+                  </a>
                   <a href="/fueling" use:link class="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-ink-500 hover:bg-brand-50 hover:text-brand-700">
                     <Salad size={15} /> Fueling guide
                   </a>
-                  <a href="/plan" use:link class="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-ink-500 hover:bg-brand-50 hover:text-brand-700">
-                    <Sparkles size={15} /> New prediction
+                  <a href="/settings" use:link class="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-ink-500 hover:bg-brand-50 hover:text-brand-700">
+                    <Settings size={15} /> Settings
                   </a>
                   <button
                     type="button"
@@ -393,19 +396,19 @@
         </div>
 
         {#if searchOpen}
-          <form class="px-4 pb-3 lg:hidden" onsubmit={submitSearch}>
+          <form class="px-3 pb-3 sm:px-4 lg:hidden" onsubmit={submitSearch}>
             <label class="flex items-center gap-2 rounded-2xl border border-brand-100 bg-white px-4 py-2.5">
               <Search size={16} class="text-ink-400" />
-              <input class="w-full bg-transparent text-sm font-semibold outline-none" placeholder="Search activities…" bind:value={searchTerm} />
+              <input class="w-full min-w-0 bg-transparent text-base font-semibold outline-none sm:text-sm" placeholder="Search activities…" bind:value={searchTerm} />
             </label>
           </form>
         {/if}
       </header>
 
-      <main class="px-4 pb-4 pt-5 sm:px-6">
+      <main class="px-3 pb-4 pt-4 sm:px-6 sm:pt-5">
         {@render children?.()}
       </main>
-      <div class="px-4 pb-24 sm:px-6 lg:pb-6">
+      <div class="px-3 pb-[calc(5.25rem+env(safe-area-inset-bottom))] sm:px-6 lg:pb-6">
         <Footer />
       </div>
     </div>
@@ -417,7 +420,15 @@
       {#each MOBILE as item (item.href)}
         {@const active = isActive($route, item.href, item.href === '/')}
         <a href={item.href} use:link class="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl py-1.5 {active ? 'text-brand-600' : 'text-ink-400'}">
-          <item.Icon size={20} strokeWidth={active ? 2.6 : 2.1} />
+          <span class="relative inline-flex">
+            <item.Icon size={20} strokeWidth={active ? 2.6 : 2.1} />
+            {#if item.href === '/track' && liveTracker.tracking}
+              <span
+                class="absolute -right-1.5 -top-1 h-2.5 w-2.5 rounded-full ring-2 ring-white {liveTracker.paused ? 'bg-amber-400' : 'bg-emerald-500 animate-pulse'}"
+                aria-label={liveTracker.paused ? 'Tracking paused' : 'Tracking live'}
+              ></span>
+            {/if}
+          </span>
           <span class="max-w-full truncate text-[10px] font-bold">{item.label}</span>
           <span class="h-1 w-5 rounded-full {active ? 'bg-brand-500' : 'bg-transparent'}"></span>
         </a>

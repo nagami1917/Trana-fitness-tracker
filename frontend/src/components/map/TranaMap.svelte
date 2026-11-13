@@ -244,20 +244,20 @@
   {/if}
 
   {#if interactiveRoute && plannedWaypoints.length === 0}
-    <div class="pointer-events-none absolute left-4 top-4 z-20">
-      <div class="rounded-2xl bg-white/95 px-3.5 py-2 text-xs font-bold text-ink-700 shadow-soft backdrop-blur-sm border border-brand-100">
+    <div class="pointer-events-none absolute left-3 top-3 right-16 z-20 sm:left-4 sm:top-4 sm:right-20">
+      <div class="w-fit max-w-full rounded-2xl bg-white/95 px-3 py-2 text-[11px] font-bold text-ink-700 shadow-soft backdrop-blur-sm border border-brand-100 sm:px-3.5 sm:text-xs">
         {routeMode === 'roads'
           ? 'Tap Start, then tap End on the map — follows roads & paths'
           : 'Tap Start, then tap End on the map to plot straight points'}
       </div>
     </div>
   {:else if interactiveRoute && plannedWaypoints.length === 1}
-    <div class="pointer-events-none absolute left-4 top-4 z-20">
-      <div class="inline-flex items-center gap-1.5 rounded-full bg-white/95 px-3.5 py-1.5 text-xs font-bold text-ink-700 shadow-soft border border-brand-100">
-        <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
-        {routeMode === 'roads'
+    <div class="pointer-events-none absolute left-3 top-3 right-16 z-20 sm:left-4 sm:top-4 sm:right-20">
+      <div class="inline-flex max-w-full items-center gap-1.5 rounded-2xl bg-white/95 px-3 py-1.5 text-[11px] font-bold text-ink-700 shadow-soft border border-brand-100 sm:rounded-full sm:px-3.5 sm:text-xs">
+        <span class="h-2 w-2 shrink-0 rounded-full bg-emerald-500"></span>
+        <span>{routeMode === 'roads'
           ? 'Start set — now tap End on the map to follow roads'
-          : 'Start set — now tap End on the map'}
+          : 'Start set — now tap End on the map'}</span>
       </div>
     </div>
   {/if}

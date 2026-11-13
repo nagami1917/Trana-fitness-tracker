@@ -357,7 +357,7 @@
             <input id="edit-food-calories" type="number" min="0" bind:value={editForm.calories} class="w-full px-3 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" />
           </div>
         </div>
-        <div class="flex gap-2">
+        <div class="flex flex-wrap gap-2">
           <button type="submit" disabled={busy} class="flex-1 rounded-xl py-2.5 border border-transparent bg-brand-gradient text-white text-xs font-bold cursor-pointer disabled:opacity-60">Save</button>
           <button type="button" onclick={cancelEdit} class="flex-1 rounded-xl py-2.5 border border-brand-100 bg-white text-ink-700 text-xs font-bold cursor-pointer">Cancel</button>
           <button type="button" disabled={busy} onclick={() => deleteFood(editingFoodId)} class="rounded-xl px-3 py-2.5 border border-rose-200 bg-rose-50 text-rose-600 text-xs font-bold cursor-pointer disabled:opacity-60">Delete</button>

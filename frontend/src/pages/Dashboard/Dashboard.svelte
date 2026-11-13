@@ -252,7 +252,7 @@
     </div>
   </div>
 
-  <div class="space-y-5" data-tour="dashboard-overview">
+  <div class="space-y-5 scroll-mt-20" data-tour="dashboard-overview">
     <!-- live / latest track activity prompt -->
     <TrackActivityPrompt fallbackCenter={livePlace ? [livePlace.latitude, livePlace.longitude] : [14.676, 121.0437]} />
 
@@ -460,9 +460,9 @@
           </button>
         </div>
 
-        <div class="mt-4 flex items-center gap-5">
+        <div class="mt-4 flex flex-col items-center gap-4 min-[420px]:flex-row sm:gap-5">
           <DonutRing value={goalPercent} label={`${Math.round(goalPercent)}%`} sublabel="of daily goal" size={132} />
-          <div class="min-w-0 flex-1 space-y-3">
+          <div class="w-full min-w-0 flex-1 space-y-3">
             {#each summaryRows as row (row.label)}
               <div>
                 <div class="flex items-baseline justify-between gap-2">
@@ -533,7 +533,7 @@
       <!-- next planned -->
       {#if $plans.length}
         {@const plan = $plans[0]}
-        <Card cls="!p-0 overflow-hidden">
+        <Card class="!p-0 overflow-hidden">
           <div class="flex items-center justify-between bg-gradient-to-r from-brand-50 to-white px-5 py-3">
             <p class="text-[11px] font-extrabold uppercase tracking-[0.12em] text-brand-600">Next planned session</p>
             <button class="text-[11px] font-extrabold text-brand-600" onclick={() => navigate('/plan')}>Open</button>

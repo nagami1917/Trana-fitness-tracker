@@ -12,6 +12,7 @@
   html,
   body {
     @apply h-full antialiased;
+    overflow-x: clip;
   }
 
   body {
@@ -60,7 +61,7 @@
   }
 
   .btn {
-    @apply inline-flex select-none items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-bold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex select-none touch-manipulation items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-bold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50;
     @apply focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-200;
   }
 
@@ -73,7 +74,7 @@
   }
 
   .btn-chip {
-    @apply inline-flex items-center gap-1.5 rounded-full border border-brand-100 bg-white/70 px-3.5 py-2 text-xs font-bold text-ink-500 transition hover:border-brand-200 hover:text-brand-700;
+    @apply inline-flex touch-manipulation items-center gap-1.5 rounded-full border border-brand-100 bg-white/70 px-3.5 py-2 text-xs font-bold text-ink-500 transition hover:border-brand-200 hover:text-brand-700;
     @apply focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-200;
   }
 
@@ -82,7 +83,7 @@
   }
 
   .input {
-    @apply w-full rounded-2xl border border-brand-100 bg-white/90 px-4 py-2.5 font-semibold text-ink-900 outline-none transition placeholder:font-medium placeholder:text-ink-400 focus:border-brand-300 focus:ring-4 focus:ring-brand-100;
+    @apply w-full min-w-0 max-w-full rounded-2xl border border-brand-100 bg-white/90 px-4 py-2.5 text-base font-semibold text-ink-900 outline-none transition placeholder:font-medium placeholder:text-ink-400 focus:border-brand-300 focus:ring-4 focus:ring-brand-100 sm:text-sm;
   }
 
   .label {

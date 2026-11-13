@@ -645,8 +645,8 @@
 
   <div class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
     <!-- input -->
-    <div class="space-y-4">
-      <div data-tour="plan-activity-card">
+    <div class="space-y-4 min-w-0">
+      <div class="scroll-mt-20" data-tour="plan-activity-card">
       <Card>
         <h2 class="text-lg">Activity</h2>
         <div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -667,7 +667,7 @@
         </div>
 
         <div class="mt-4 grid gap-3 sm:grid-cols-2">
-          <div>
+          <div class="min-w-0">
             <span class="label">Distance {routeKm > 0 ? '(from route)' : '(from map)'}</span>
             <div class="flex gap-2">
               <input
@@ -689,7 +689,7 @@
             {/if}
           </div>
 
-          <div>
+          <div class="min-w-0">
             <span class="label">Elevation gain</span>
             <div class="flex gap-2">
               <input
@@ -704,7 +704,7 @@
             </div>
           </div>
 
-          <div>
+          <div class="min-w-0">
             <span class="label"><Thermometer size={11} class="mr-1 inline" /> Expected temperature</span>
             <div class="flex gap-2">
               <input class="input" type="number" min="-5" max="45" bind:value={form.temperature_c} oninput={markEdited} />
@@ -712,7 +712,7 @@
             </div>
           </div>
 
-          <div>
+          <div class="min-w-0">
             <span class="label">When</span>
             <input
               class="input"
@@ -768,10 +768,10 @@
 
         <!-- Auto road-follow mode switch + destination search -->
         <div class="mt-3 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
-          <div class="inline-flex rounded-2xl border border-brand-100 bg-brand-50/70 p-1" role="group" aria-label="Routing mode">
+          <div class="flex flex-wrap rounded-2xl border border-brand-100 bg-brand-50/70 p-1 sm:inline-flex" role="group" aria-label="Routing mode">
             <button
               type="button"
-              class="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11px] font-extrabold transition {routeMode === 'roads'
+              class="inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-1.5 text-[11px] font-extrabold transition sm:flex-initial {routeMode === 'roads'
                 ? 'bg-white text-brand-600 shadow-soft'
                 : 'text-ink-500 hover:text-ink-900'}"
               onclick={() => setRouteMode('roads')}
@@ -780,7 +780,7 @@
             </button>
             <button
               type="button"
-              class="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11px] font-extrabold transition {routeMode === 'straight'
+              class="inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-1.5 text-[11px] font-extrabold transition sm:flex-initial {routeMode === 'straight'
                 ? 'bg-white text-brand-600 shadow-soft'
                 : 'text-ink-500 hover:text-ink-900'}"
               onclick={() => setRouteMode('straight')}
@@ -789,11 +789,11 @@
             </button>
           </div>
 
-          <form class="flex flex-1 items-center gap-1.5 sm:max-w-xs" onsubmit={handlePlaceSearch}>
-            <label class="flex flex-1 items-center gap-1.5 rounded-2xl border border-brand-100 bg-white px-3 py-1.5 focus-within:border-brand-300">
+          <form class="flex min-w-0 flex-1 items-center gap-1.5 sm:max-w-xs" onsubmit={handlePlaceSearch}>
+            <label class="flex min-w-0 flex-1 items-center gap-1.5 rounded-2xl border border-brand-100 bg-white px-3 py-1.5 focus-within:border-brand-300">
               <Search size={13} class="shrink-0 text-ink-400" />
               <input
-                class="w-full bg-transparent text-xs font-semibold text-ink-900 outline-none placeholder:font-medium placeholder:text-ink-400"
+                class="min-w-0 w-full bg-transparent text-base font-semibold text-ink-900 outline-none placeholder:font-medium placeholder:text-ink-400 sm:text-xs"
                 placeholder="Search street, park, or stop…"
                 bind:value={placeQuery}
               />
@@ -1016,10 +1016,10 @@
           </div>
           <div class="mt-2 divide-y divide-brand-100/70">
             {#each visiblePlans as plan (plan.id)}
-              <div class="flex items-center gap-2 py-2.5">
+              <div class="flex flex-wrap items-center justify-between gap-2 py-2.5 sm:flex-nowrap">
                 <button
                   type="button"
-                  class="flex min-w-0 flex-1 items-center gap-3 text-left transition hover:opacity-75"
+                  class="flex min-w-[180px] flex-1 items-center gap-3 text-left transition hover:opacity-75"
                   onclick={() => loadSavedPlan(plan)}
                 >
                   <ActivityIcon type={plan.activity_type} size="sm" />
@@ -1039,7 +1039,7 @@
                   </span>
                 </button>
                 {#if confirmDeletePlanId === plan.id}
-                  <div class="flex shrink-0 items-center gap-1.5">
+                  <div class="ml-auto flex shrink-0 items-center gap-1.5">
                     <button
                       type="button"
                       class="btn-chip !border-rose-200 !bg-rose-50 !text-rose-600 hover:!bg-rose-100"
@@ -1062,27 +1062,29 @@
                     </button>
                   </div>
                 {:else}
-                  {#if plan.route?.length >= 2}
+                  <div class="ml-auto flex shrink-0 items-center gap-1.5">
+                    {#if plan.route?.length >= 2}
+                      <button
+                        type="button"
+                        class="btn-chip shrink-0"
+                        title="Follow this planned route on live tracking"
+                        disabled={Boolean(deletingPlanId)}
+                        onclick={() => followOnTrack(plan.id)}
+                      >
+                        <Navigation size={11} /> Track
+                      </button>
+                    {/if}
                     <button
                       type="button"
-                      class="btn-chip shrink-0"
-                      title="Follow this planned route on live tracking"
+                      class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-brand-100 bg-white/80 text-ink-400 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
+                      title="Delete saved plan"
+                      aria-label="Delete saved plan {plan.distance_km} km {plan.activity_type}"
                       disabled={Boolean(deletingPlanId)}
-                      onclick={() => followOnTrack(plan.id)}
+                      onclick={() => (confirmDeletePlanId = plan.id)}
                     >
-                      <Navigation size={11} /> Track
+                      <Trash2 size={13} />
                     </button>
-                  {/if}
-                  <button
-                    type="button"
-                    class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-brand-100 bg-white/80 text-ink-400 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
-                    title="Delete saved plan"
-                    aria-label="Delete saved plan {plan.distance_km} km {plan.activity_type}"
-                    disabled={Boolean(deletingPlanId)}
-                    onclick={() => (confirmDeletePlanId = plan.id)}
-                  >
-                    <Trash2 size={13} />
-                  </button>
+                  </div>
                 {/if}
               </div>
             {/each}

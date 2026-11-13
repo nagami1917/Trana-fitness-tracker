@@ -319,6 +319,49 @@ try {
   await waitFor(() => !document.querySelector('[role="dialog"]') && harness.getRoute() === '/plan', 'Plan first workout closes tour & opens /plan');
   assert.equal(window.localStorage.getItem('trana:tour_seen:103'), 'completed');
 
+  // 7. Mobile viewport (360x640) ergonomics: centered modal scrollable wrapper,
+  //    scrollIntoView block:'start', safe-area bottom docking, and dockTop flip!
+  window.innerWidth = 360;
+  window.innerHeight = 640;
+  window.dispatchEvent(new window.Event('resize'));
+  document.querySelector('[data-tour="tour-replay"]').click();
+  await waitFor(() => document.querySelector('[role="dialog"]'), 'Mobile replay opens welcome modal');
+
+  const mobileWelcomeDialog = document.querySelector('[role="dialog"]');
+  assert.ok(mobileWelcomeDialog.parentElement.className.includes('overflow-y-auto'), 'Centered modal container must scroll on short mobile viewports');
+  assert.ok(findButton('Show me around').className.includes('w-full'), 'Centered modal CTA should span full width on narrow mobile');
+
+  let recordedScrollOpt = null;
+  const origElGetRect = window.Element.prototype.getBoundingClientRect;
+  const origScrollIntoView = window.Element.prototype.scrollIntoView;
+  try {
+    window.Element.prototype.scrollIntoView = function (opts) {
+      if (this.getAttribute?.('data-tour')) recordedScrollOpt = opts;
+      return origScrollIntoView?.call(this, opts);
+    };
+    window.Element.prototype.getBoundingClientRect = function () {
+      if (this.getAttribute?.('data-tour') === 'dashboard-overview') {
+        return { top: 220, left: 12, right: 348, bottom: 480, width: 336, height: 260 };
+      }
+      return origElGetRect?.call(this) ?? { top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0 };
+    };
+
+    findButton('Show me around').click();
+    await waitFor(
+      () => document.querySelector('#mascot-tour-title')?.textContent.includes('Your daily command center'),
+      'Mobile Dashboard tour step',
+    );
+    await waitFor(() => recordedScrollOpt !== null, 'Mobile scrollIntoView invoked');
+    assert.equal(recordedScrollOpt.block, 'start', 'Mobile tour target scroll should align to start under sticky header');
+
+    const floatingWrapper = document.querySelector('[role="dialog"]')?.parentElement;
+    assert.ok(floatingWrapper.className.includes('top-[4.25rem]'), 'Mobile tour card should flip to top dock when target extends behind bottom area');
+    assert.ok(document.querySelector('[role="dialog"]').className.includes('max-h-[calc(100dvh-9.5rem)]'), 'Floating tour card should constrain max height on small screens');
+  } finally {
+    window.Element.prototype.getBoundingClientRect = origElGetRect;
+    window.Element.prototype.scrollIntoView = origScrollIntoView;
+  }
+
   console.log('TRANA cat mascot welcome tour UI checks passed ✔');
 } finally {
   await harness.destroy();
