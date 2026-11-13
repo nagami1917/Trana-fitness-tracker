@@ -20,6 +20,7 @@
     toDisplayWeight,
     weightUnit,
   } from '../../lib/units.js';
+  import { SPORT_COLORS } from '../../components/analytics/theme.js';
   import Segmented from '../../components/common/Segmented.svelte';
 
   const FEATURE_LABELS = {
@@ -35,7 +36,7 @@
     is_walk: 'Walking',
   };
 
-  const TYPE_COLORS = { run: '#f9569b', ride: '#c084fc', walk: '#fdba74', hike: '#38bdf8' };
+  const TYPE_COLORS = SPORT_COLORS;
 
   let energyRange = $state('3M');
   const energySeries = $derived($chartSeries[energyRange] ?? $chartSeries['3M']);

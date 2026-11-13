@@ -228,13 +228,19 @@ assert.ok(q1.localId && q2.localId);
 console.log('✔ Offline activity sync queue');
 
 // 6. Dark Outdoor Theme
+const meta = document.createElement('meta');
+meta.setAttribute('name', 'theme-color');
+meta.setAttribute('content', '#db2777');
+document.head.appendChild(meta);
 const themeMod = await import('../src/lib/theme.js');
 themeMod.setTheme('dark');
 assert.equal(document.documentElement.classList.contains('theme-dark'), true);
 assert.equal(localStorage.getItem('trana:theme'), 'dark');
+assert.equal(meta.getAttribute('content'), '#0f131d');
 themeMod.toggleTheme();
 assert.equal(document.documentElement.classList.contains('theme-dark'), false);
 assert.equal(localStorage.getItem('trana:theme'), 'light');
+assert.equal(meta.getAttribute('content'), '#db2777');
 console.log('✔ Outdoor high-contrast dark theme toggle & persistence');
 
 // 7. SSR Render check for Preview.svelte

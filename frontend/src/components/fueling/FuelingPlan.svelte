@@ -52,25 +52,25 @@
 
 <div class="space-y-4">
   <!-- hero -->
-  <div class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-500 via-brand-600 to-brand-700 p-5 text-white shadow-card">
+  <div class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-600 via-brand-700 to-brand-800 p-5 text-white shadow-card">
     <div class="absolute -right-8 -top-10 h-36 w-36 rounded-full bg-white/10"></div>
     <div class="absolute -bottom-12 left-1/4 h-32 w-32 rounded-full bg-white/5"></div>
     <div class="relative">
       <div class="flex items-center justify-between gap-3">
-        <p class="text-[11px] font-extrabold uppercase tracking-[0.14em] text-white/80">Predicted duration</p>
-        <span class="rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide backdrop-blur">
+        <p class="text-[11px] font-extrabold uppercase tracking-[0.14em] text-white/90">Predicted duration</p>
+        <span class="rounded-full bg-white/20 px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide backdrop-blur">
           {INTENSITY_COPY[f.intensity]?.label ?? f.intensity}
         </span>
       </div>
       <div class="mt-1 flex flex-wrap items-end gap-x-3 gap-y-1">
         <p class="num-tabular font-display text-[40px] font-extrabold leading-none">{fmtDuration(d.minutes)}</p>
-        <p class="num-tabular pb-1 text-sm font-bold text-white/80">{Math.round(d.low)}–{Math.round(d.high)} min range</p>
+        <p class="num-tabular pb-1 text-sm font-bold text-white/90">{Math.round(d.low)}–{Math.round(d.high)} min range</p>
       </div>
-      <div class="num-tabular mt-3 flex flex-wrap items-center gap-2 text-[11px] font-bold text-white/85">
-        <span class="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1">
+      <div class="num-tabular mt-3 flex flex-wrap items-center gap-2 text-[11px] font-bold text-white/95">
+        <span class="inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-1">
           <Gauge size={12} /> {d.paceMinPerKm ? pace(d.paceMinPerKm, $unitSystem) : speed(d.speedKmh, $unitSystem)}
         </span>
-        <span class="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1">
+        <span class="inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-1">
           <Clock size={12} /> Estimate only
         </span>
         <span class="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1">
@@ -91,7 +91,7 @@
         <p class="num-tabular font-display text-lg font-extrabold leading-tight text-ink-900">
           {tile.value}<span class="ml-0.5 text-[11px] font-bold text-ink-400">{tile.unit}</span>
         </p>
-        <p class="num-tabular text-[11px] font-bold text-brand-500">{tile.sub}</p>
+        <p class="num-tabular text-[11px] font-bold text-brand-700">{tile.sub}</p>
       </div>
     {/each}
   </div>
@@ -110,18 +110,18 @@
             {#if index < f.timeline.length - 1}
               <span class="absolute left-[15px] top-9 h-[calc(100%-1.6rem)] w-0.5 rounded-full bg-brand-100"></span>
             {/if}
-            <span class="relative z-10 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-50 text-brand-600 ring-1 ring-brand-100">
+            <span class="relative z-10 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-50 text-brand-700 ring-1 ring-brand-100">
               <Icon size={15} />
             </span>
             <div class="min-w-0 flex-1 pt-0.5">
               <div class="flex flex-wrap items-baseline gap-x-2">
                 <p class="text-xs font-extrabold text-ink-900">{step.label}</p>
-                <span class="text-[11px] font-bold uppercase tracking-wide text-brand-500">{step.window}</span>
+                <span class="text-[11px] font-bold uppercase tracking-wide text-brand-700">{step.window}</span>
               </div>
               <p class="text-[11px] font-semibold text-ink-400">{step.detail}</p>
             </div>
             {#if step.carbsG > 0}
-              <span class="num-tabular shrink-0 self-start rounded-lg bg-brand-50 px-2 py-1 text-[11px] font-extrabold text-brand-600">+{step.carbsG} g</span>
+              <span class="num-tabular shrink-0 self-start rounded-lg bg-brand-50 px-2 py-1 text-[11px] font-extrabold text-brand-700">+{step.carbsG} g</span>
             {/if}
           </li>
         {/each}

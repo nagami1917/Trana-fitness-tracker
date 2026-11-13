@@ -139,7 +139,7 @@
               title="Schedule for {isoDay(day)}"
               onclick={() => navigate(`/plan?date=${isoDay(day)}`)}
             >
-              <p class="text-[11px] font-extrabold uppercase tracking-wider {today ? 'text-brand-500' : 'text-ink-400'}">
+              <p class="text-[11px] font-extrabold uppercase tracking-wider {today ? 'text-brand-700' : 'text-ink-400'}">
                 {weekdayShort[day.getDay()]}
               </p>
               <p class="num-tabular text-lg font-extrabold {today ? 'text-brand-700' : 'text-ink-900'}">{day.getDate()}</p>

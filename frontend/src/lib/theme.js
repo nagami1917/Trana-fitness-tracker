@@ -17,7 +17,12 @@ function readTheme() {
 
 function applyTheme(mode) {
   if (typeof document !== 'undefined') {
-    document.documentElement.classList.toggle('theme-dark', mode === 'dark');
+    const isDark = mode === 'dark';
+    document.documentElement.classList.toggle('theme-dark', isDark);
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) {
+      meta.setAttribute('content', isDark ? '#0f131d' : '#db2777');
+    }
   }
 }
 

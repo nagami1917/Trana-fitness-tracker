@@ -389,7 +389,7 @@
             <Flame size={22} />
           </span>
           <div class="min-w-0 flex-1">
-            <p class="text-[11px] font-extrabold uppercase tracking-[0.1em] text-brand-500">Predicted effort</p>
+            <p class="text-[11px] font-extrabold uppercase tracking-[0.1em] text-brand-700">Predicted effort</p>
             {#if loadingModel || !prediction}
               <div class="mt-2"><Skeleton variant="lines" count={2} /></div>
             {:else}
@@ -398,7 +398,7 @@
                   {fmtDuration(prediction.d.minutes)}
                 </p>
                 <p class="num-tabular text-sm font-bold text-ink-400">
-                  ≈ <span class="text-brand-600">{kcal(prediction.f.calories.total)} kcal</span>
+                  ≈ <span class="text-brand-700">{kcal(prediction.f.calories.total)} kcal</span>
                 </p>
               </div>
               <p class="num-tabular mt-1 text-[11px] font-semibold text-ink-400">

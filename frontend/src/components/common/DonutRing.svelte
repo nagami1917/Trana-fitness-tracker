@@ -1,5 +1,5 @@
 <script>
-  let { value = 0, size = 148, thickness = 13, label = '', sublabel = '', track = '#ffe1ee' } = $props();
+  let { value = 0, size = 148, thickness = 13, label = '', sublabel = '', track = 'var(--track-ring)' } = $props();
 
   const r = $derived((size - thickness) / 2);
   const c = $derived(2 * Math.PI * r);
@@ -11,9 +11,9 @@
   <svg width={size} height={size} class="-rotate-90">
     <defs>
       <linearGradient id={gid} x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stop-color="#ff9ec4" />
-        <stop offset="55%" stop-color="#fb5c9f" />
-        <stop offset="100%" stop-color="#db2777" />
+        <stop offset="0%" stop-color="#f9569b" />
+        <stop offset="55%" stop-color="#db2777" />
+        <stop offset="100%" stop-color="#be185d" />
       </linearGradient>
     </defs>
     <circle cx={size / 2} cy={size / 2} {r} stroke={track} stroke-width={thickness} fill="none" />

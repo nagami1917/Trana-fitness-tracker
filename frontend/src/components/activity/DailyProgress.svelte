@@ -192,7 +192,7 @@
           <span class="font-display text-2xl font-extrabold text-emerald-600">{session.calories_burned}</span>
           <span class="text-xs font-bold text-ink-400">kcal</span>
         </div>
-        <div class="mt-2 w-full bg-brand-100 rounded-full h-2">
+        <div class="mt-2 w-full rounded-full h-2" style="background-color: var(--track-bar)">
           <div class="bg-emerald-500 h-2 rounded-full" style="width:{Math.min(100, (session.calories_burned / dailyBurnTarget) * 100)}%"></div>
         </div>
         <p class="num-tabular text-[11px] font-semibold text-ink-400 mt-1">Goal ~{dailyBurnTarget} kcal</p>
@@ -204,7 +204,7 @@
           <span class="font-display text-2xl font-extrabold text-rose-500">{session.calories_eaten}</span>
           <span class="text-xs font-bold text-ink-400">kcal</span>
         </div>
-        <div class="mt-2 w-full bg-brand-100 rounded-full h-2">
+        <div class="mt-2 w-full rounded-full h-2" style="background-color: var(--track-bar)">
           <div class="bg-rose-500 h-2 rounded-full" style="width:{Math.min(100, (session.calories_eaten / dailyCalorieGoal) * 100)}%"></div>
         </div>
         <p class="num-tabular text-[11px] font-semibold text-ink-400 mt-1">Target {dailyCalorieGoal} kcal</p>
@@ -213,7 +213,7 @@
       <div class="card-flat p-4">
         <p class="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400">Water</p>
         <div class="num-tabular flex items-baseline gap-1 mt-1">
-          <span class="font-display text-2xl font-extrabold text-brand-600">
+          <span class="font-display text-2xl font-extrabold text-sky-600">
             {$unitSystem === 'imperial' ? Math.round(toDisplayFluid(session.water_ml, 'imperial')) : session.water_ml}
           </span>
           <span class="text-xs font-bold text-ink-400">{fluidUnit($unitSystem)}</span>

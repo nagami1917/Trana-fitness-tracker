@@ -45,9 +45,22 @@ const ratio = contrastRatio(ink400Match[1], '#ffffff');
 assert.ok(ratio >= 4.5, `Expected ink[400] (${ink400Match[1]}) WCAG AA >= 4.5:1 on white, got ${ratio.toFixed(2)}`);
 
 const appCss = readFileSync(resolve(root, 'src/app.css'), 'utf8');
-for (const token of ['--bg-surface', '--bg-subtle', '--text-primary', '--text-muted', '--border-hairline', '.card-flat', 'tabular-nums', '.leaflet-tile-pane']) {
+for (const token of ['--bg-surface', '--bg-subtle', '--text-primary', '--text-muted', '--border-hairline', '--track-ring', '--track-bar', '--chart-tick', '--brand-text', '.bg-sky-50', '.bg-ink-100', '.card-flat', 'tabular-nums', '.leaflet-tile-pane']) {
   assert.ok(appCss.includes(token), `app.css missing expected token/rule: ${token}`);
 }
+
+for (const shade of ['100:', '200:', '300:', '400:', '500:', '600:', '700:', '800:', '900:']) {
+  assert.ok(tailwindCfg.includes(shade), `tailwind.config.js missing ink shade ${shade}`);
+}
+const gradMatch = tailwindCfg.match(/'brand-gradient':\s*'([^']+)'/);
+assert.ok(gradMatch, 'Expected brand-gradient in tailwind.config.js');
+for (const stopHex of gradMatch[1].match(/#[0-9a-fA-F]{6}/g) || []) {
+  const gradContrast = contrastRatio(stopHex, '#ffffff');
+  assert.ok(gradContrast >= 4.5, `Expected brand-gradient stop ${stopHex} WCAG AA >= 4.5:1 with white text, got ${gradContrast.toFixed(2)}`);
+}
+
+const donutSrc = readFileSync(resolve(root, 'src/components/common/DonutRing.svelte'), 'utf8');
+assert.ok(!donutSrc.includes("track = '#ffe1ee'"), 'DonutRing should use CSS token --track-ring instead of hardcoded #ffe1ee');
 
 const dashSource = readFileSync(resolve(root, 'src/pages/Dashboard/Dashboard.svelte'), 'utf8');
 assert.ok(!dashSource.includes('/mascot-cat.png'), 'Dashboard should not render decorative mascot images');

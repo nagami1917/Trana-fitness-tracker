@@ -313,7 +313,7 @@
                   </button>
                   <button
                     type="button"
-                    class="shrink-0 rounded px-1.5 py-0.5 text-xs text-rose-500 hover:bg-rose-50 cursor-pointer"
+                    class="shrink-0 rounded px-1.5 py-0.5 text-xs text-red-600 hover:bg-red-50 cursor-pointer"
                     onclick={() => deleteFood(food.id)}
                     aria-label="Remove {food.food_name}"
                     title="Remove {food.food_name}"
@@ -351,7 +351,7 @@
     </div>
 
     {#if adding}
-      <form class="rounded-xl border border-brand-100 bg-brand-50/30 p-4 shadow-sm space-y-3" onsubmit={(event) => { event.preventDefault(); addFood(); }}>
+      <form class="card-flat p-4 space-y-3" onsubmit={(event) => { event.preventDefault(); addFood(); }}>
         <div>
           <p class="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400 mb-1.5">1-tap athlete quick-add</p>
           <div class="flex flex-wrap gap-1.5">
@@ -373,13 +373,13 @@
             <input
               id="food-name"
               bind:value={form.food_name}
-              class="w-full px-3 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none"
+              class="input !rounded-xl !px-3 !py-2"
               placeholder="e.g. oatmeal with banana"
             />
           </div>
           <div>
             <label for="food-meal" class="block text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400 mb-1">Meal</label>
-            <select id="food-meal" bind:value={form.meal_type} class="w-full px-3 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none">
+            <select id="food-meal" bind:value={form.meal_type} class="input !rounded-xl !px-3 !py-2">
               {#each MEALS as meal (meal.id)}
                 <option value={meal.id}>{meal.label}</option>
               {/each}
@@ -387,25 +387,25 @@
           </div>
           <div>
             <label for="food-calories" class="block text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400 mb-1">Calories</label>
-            <input id="food-calories" type="number" min="0" bind:value={form.calories} class="num-tabular w-full px-3 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" placeholder="0" />
+            <input id="food-calories" type="number" min="0" bind:value={form.calories} class="input num-tabular !rounded-xl !px-3 !py-2" placeholder="0" />
           </div>
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
           <div>
             <label for="food-carbs" class="block text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400 mb-1">Carbs (g)</label>
-            <input id="food-carbs" type="number" min="0" bind:value={form.carbs_g} class="num-tabular w-full px-2.5 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" placeholder="0" />
+            <input id="food-carbs" type="number" min="0" bind:value={form.carbs_g} class="input num-tabular !rounded-xl !px-2.5 !py-2" placeholder="0" />
           </div>
           <div>
             <label for="food-protein" class="block text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400 mb-1">Protein (g)</label>
-            <input id="food-protein" type="number" min="0" bind:value={form.protein_g} class="num-tabular w-full px-2.5 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" placeholder="0" />
+            <input id="food-protein" type="number" min="0" bind:value={form.protein_g} class="input num-tabular !rounded-xl !px-2.5 !py-2" placeholder="0" />
           </div>
           <div>
             <label for="food-fat" class="block text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400 mb-1">Fat (g)</label>
-            <input id="food-fat" type="number" min="0" bind:value={form.fat_g} class="num-tabular w-full px-2.5 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" placeholder="0" />
+            <input id="food-fat" type="number" min="0" bind:value={form.fat_g} class="input num-tabular !rounded-xl !px-2.5 !py-2" placeholder="0" />
           </div>
           <div>
             <label for="food-qty" class="block text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400 mb-1">Qty</label>
-            <input id="food-qty" type="number" min="1" bind:value={form.quantity} class="num-tabular w-full px-2.5 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" placeholder="1" />
+            <input id="food-qty" type="number" min="1" bind:value={form.quantity} class="input num-tabular !rounded-xl !px-2.5 !py-2" placeholder="1" />
           </div>
         </div>
         <div>
@@ -414,7 +414,7 @@
             id="food-notes"
             bind:value={form.notes}
             rows="2"
-            class="w-full px-3 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none"
+            class="input !rounded-xl !px-3 !py-2"
             placeholder="e.g. felt energetic after"
           ></textarea>
         </div>
@@ -429,7 +429,7 @@
     {/if}
 
     {#if editingFoodId !== null && editForm}
-      <form class="rounded-xl border border-brand-200 bg-brand-50/40 p-4 shadow-sm space-y-3" onsubmit={(event) => { event.preventDefault(); saveEdit(); }}>
+      <form class="card-flat p-4 space-y-3" onsubmit={(event) => { event.preventDefault(); saveEdit(); }}>
         <h4 class="text-xs font-extrabold text-brand-700 uppercase tracking-[0.1em]">Edit Food</h4>
         <div class="grid grid-cols-2 gap-3">
           <div class="col-span-2">
@@ -437,12 +437,12 @@
             <input
               id="edit-food-name"
               bind:value={editForm.food_name}
-              class="w-full px-3 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none"
+              class="input !rounded-xl !px-3 !py-2"
             />
           </div>
           <div>
             <label for="edit-food-meal" class="block text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400 mb-1">Meal</label>
-            <select id="edit-food-meal" bind:value={editForm.meal_type} class="w-full px-3 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none">
+            <select id="edit-food-meal" bind:value={editForm.meal_type} class="input !rounded-xl !px-3 !py-2">
               {#each MEALS as meal (meal.id)}
                 <option value={meal.id}>{meal.label}</option>
               {/each}
@@ -450,35 +450,35 @@
           </div>
           <div>
             <label for="edit-food-calories" class="block text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400 mb-1">Calories</label>
-            <input id="edit-food-calories" type="number" min="0" bind:value={editForm.calories} class="num-tabular w-full px-3 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" />
+            <input id="edit-food-calories" type="number" min="0" bind:value={editForm.calories} class="input num-tabular !rounded-xl !px-3 !py-2" />
           </div>
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
           <div>
             <label for="edit-food-carbs" class="block text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400 mb-1">Carbs (g)</label>
-            <input id="edit-food-carbs" type="number" min="0" bind:value={editForm.carbs_g} class="num-tabular w-full px-2.5 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" />
+            <input id="edit-food-carbs" type="number" min="0" bind:value={editForm.carbs_g} class="input num-tabular !rounded-xl !px-2.5 !py-2" />
           </div>
           <div>
             <label for="edit-food-protein" class="block text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400 mb-1">Protein (g)</label>
-            <input id="edit-food-protein" type="number" min="0" bind:value={editForm.protein_g} class="num-tabular w-full px-2.5 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" />
+            <input id="edit-food-protein" type="number" min="0" bind:value={editForm.protein_g} class="input num-tabular !rounded-xl !px-2.5 !py-2" />
           </div>
           <div>
             <label for="edit-food-fat" class="block text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400 mb-1">Fat (g)</label>
-            <input id="edit-food-fat" type="number" min="0" bind:value={editForm.fat_g} class="num-tabular w-full px-2.5 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" />
+            <input id="edit-food-fat" type="number" min="0" bind:value={editForm.fat_g} class="input num-tabular !rounded-xl !px-2.5 !py-2" />
           </div>
           <div>
             <label for="edit-food-qty" class="block text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400 mb-1">Qty</label>
-            <input id="edit-food-qty" type="number" min="1" bind:value={editForm.quantity} class="num-tabular w-full px-2.5 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" />
+            <input id="edit-food-qty" type="number" min="1" bind:value={editForm.quantity} class="input num-tabular !rounded-xl !px-2.5 !py-2" />
           </div>
         </div>
         <div>
           <label for="edit-food-notes" class="block text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400 mb-1">Notes</label>
-          <input id="edit-food-notes" bind:value={editForm.notes} class="w-full px-3 py-2 rounded-lg border border-brand-200 bg-white text-sm focus:border-brand-500 focus:outline-none" placeholder="Optional note" />
+          <input id="edit-food-notes" bind:value={editForm.notes} class="input !rounded-xl !px-3 !py-2" placeholder="Optional note" />
         </div>
         <div class="flex flex-wrap gap-2">
           <button type="submit" disabled={busy} class="btn-primary flex-1 !py-2 !text-xs">Save</button>
           <button type="button" onclick={cancelEdit} class="btn-ghost flex-1 !py-2 !text-xs">Cancel</button>
-          <button type="button" disabled={busy} onclick={() => deleteFood(editingFoodId)} class="rounded-xl px-3 py-2 border border-rose-200 bg-rose-50 text-rose-600 text-xs font-bold cursor-pointer disabled:opacity-60">Delete</button>
+          <button type="button" disabled={busy} onclick={() => deleteFood(editingFoodId)} class="rounded-xl px-3 py-2 border border-red-200 bg-red-50 text-red-700 text-xs font-bold hover:bg-red-100 cursor-pointer disabled:opacity-60">Delete</button>
         </div>
       </form>
     {/if}

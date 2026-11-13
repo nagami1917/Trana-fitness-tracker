@@ -1,7 +1,8 @@
 <script>
   import { onMount } from 'svelte';
   import Chart from 'chart.js/auto';
-  import { baseOptions, PINK } from './theme.js';
+  import { baseOptions, chartColors, PINK } from './theme.js';
+  import { theme } from '../../lib/theme.js';
 
   let {
     labels = [],
@@ -19,6 +20,7 @@
   let chart;
 
   function buildDatasets() {
+    const c = chartColors();
     return series.map((s, index) => ({
       label: s.label,
       data: s.data,
@@ -28,7 +30,7 @@
       fill: fill && (s.fill ?? index === 0),
       pointRadius: s.pointRadius ?? 0,
       pointHoverRadius: 5,
-      pointBackgroundColor: '#fff',
+      pointBackgroundColor: c.pointBg,
       pointBorderColor: s.color ?? PINK,
       pointBorderWidth: 2.5,
       borderDash: s.dashed ? [6, 6] : undefined,
@@ -72,6 +74,7 @@
   });
 
   $effect(() => {
+    void $theme;
     if (!chart) return;
     const nextLabels = labels;
     const nextSeries = series;
