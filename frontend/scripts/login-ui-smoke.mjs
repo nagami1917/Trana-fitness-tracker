@@ -84,6 +84,7 @@ try {
   click(document.querySelector('button[role="tab"][aria-selected="false"]'));
   assert.ok(document.querySelector('#full-name'));
   assert.ok(document.querySelector('#username'));
+  assert.equal(document.querySelector('#username')?.hasAttribute('pattern'), false, 'Username should not be blocked by native pattern validation.');
   assert.ok(document.querySelector('#signup-email'));
 
   setInput('#full-name', 'Test Athlete');

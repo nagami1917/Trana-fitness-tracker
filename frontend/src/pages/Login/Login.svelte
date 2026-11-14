@@ -336,7 +336,7 @@
           <input id="full-name" bind:value={fullName} type="text" maxlength="80" autocomplete="name" required />
           {#if fieldError('name')}<small class="field-error">{fieldError('name')}</small>{/if}
           <label for="username">Username</label>
-          <input id="username" bind:value={username} type="text" minlength="3" maxlength="20" pattern="[A-Za-z0-9_]{3,20}" autocomplete="username" required />
+          <input id="username" bind:value={username} type="text" minlength="3" maxlength="20" autocomplete="username" required />
           <p class="hint">3–20 letters, numbers, or underscores.</p>
           {#if fieldError('username')}<small class="field-error">{fieldError('username')}</small>{/if}
           <label for="signup-email">Gmail address</label>
