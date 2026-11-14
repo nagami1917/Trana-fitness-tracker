@@ -90,6 +90,7 @@ jobs:
       # No composer.lock is committed in this repo, so `install` cannot work —
       # resolve dependencies instead. (Maintainers: consider committing a lock file.)
       - name: Install dependencies
+        id: install-dependencies
         working-directory: backend
         run: composer update --no-interaction --prefer-dist --no-progress
       - name: Smoke-test the local Laravel server
@@ -108,10 +109,21 @@ jobs:
           fi
           curl --fail --silent --show-error http://127.0.0.1:18001/api/docs \
             | python3 -c 'import json, sys; assert json.load(sys.stdin)["name"] == "TRANA API"'
-      - name: Test browser-origin bearer authentication over HTTP
+      - name: Test HttpOnly-cookie authentication and CSRF over HTTP
+        id: http-smoke
         working-directory: backend
-        run: python3 scripts/test_stateless_api_http.py
+        run: |
+          set +e
+          python3 scripts/test_stateless_api_http.py 2>&1 | tee /tmp/trana-http-smoke.log
+          code=${PIPESTATUS[0]}
+          if [ "$code" -ne 0 ]; then
+            tail -12 /tmp/trana-http-smoke.log | cut -c1-450 | while IFS= read -r line; do
+              [ -n "$line" ] && echo "::error::$line"
+            done
+            exit "$code"
+          fi
       - name: Run backend tests
+        if: ${{ !cancelled() && steps.install-dependencies.outcome == 'success' }}
         working-directory: backend
         run: |
           set +e
@@ -138,10 +150,12 @@ jobs:
                 printf '%s\n' "$plain" | sed -n '/\(FAILURES\|ERRORS\)!/,$p' | cut -c1-450 | head -10
               fi
             else
-              {
-                printf '%s\n' "$plain" | grep -E 'Tests:|^[[:space:]]*OK \(|WARN  |FAIL  ' | head -6
-                printf '%s\n' "$plain" | tail -8
-              } | cut -c1-450 | head -10
+              details=$(printf '%s\n' "$plain" | grep -E 'FAIL|FAILED|⨯|Failed asserting|Expected|Error:|Exception:|Tests:' | head -10 || true)
+              if [ -n "$details" ]; then
+                printf '%s\n' "$details" | cut -c1-450
+              else
+                printf '%s\n' "$plain" | tail -10 | cut -c1-450
+              fi
             fi | while IFS= read -r line; do [ -n "$line" ] && echo "::error::$line"; done
             exit "$code"
           fi
