@@ -293,11 +293,13 @@ class EmailPasswordAuthTest extends TestCase
         ])->assertOk()->assertJsonPath('user.email', 'reset@gmail.com');
     }
 
-    public function test_production_auth_cookie_is_secure(): void
+    public function test_production_auth_cookies_are_secure_and_default_to_cross_site_compatible_samesite(): void
     {
         $account = $this->createVerifiedAccount('Secure Athlete', 'secure@gmail.com');
         $previousEnvironment = app()->environment();
+        $previousSameSite = config('services.trana.cookie_same_site');
         app()->instance('env', 'production');
+        config(['services.trana.cookie_same_site' => null]);
 
         try {
             $response = $this->postJson('/api/auth/login', [
@@ -305,11 +307,17 @@ class EmailPasswordAuthTest extends TestCase
                 'password' => 'Fixture-password-123',
             ])->assertOk();
             $cookie = $response->getCookie('trana_session', decrypt: false);
+            $csrfCookie = $response->getCookie('trana_csrf', decrypt: false);
             $this->assertNotNull($cookie);
+            $this->assertNotNull($csrfCookie);
             $this->assertTrue($cookie->isSecure());
             $this->assertTrue($cookie->isHttpOnly());
+            $this->assertSame('none', $cookie->getSameSite());
+            $this->assertTrue($csrfCookie->isSecure());
+            $this->assertSame('none', $csrfCookie->getSameSite());
         } finally {
             app()->instance('env', $previousEnvironment);
+            config(['services.trana.cookie_same_site' => $previousSameSite]);
         }
     }
 }

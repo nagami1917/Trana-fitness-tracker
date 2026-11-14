@@ -62,9 +62,9 @@ try {
 
   const user = { id: 1, name: 'Athlete', username: 'runner_1', email: 'athlete@gmail.com', role: 'athlete' };
   replies = [reply('/api/auth/login', 200, { user, csrfToken: 'd'.repeat(64) })];
-  assert.equal((await api.auth.login('runner_1', 'Runner-pass-123')).username, 'runner_1');
+  assert.equal((await api.auth.login('athlete@gmail.com', 'Runner-pass-123')).username, 'runner_1');
   assert.equal(calls.at(-1).method, 'POST');
-  assert.deepEqual(JSON.parse(calls.at(-1).body), { identifier: 'runner_1', password: 'Runner-pass-123' });
+  assert.deepEqual(JSON.parse(calls.at(-1).body), { identifier: 'athlete@gmail.com', password: 'Runner-pass-123' });
   assert.equal(calls.at(-1).headers['X-CSRF-TOKEN'], csrf);
   assert.equal(calls.at(-1).credentials, 'include');
   assert.equal(calls.at(-1).headers.Authorization, undefined, 'Browser auth must use the HttpOnly cookie.');

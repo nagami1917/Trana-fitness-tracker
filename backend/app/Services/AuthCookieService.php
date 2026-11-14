@@ -91,8 +91,12 @@ class AuthCookieService
 
     private function sameSite(): string
     {
-        $sameSite = strtolower((string) config('services.trana.cookie_same_site', 'lax'));
+        $default = app()->environment('production') ? 'none' : 'lax';
+        $configured = config('services.trana.cookie_same_site');
+        $sameSite = is_string($configured) && trim($configured) !== ''
+            ? strtolower(trim($configured))
+            : $default;
 
-        return in_array($sameSite, ['lax', 'strict', 'none'], true) ? $sameSite : 'lax';
+        return in_array($sameSite, ['lax', 'strict', 'none'], true) ? $sameSite : $default;
     }
 }

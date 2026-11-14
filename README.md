@@ -235,7 +235,7 @@ Vite. Never put database credentials in a `VITE_*` variable.
 | frontend | `VITE_ORS_API_KEY` | OpenRouteService key — drawn routes snap onto real roads. Optional; without it the map falls back to straight lines. |
 | backend | `DB_HOST/DB_PORT/DB_DATABASE/DB_USERNAME/DB_PASSWORD/DB_SSLMODE` | Supabase Postgres (session pooler for Vercel). Laravel ignores `DB_URL`/`DATABASE_URL` for pgsql. |
 | backend | `MAIL_MAILER`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_ADDRESS` | SMTP/transactional mail for verification and password-reset OTPs; keep credentials in deployment secrets. |
-| backend | `TRANA_AUTH_COOKIE_MINUTES`, `TRANA_COOKIE_SAME_SITE`, `TRANA_COOKIE_DOMAIN` | HttpOnly auth-cookie lifetime and deployment scope; production cookies are Secure. |
+| backend | `TRANA_AUTH_COOKIE_MINUTES`, `TRANA_COOKIE_SAME_SITE`, `TRANA_COOKIE_DOMAIN` | HttpOnly auth-cookie lifetime and deployment scope; production cookies are Secure and default to `SameSite=None` for the separate web/API sites. |
 | backend | `ML_API_URL`, `ML_API_TOKEN`, `ML_ADMIN_TOKEN`, `ML_TIMEOUT` | Python prediction service and optional server-to-server secrets. |
 | backend | `CORS_ALLOWED_ORIGINS` | Comma-separated frontend origins, required for browser CORS and CSRF checks. |
 | ml | `ML_API_TOKEN`, `ADMIN_TOKEN`, `ALLOWED_ORIGINS`, `DATABASE_URL` | API/reload secrets, CORS, and optional training source. |
