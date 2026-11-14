@@ -12,6 +12,7 @@ import http.client
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import socket
 import subprocess
@@ -170,12 +171,22 @@ def main():
                     echo $user->createToken("http-test")->plainTextToken;
                 '''
                 token = run_checked([php, "-r", create_token], cwd=app, env=env, text=True).stdout.strip()
-                assert token, "Could not create the test Sanctum token."
+                assert re.fullmatch(r"[0-9]+\|[A-Za-z0-9]+", token), "Could not create a valid-format test Sanctum token."
                 auth_cookie = f"trana_session={token}; {csrf_cookie}"
 
                 expect_status(request(port, "GET", "/api/profile", cookie="laravel_session=stale"), 401, "web-session-only profile")
-                expect_status(request(port, "GET", "/api/profile", cookie=auth_cookie), 200, "HttpOnly-cookie profile")
-                expect_status(request(port, "GET", "/api/profile", token=token), 200, "non-browser bearer profile")
+                # Capture the cookie result before a bearer request can mask a
+                # broken cookie-to-Authorization middleware path.
+                cookie_profile = request(port, "GET", "/api/profile", cookie=auth_cookie)
+                bearer_profile = request(port, "GET", "/api/profile", token=token)
+                if cookie_profile[0] != 200:
+                    cookie_message = cookie_profile[1].get("message", "") if isinstance(cookie_profile[1], dict) else ""
+                    bearer_message = bearer_profile[1].get("message", "") if isinstance(bearer_profile[1], dict) else ""
+                    raise AssertionError(
+                        f"HttpOnly-cookie profile: got HTTP {cookie_profile[0]}: {cookie_message}; "
+                        f"direct bearer profile: got HTTP {bearer_profile[0]}: {bearer_message}"
+                    )
+                expect_status(bearer_profile, 200, "non-browser bearer profile")
                 expect_status(request(port, "PUT", "/api/profile", cookie=auth_cookie, body={"weight_kg": 68}), 419, "cookie write missing CSRF header")
                 expect_status(request(port, "PUT", "/api/profile", cookie=auth_cookie, csrf=csrf, body={"weight_kg": 68}), 200, "cookie write with CSRF")
                 expect_status(request(port, "PUT", "/api/profile", cookie=auth_cookie, csrf=csrf, body={"weight_kg": 69}, origin="https://evil.example"), 403, "cookie write from untrusted Origin")

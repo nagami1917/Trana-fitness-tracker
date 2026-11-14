@@ -182,7 +182,7 @@ class EmailPasswordAuthTest extends TestCase
         $this->assertMatchesRegularExpression('/^[0-9]+\|[A-Za-z0-9]+$/', $cookie->getValue());
 
         app('auth')->forgetGuards();
-        $this->withCookie('trana_session', $cookie->getValue())
+        $this->withCredentials()->withUnencryptedCookies(['trana_session' => $cookie->getValue()])
             ->getJson('/api/auth/me')
             ->assertOk()->assertJsonPath('user.username', 'pending_runner');
     }
