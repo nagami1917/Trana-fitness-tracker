@@ -28,6 +28,7 @@ window.alert = () => {};
 const requests = [];
 const csrf = 'a'.repeat(64);
 const user = { id: 1, name: 'Test Athlete', username: 'test_athlete', email: 'athlete@gmail.com', role: 'athlete' };
+let accountVerified = false;
 const response = (data, status = 200) => ({
   ok: status >= 200 && status < 300,
   status,
@@ -39,8 +40,23 @@ window.fetch = async (url, options = {}) => {
   requests.push({ url: String(url), method: options.method || 'GET', body, headers: options.headers, credentials: options.credentials });
   if (path === '/api/auth/csrf') return response({ csrfToken: csrf });
   if (path === '/api/auth/register') return response({ email: 'athlete@gmail.com', expires_in: 300 }, 202);
-  if (path === '/api/auth/email/verify') return response({ message: 'Account verified.', verified: true });
-  if (path === '/api/auth/login') return response({ user, csrfToken: 'b'.repeat(64) });
+  if (path === '/api/auth/email/verify') {
+    accountVerified = true;
+    return response({ message: 'Account verified.', verified: true });
+  }
+  if (path === '/api/auth/login') {
+    if (!accountVerified) {
+      return response({
+        code: 'EMAIL_NOT_VERIFIED',
+        message: 'Verify your Gmail address before logging in.',
+        email: user.email,
+        expires_in: 300,
+        resend_after: 0,
+      }, 403);
+    }
+    if (body.password !== 'Strong-pass-123') return response({ message: 'Invalid credentials.' }, 401);
+    return response({ user, csrfToken: 'b'.repeat(64) });
+  }
   if (path === '/api/profile') return response({ data: { ...user, onboarded: true } });
   if (path === '/api/activities' || path === '/api/predictions') {
     return response({ data: [], meta: { current_page: 1, last_page: 1 } });
@@ -95,6 +111,15 @@ try {
   submit(document.querySelector('form'));
   await waitFor(() => document.querySelectorAll('.otp-row input').length === 6, 'the email verification screen');
 
+  const backToLogin = [...document.querySelectorAll('.resend-row button')]
+    .find((button) => button.textContent.includes('Back to log in'));
+  click(backToLogin);
+  setInput('#identifier', 'athlete@gmail.com');
+  setInput('#login-password', 'Strong-pass-123');
+  submit(document.querySelector('form'));
+  await waitFor(() => document.querySelectorAll('.otp-row input').length === 6, 'unverified-login email verification screen');
+  assert.match(document.body.textContent, /Please verify your Gmail address before logging in\./);
+
   const verificationDigits = [...document.querySelectorAll('.otp-row input')];
   for (const [index, digit] of [...'135790'].entries()) {
     verificationDigits[index].value = digit;
@@ -103,7 +128,11 @@ try {
   }
   await waitFor(() => document.body.textContent.includes('Welcome back'), 'successful email verification');
 
-  setInput('#identifier', 'test_athlete');
+  setInput('#identifier', 'athlete@gmail.com');
+  setInput('#login-password', 'Wrong-pass-123');
+  submit(document.querySelector('form'));
+  await waitFor(() => document.querySelector('[role="alert"]')?.textContent.includes('Invalid credentials.'), 'generic invalid-login feedback');
+
   setInput('#login-password', 'Strong-pass-123');
   submit(document.querySelector('form'));
   await waitFor(() => window.location.pathname === '/', 'the signed-in dashboard route');
@@ -119,15 +148,19 @@ try {
   assert.deepEqual(requests.find((request) => request.url === '/api/auth/email/verify').body, {
     email: 'athlete@gmail.com', code: '135790',
   });
-  const loginRequest = requests.find((request) => request.url === '/api/auth/login');
-  assert.deepEqual(loginRequest.body, { identifier: 'test_athlete', password: 'Strong-pass-123' });
+  const loginRequests = requests.filter((request) => request.url === '/api/auth/login');
+  assert.deepEqual(loginRequests.map((request) => request.body), [
+    { identifier: 'athlete@gmail.com', password: 'Strong-pass-123' },
+    { identifier: 'athlete@gmail.com', password: 'Wrong-pass-123' },
+    { identifier: 'athlete@gmail.com', password: 'Strong-pass-123' },
+  ]);
   for (const request of requests.filter((item) => item.method !== 'GET')) {
     assert.equal(request.headers['X-CSRF-TOKEN'], csrf, `${request.url} should include a CSRF header`);
     assert.equal(request.credentials, 'include', `${request.url} should include same-site cookies`);
   }
   assert.equal(window.localStorage.getItem('trana.token'), null, 'Auth tokens must never be stored in localStorage.');
   assert.equal(requests.some((request) => JSON.stringify(request.body || {}).includes('google')), false);
-  console.log('Gmail/password signup, OTP verification, login and cookie/CSRF UI checks passed');
+  console.log('Signup, OTP verification, unverified and invalid login, Gmail sign-in and cookie/CSRF UI checks passed');
 } finally {
   await window.destroyLoginTest();
   await window.happyDOM.abort();

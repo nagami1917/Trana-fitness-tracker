@@ -76,7 +76,7 @@ Set these environment variables in the Vercel dashboard (Production + Preview):
 | `DB_CONNECTION` / `DB_HOST` / `DB_PORT` / `DB_DATABASE` / `DB_USERNAME` / `DB_PASSWORD` / `DB_SSLMODE` | from Supabase (§1) |
 | `CACHE_STORE` / `SESSION_DRIVER` | `database` (run the cache/sessions migrations once) |
 | `CORS_ALLOWED_ORIGINS` | Exact comma-separated frontend origins (scheme and port included) |
-| `TRANA_COOKIE_SAME_SITE` | `none` for cross-site frontend/API deployments, otherwise `lax` |
+| `TRANA_COOKIE_SAME_SITE` | Optional override; defaults to `none` in production and `lax` in local/development. Use `lax` for same-site production deployments. |
 | `TRANA_AUTH_COOKIE_MINUTES` | Optional; default is 720 minutes |
 | `TRANA_COOKIE_DOMAIN` | Optional; leave blank for host-only API cookies unless a shared parent domain is required |
 | `MAIL_MAILER`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME` | Provider SMTP settings; store credentials only in deployment secrets |
@@ -107,15 +107,16 @@ Notes:
 
 The API stores the Sanctum access token in the `trana_session` HttpOnly cookie;
 JavaScript never reads it and the login response never includes it. Production
-cookies are Secure and default to `SameSite=Lax`. If the frontend and API are on
-different sites, configure `TRANA_COOKIE_SAME_SITE=none` (HTTPS is required) and
-keep `TRANA_COOKIE_DOMAIN` blank unless both hosts share a domain where a shared
-cookie is intentionally needed. The current Vercel aliases are
+cookies are Secure. The cookie service defaults to `SameSite=None` in production
+(needed for the separate Vercel frontend/API sites) and `SameSite=Lax` in
+local/development; `TRANA_COOKIE_SAME_SITE` can override that default. `None`
+requires HTTPS. Keep `TRANA_COOKIE_DOMAIN` blank unless both hosts share a domain
+where a shared cookie is intentionally needed. The current Vercel aliases are
 `https://trana-web.vercel.app` (frontend) and `https://trana-api.vercel.app`
-(API), so set `TRANA_COOKIE_SAME_SITE=none` in the API's production environment;
-`backend/.env.example` lists the matching frontend CORS origin. For cross-site
-deployments, browser third-party cookie policies can still interfere; a same-site
-custom domain is more reliable.
+(API), so the API must use `TRANA_COOKIE_SAME_SITE=none`; the code supplies that
+default even when the variable is omitted. `backend/.env.example` lists the
+matching frontend CORS origin. For cross-site deployments, browser third-party
+cookie policies can still interfere; a same-site custom domain is more reliable.
 
 Set `CORS_ALLOWED_ORIGINS` to the exact deployed frontend origin(s), including
 the scheme and any port. Do not use a wildcard with credentialed browser
