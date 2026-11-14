@@ -3,21 +3,17 @@
 namespace App\Services;
 
 use App\Models\EmailOtpChallenge;
-use App\Models\User;
 use App\Notifications\EmailOtpNotification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Validation\ValidationException;
+use InvalidArgumentException;
 use RuntimeException;
 use Throwable;
 
-/** Issues and consumes hashed, short-lived email one-time codes. */
+/** Issues and consumes hashed, short-lived codes for account deletion only. */
 class EmailOtpService
 {
-    public const PURPOSE_REGISTRATION = 'registration';
-
-    public const PURPOSE_LOGIN = 'login';
-
     public const PURPOSE_ACCOUNT_DELETION = 'account_deletion';
 
     public const CODE_TTL_MINUTES = 10;
@@ -29,12 +25,15 @@ class EmailOtpService
     public const MAX_SENDS_PER_HOUR = 5;
 
     /**
-     * Return false when the per-email cooldown / hourly limit suppresses a send.
-     * The caller decides whether that state is visible (registration / account
-     * deletion) or should get the same generic answer as a missing login.
+     * Return false when the per-email cooldown or hourly limit suppresses a send.
+     * This service is deliberately not used for registration or sign-in.
      */
     public function issue(string $email, ?string $name, string $purpose): bool
     {
+        if ($purpose !== self::PURPOSE_ACCOUNT_DELETION) {
+            throw new InvalidArgumentException('Email confirmation codes are reserved for account deletion.');
+        }
+
         $email = $this->normalizeEmail($email);
         $this->assertRealProductionMailer();
 
@@ -99,7 +98,6 @@ class EmailOtpService
             Notification::route('mail', $email)->notify(new EmailOtpNotification(
                 $code,
                 $name ?: 'TRANA athlete',
-                $purpose,
             ));
         } catch (Throwable $exception) {
             // Do not leave a usable code behind when the transport rejects mail.
@@ -120,85 +118,6 @@ class EmailOtpService
         }
 
         return true;
-    }
-
-    /** Validate a login/registration code and return its newly issued session. */
-    public function verify(string $email, string $code): array
-    {
-        $email = $this->normalizeEmail($email);
-
-        $result = DB::transaction(function () use ($email, $code): array {
-            $challenge = EmailOtpChallenge::query()
-                ->where('email', $email)
-                ->lockForUpdate()
-                ->first();
-
-            if (! $challenge) {
-                return ['invalid' => true];
-            }
-
-            if ($challenge->expires_at->isPast() || (int) $challenge->attempts >= self::MAX_ATTEMPTS) {
-                $this->invalidateChallenge($challenge);
-
-                return ['invalid' => true];
-            }
-
-            // A code sent for account deletion can never be used to sign in.
-            if (! in_array($challenge->purpose, [self::PURPOSE_REGISTRATION, self::PURPOSE_LOGIN], true)) {
-                $this->recordFailedAttempt($challenge);
-
-                return ['invalid' => true];
-            }
-
-            $expectedHash = $this->hashCode($email, $challenge->purpose, $code);
-            if (! hash_equals($challenge->code_hash, $expectedHash)) {
-                $this->recordFailedAttempt($challenge);
-
-                return ['invalid' => true];
-            }
-
-            if ($challenge->purpose === self::PURPOSE_REGISTRATION) {
-                // The request is rechecked while holding the challenge lock so
-                // a concurrent registration cannot create a duplicate account.
-                if (User::query()->where('email', $email)->exists()) {
-                    $this->invalidateChallenge($challenge);
-
-                    return ['invalid' => true];
-                }
-
-                $user = User::create([
-                    'name' => $challenge->name,
-                    'email' => $email,
-                    'password' => null,
-                ]);
-                $user->forceFill(['email_verified_at' => now()])->save();
-            } else {
-                $user = User::query()->where('email', $email)->first();
-                if (! $user || $user->isSuspended()) {
-                    $this->invalidateChallenge($challenge);
-
-                    return ['invalid' => true];
-                }
-                if (! $user->email_verified_at) {
-                    $user->forceFill(['email_verified_at' => now()])->save();
-                }
-            }
-
-            $user->ensureProfile();
-            $user->ensureGoals();
-            $token = $user->createToken('pwa')->plainTextToken;
-            $this->invalidateChallenge($challenge);
-
-            return ['token' => $token, 'user' => $user];
-        });
-
-        if (isset($result['invalid'])) {
-            throw ValidationException::withMessages([
-                'code' => ['That code is invalid or expired. Request a fresh one and try again.'],
-            ]);
-        }
-
-        return $result;
     }
 
     /** Consume a fresh code sent specifically for account deletion. */
@@ -291,7 +210,7 @@ class EmailOtpService
 
         $mailer = config('mail.default');
         if (! is_string($mailer) || in_array($mailer, ['log', 'array'], true)) {
-            throw new RuntimeException('Production email OTP delivery requires a real mail transport.');
+            throw new RuntimeException('Account deletion confirmation email requires a real mail transport.');
         }
 
         if ($mailer === 'smtp') {

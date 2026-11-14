@@ -45,10 +45,10 @@ Route::post('/client-errors', [ErrorReportController::class, 'store'])
     ->middleware('throttle:errors');
 
 Route::middleware('throttle:auth')->group(function () {
-    // Registration/login send a six-digit email code; only verification issues a token.
-    Route::post('/auth/register', [AuthController::class, 'register']);
-    Route::post('/auth/login', [AuthController::class, 'login']);
-    Route::post('/auth/otp/verify', [AuthController::class, 'verifyOtp']);
+    // Both account creation and sign-in use a Google OIDC ID token. The nonce
+    // endpoint is public but rate-limited and the token is verified server-side.
+    Route::post('/auth/google/nonce', [AuthController::class, 'googleNonce']);
+    Route::post('/auth/google', [AuthController::class, 'googleSignIn']);
 });
 
 // Authenticated surface. `ensure.active` re-checks the suspension flag on

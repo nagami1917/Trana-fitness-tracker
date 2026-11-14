@@ -8,31 +8,31 @@
 
 ---
 
-## 1. Creating your account
+## 1. Creating your account and signing in
 
 1. Open the app and choose **Create your account**.
-2. Enter your **name** and **Gmail address**. TRANA accepts `@gmail.com`
-   addresses only for new registrations; existing accounts with other email
-   domains can still sign in.
-3. Submit. TRANA emails a **six-digit sign-up code**. Enter it in the app to
-   verify your email and create your account. Use the newest code; each code
-   expires after 10 minutes and works once.
+2. Select **Sign up with Google** and complete Google's sign-in prompt. Google
+   shares your verified name and email with TRANA; verified Google Workspace
+   accounts are supported as well as Gmail.
+3. TRANA creates your account and opens onboarding. If that Google account was
+   already linked to TRANA, the same flow signs you in instead.
 
-**Sign in without a password.** Enter your email address and request a
-six-digit sign-in code. If the address is registered, TRANA emails the code;
-enter it to sign in. The login response does not disclose whether an address has
-an account. No TRANA password or Google/Gmail password is requested.
+**Sign in with Google.** Choose **Sign in with Google** and select the Google
+account linked to TRANA. Google handles the password and authentication; TRANA
+never asks for or stores your Google password, and there is no separate TRANA
+password or email-code sign-in.
 
-If no message arrives, check Spam and Promotions, wait for the resend timer,
-and request a new code. Code verification still depends on TRANA's mail
-provider being correctly configured and able to deliver messages; requesting an
-OTP does not itself fix email delivery.
+If Google sign-in is unavailable or the button reports a configuration issue,
+contact the TRANA operator. The app needs a Google OAuth Web client configured
+for its deployed domain. Account deletion remains separately protected by a
+one-time email code plus typing `DELETE` (see §14); that code is not used to
+create an account or sign in.
 
 ---
 
 ## 2. First-run onboarding
 
-After verifying, a three-step wizard collects what the prediction engine needs:
+After your Google account is verified, a three-step wizard collects what the prediction engine needs:
 
 | Step | What you provide |
 | --- | --- |
@@ -189,7 +189,7 @@ email marketing and no way for other users to message you.
 | **Training & sweat** | Experience level, typical temperature, sweat profile |
 | **Prediction engine** | Units (metric/imperial) and calibration preferences |
 | **Energy calibration** | *Import samples* — upload what your watch measured so TRANA can learn your personal energy gap (from 3 samples on, estimates are scaled to you, clamped 0.5×–2.0×) |
-| **Account** | Email address display; sign in uses email codes, not a password |
+| **Account** | Verified Google email display; sign in uses Google, not a TRANA password |
 | **Danger zone** | **Delete account** — requires a fresh email code and typing `DELETE`; removes your data permanently (self-service only) |
 | **Install TRANA** | Install the app as a PWA on phone or desktop |
 
@@ -218,9 +218,9 @@ if they navigate to `/admin` directly.
 
 | Symptom | What to do |
 | --- | --- |
-| *"Sign-up is limited to Gmail addresses"* | Register with an `@gmail.com` address (case-insensitive). This restriction applies to new accounts; existing accounts can still sign in. |
-| No sign-in or sign-up code arrives | Check Spam/Promotions, wait for the resend cooldown, then request a fresh code. If it still does not arrive, the TRANA mail provider may be unavailable or misconfigured; contact the operator. |
-| *"That code is invalid or expired"* | Check that you entered the newest six-digit code within 10 minutes. Request a new one if needed. |
+| Google sign-in button does not load | Check your connection and ask the TRANA operator to confirm the Google OAuth client ID and authorized JavaScript origin for this domain. |
+| Google account cannot be linked | Contact the TRANA operator; the verified Google identity may conflict with an existing account link. |
+| Account-deletion confirmation email does not arrive | Check Spam/Promotions and contact the operator if it still does not arrive. Deletion codes depend on the TRANA mail provider; requesting a code does not guarantee delivery. |
 | *"This account has been suspended."* | An operator suspended the account — contact the operator to reactivate. |
 | Prediction says the service is unavailable | The ML service is down or unreachable — your data is safe; retry shortly. Anchors and history remain visible. |
 | No GPS signal in Track | Use **manual entry** from Activities instead. |
@@ -237,8 +237,9 @@ if they navigate to `/admin` directly.
   your activities.
 - **No social layer.** There are no public profiles, no feeds, no sharing of
   your sessions with other athletes.
-- **Emails** are stored lowercase; only `@gmail.com` addresses are accepted
-  for new sign-ups.
+- **Google sign-in** uses the verified email and stable Google identity; no
+  Google password is stored by TRANA. Verified Google Workspace and Gmail
+  accounts can be used.
 - **What TRANA does not do:** wearable sync (Garmin/Strava-style live sync) is
   not supported — use calibration imports (Settings → Energy calibration) or
   manual entry instead.

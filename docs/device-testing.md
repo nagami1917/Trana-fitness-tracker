@@ -31,13 +31,13 @@
 
 | # | Step | Expected | Status |
 | --- | --- | --- | --- |
-| C1 | Register with a non-Gmail address | Clear rejection message; no code request | ☐ |
-| C2 | Register with Gmail | Six-digit sign-up code arrives (check Spam/Promotions) | ☐ |
-| C3 | Enter a wrong/expired code | Inline rejection; no account session is created | ☐ |
-| C4 | Verify the newest valid code | Account is created and the dashboard loads | ☐ |
-| C5 | Sign in with the registered email | A six-digit code arrives; no password is requested | ☐ |
-| C6 | Enter the sign-in code | Session is created; no Google/Gmail password is used | ☐ |
-| C7 | Settings → Danger zone → request code | Deletion confirmation code arrives | ☐ |
+| C1 | Create an account with **Sign up with Google** | Google prompt completes; account and profile are created | ☐ |
+| C2 | Use a verified Google Workspace account, if available | Account is created without a Gmail-only restriction | ☐ |
+| C3 | Cancel the Google prompt | No TRANA session is created; sign-in screen remains usable | ☐ |
+| C4 | Sign in with the same Google account | Existing account opens; no email code or TRANA password is requested | ☐ |
+| C5 | Inspect the sign-in screens and requests | No Google password, TRANA password or emailed sign-in code is collected | ☐ |
+| C6 | Sign out and sign in again with Google | Session is restored and the dashboard loads | ☐ |
+| C7 | Settings → Danger zone → request code | Separate account-deletion confirmation email arrives | ☐ |
 | C8 | Type `DELETE` and submit a valid deletion code | Account data is erased and app returns to sign-in | ☐ |
 
 ## D. Planning & drawing (the draw-test on a real map)

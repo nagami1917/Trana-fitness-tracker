@@ -92,8 +92,9 @@ begin
         '2026_11_08_130000_create_daily_sessions_table',
         '2026_11_08_130001_create_daily_session_foods_table',
         '2026_11_14_000001_create_email_otp_challenges_table',
-        '2026_11_14_000002_secure_email_otp_challenges'
-    )) <> 17 then
+        '2026_11_14_000002_secure_email_otp_challenges',
+        '2026_11_14_000003_add_google_sub_to_users_table'
+    )) <> 18 then
         raise exception 'Laravel migration records are incomplete — run php artisan migrate';
     end if;
 end $$;

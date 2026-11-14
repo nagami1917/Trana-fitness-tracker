@@ -6,7 +6,7 @@ use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-/** Only an OTP-confirmed email may use the authenticated API surface. */
+/** Only a Google-verified email may use the authenticated API surface. */
 class EnsureVerifiedEmail
 {
     public function handle(Request $request, Closure $next): Response
@@ -15,14 +15,14 @@ class EnsureVerifiedEmail
 
         if ($user && ! $user->email_verified_at) {
             try {
-                // Old pre-OTP tokens must not bypass the new code-confirmation gate.
+                // Legacy tokens must not bypass the Google email-verification gate.
                 $user->currentAccessToken()?->delete();
             } catch (\Throwable) {
                 // The response still rejects an unverified account if its token is gone.
             }
 
             return response()->json([
-                'message' => 'Confirm your email with a sign-in code before continuing.',
+                'message' => 'Use Google sign-in to verify your email before continuing.',
             ], 401);
         }
 

@@ -170,10 +170,13 @@ export const api = {
         throw error;
       }
     },
-    requestLoginCode: (email) => request('/auth/login', { method: 'POST', body: { email }, auth: false }),
-    requestRegistrationCode: (payload) => request('/auth/register', { method: 'POST', body: payload, auth: false }),
-    async verifyOtp({ email, code }) {
-      const data = await request('/auth/otp/verify', { method: 'POST', body: { email, code }, auth: false });
+    requestGoogleNonce: () => request('/auth/google/nonce', { method: 'POST', auth: false }),
+    async signInWithGoogle(credential) {
+      const data = await request('/auth/google', {
+        method: 'POST',
+        body: { credential },
+        auth: false,
+      });
       return saveSession(data);
     },
     async logout() {
