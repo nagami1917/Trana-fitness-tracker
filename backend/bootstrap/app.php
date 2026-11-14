@@ -24,6 +24,18 @@ return Application::configure(basePath: dirname(__DIR__))
             \App\Http\Middleware\VerifyApiCsrf::class,
         ]);
 
+        // Laravel's route middleware priority can move auth:sanctum ahead of
+        // ordinary API middleware. These adapters must run first so the auth
+        // cookie is available to Sanctum, and CSRF checks precede route auth.
+        $middleware->prependToPriorityList(
+            \Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests::class,
+            \App\Http\Middleware\AuthenticateFromHttpOnlyCookie::class,
+        );
+        $middleware->prependToPriorityList(
+            \Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests::class,
+            \App\Http\Middleware\VerifyApiCsrf::class,
+        );
+
         $middleware->alias([
             'abilities' => \Laravel\Sanctum\Http\Middleware\CheckAbilities::class,
             'ability' => \Laravel\Sanctum\Http\Middleware\CheckForAnyAbility::class,

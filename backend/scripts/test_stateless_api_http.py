@@ -12,6 +12,7 @@ import http.client
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import socket
 import subprocess
@@ -57,6 +58,18 @@ def expect_status(result, expected, description):
     return data
 
 
+def run_checked(command, *, cwd, env, text=False):
+    result = subprocess.run(command, cwd=cwd, env=env, capture_output=True, text=text)
+    if result.returncode != 0:
+        stdout = result.stdout if isinstance(result.stdout, str) else result.stdout.decode(errors="replace")
+        stderr = result.stderr if isinstance(result.stderr, str) else result.stderr.decode(errors="replace")
+        output = "\n".join(part.strip() for part in (stdout, stderr) if part and part.strip())
+        raise RuntimeError(
+            f"Command {' '.join(map(str, command))} failed with exit {result.returncode}.\n{output}"
+        )
+    return result
+
+
 def main():
     php = shutil.which("php")
     if php is None:
@@ -100,8 +113,8 @@ def main():
             "BCRYPT_ROUNDS": "4",
             "SANCTUM_STATEFUL_DOMAINS": "localhost:5173,127.0.0.1:5173",
         })
-        subprocess.run([php, "artisan", "migrate", "--force", "--no-interaction"], cwd=app, env=env, check=True, capture_output=True)
-        subprocess.run([php, "artisan", "config:cache"], cwd=app, env=env, check=True, capture_output=True)
+        run_checked([php, "artisan", "migrate", "--force", "--no-interaction"], cwd=app, env=env)
+        run_checked([php, "artisan", "config:cache"], cwd=app, env=env)
         guard_check = r'''
             require "vendor/autoload.php";
             $app = require "bootstrap/app.php";
@@ -111,7 +124,7 @@ def main():
                 exit(1);
             }
         '''
-        subprocess.run([php, "-r", guard_check], cwd=app, env=env, check=True, capture_output=True)
+        run_checked([php, "-r", guard_check], cwd=app, env=env, text=True)
 
         with socket.socket() as listener:
             listener.bind(("127.0.0.1", 0))
@@ -157,13 +170,23 @@ def main():
                     $user->ensureGoals();
                     echo $user->createToken("http-test")->plainTextToken;
                 '''
-                token = subprocess.run([php, "-r", create_token], cwd=app, env=env, check=True, capture_output=True, text=True).stdout.strip()
-                assert token, "Could not create the test Sanctum token."
+                token = run_checked([php, "-r", create_token], cwd=app, env=env, text=True).stdout.strip()
+                assert re.fullmatch(r"[0-9]+\|[A-Za-z0-9]+", token), "Could not create a valid-format test Sanctum token."
                 auth_cookie = f"trana_session={token}; {csrf_cookie}"
 
                 expect_status(request(port, "GET", "/api/profile", cookie="laravel_session=stale"), 401, "web-session-only profile")
-                expect_status(request(port, "GET", "/api/profile", cookie=auth_cookie), 200, "HttpOnly-cookie profile")
-                expect_status(request(port, "GET", "/api/profile", token=token), 200, "non-browser bearer profile")
+                # Capture the cookie result before a bearer request can mask a
+                # broken cookie-to-Authorization middleware path.
+                cookie_profile = request(port, "GET", "/api/profile", cookie=auth_cookie)
+                bearer_profile = request(port, "GET", "/api/profile", token=token)
+                if cookie_profile[0] != 200:
+                    cookie_message = cookie_profile[1].get("message", "") if isinstance(cookie_profile[1], dict) else ""
+                    bearer_message = bearer_profile[1].get("message", "") if isinstance(bearer_profile[1], dict) else ""
+                    raise AssertionError(
+                        f"HttpOnly-cookie profile: got HTTP {cookie_profile[0]}: {cookie_message}; "
+                        f"direct bearer profile: got HTTP {bearer_profile[0]}: {bearer_message}"
+                    )
+                expect_status(bearer_profile, 200, "non-browser bearer profile")
                 expect_status(request(port, "PUT", "/api/profile", cookie=auth_cookie, body={"weight_kg": 68}), 419, "cookie write missing CSRF header")
                 expect_status(request(port, "PUT", "/api/profile", cookie=auth_cookie, csrf=csrf, body={"weight_kg": 68}), 200, "cookie write with CSRF")
                 expect_status(request(port, "PUT", "/api/profile", cookie=auth_cookie, csrf=csrf, body={"weight_kg": 69}, origin="https://evil.example"), 403, "cookie write from untrusted Origin")

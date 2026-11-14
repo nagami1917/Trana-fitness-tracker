@@ -23,19 +23,19 @@ class StatelessApiTest extends TestCase
         $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $csrf);
 
         // Having the CSRF cookie without its matching header is rejected.
-        $this->withCookie('trana_csrf', $csrf)
+        $this->withCredentials()->withUnencryptedCookies(['trana_csrf' => $csrf])
             ->postJson('/api/auth/register', [], self::FRONTEND)
             ->assertStatus(419);
 
         // A matching token is still not enough when the browser Origin is untrusted.
-        $this->withCookie('trana_csrf', $csrf)
+        $this->withCredentials()->withUnencryptedCookies(['trana_csrf' => $csrf])
             ->postJson('/api/auth/register', [], [
                 'Origin' => 'https://evil.example',
                 'X-CSRF-TOKEN' => $csrf,
             ])->assertForbidden();
 
         // The configured SPA origin plus the matching double-submit token reaches validation.
-        $this->withCookie('trana_csrf', $csrf)
+        $this->withCredentials()->withUnencryptedCookies(['trana_csrf' => $csrf])
             ->postJson('/api/auth/register', [], self::FRONTEND + ['X-CSRF-TOKEN' => $csrf])
             ->assertUnprocessable();
     }
@@ -51,14 +51,14 @@ class StatelessApiTest extends TestCase
         $this->getJson('/api/auth/me')->assertUnauthorized();
 
         app('auth')->forgetGuards();
-        $this->withCookie('trana_session', $cookieAccount['token'])
+        $this->withCredentials()->withUnencryptedCookies(['trana_session' => $cookieAccount['token']])
             ->getJson('/api/auth/me')
             ->assertOk()
             ->assertJsonPath('user.id', $cookieAccount['user']['id'])
             ->assertJsonPath('user.username', $cookieAccount['user']['username']);
 
         app('auth')->forgetGuards();
-        $this->withCookie('trana_session', $cookieAccount['token'])
+        $this->withCredentials()->withUnencryptedCookies(['trana_session' => $cookieAccount['token']])
             ->getJson('/api/auth/me', ['Authorization' => 'Bearer '.$bearerAccount['token']])
             ->assertOk()
             ->assertJsonPath('user.id', $bearerAccount['user']['id']);
