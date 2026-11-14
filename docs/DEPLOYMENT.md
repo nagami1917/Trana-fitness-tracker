@@ -52,13 +52,18 @@ views. The default seeder does not create sample accounts or activities.
 
 ## 2. Laravel API on Vercel
 
-The repository already contains `backend/vercel.json` and `backend/api/index.php`.
+The API runs as a FrankenPHP container. `backend/vercel.json` routes traffic to
+`backend/Dockerfile`; the Dockerfile installs Composer dependencies and starts
+Laravel through Caddy/FrankenPHP. The older `backend/api/index.php` entrypoint is
+not used by this container deployment.
 
 ```bash
 cd backend
-composer install --no-dev --optimize-autoloader
 vercel link            # or: vercel --prod
 ```
+
+Local Composer installs are only needed when running Laravel tests; Vercel builds
+the production image from the Dockerfile.
 
 Set these environment variables in the Vercel dashboard (Production + Preview):
 
@@ -80,11 +85,19 @@ Set these environment variables in the Vercel dashboard (Production + Preview):
 | `ML_ADMIN_TOKEN` | Separate secret matching the ML service `ADMIN_TOKEN` if model reload is needed |
 | `ML_TIMEOUT` | `12` |
 
+The container service is named `laravel`, so Vercel stores its built image in the
+project's `laravel` container-registry repository. If a deployment fails with
+`Pushing vcr.vercel.com/.../trana-api/laravel:<sha> was denied`, the Docker image
+build has completed but Vercel cannot publish it. Check that `laravel` exists and
+that the project deployment builder has write access under **Project → Sandboxes
+→ Container Registry**, then redeploy. This is a Vercel registry permission issue,
+not a Laravel route or registration-validation error.
+
 Notes:
 
-* The PHP runtime is **read-only except `/tmp`** — that is why sessions, cache and
-  logs use the database driver, not files. If you prefer logs, send them to stderr
-  (`LOG_CHANNEL=stderr`).
+* Vercel container storage is ephemeral between deployments/instances. Keep
+  sessions and cache in the database and send logs to stderr
+  (`LOG_CHANNEL=stderr`); do not depend on local files for persistence.
 * Run migrations from your machine (or a one-off job) against Supabase; Vercel
   invocations should not run `php artisan migrate` on every cold start.
 * `trustProxies('*')` is already configured so `https://` URLs and rate limits see

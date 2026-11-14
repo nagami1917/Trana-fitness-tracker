@@ -345,7 +345,7 @@ Chart.js for data viz and Leaflet + OpenStreetMap for routes.
 | Piece | Host | Notes |
 | --- | --- | --- |
 | Frontend | Vercel | `npm run build`, output `dist`, SPA rewrite |
-| API | Vercel (PHP runtime) | `backend/vercel.json` + `api/index.php` |
+| API | Vercel (FrankenPHP container) | `backend/vercel.json` + `backend/Dockerfile` |
 | Database | Supabase | Postgres + pooler connection; see `supabase/README.md` for schema setup |
 | ML | Render / Railway / Fly.io / Cloud Run | `ml/Dockerfile`, port 8000 |
 
