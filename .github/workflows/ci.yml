@@ -109,7 +109,7 @@ jobs:
           fi
           curl --fail --silent --show-error http://127.0.0.1:18001/api/docs \
             | python3 -c 'import json, sys; assert json.load(sys.stdin)["name"] == "TRANA API"'
-      - name: Test HttpOnly-cookie authentication and CSRF over HTTP
+      - name: Test signup, email OTP, cookies, and CSRF over HTTP
         id: http-smoke
         working-directory: backend
         run: |
