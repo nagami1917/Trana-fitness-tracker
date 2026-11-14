@@ -69,7 +69,9 @@ jobs:
 
           # An empty signup must stop at Laravel's required-field validation
           # (422), not the generic API 404. It cannot create an account or send mail.
-          for attempt in 1 2 3 4 5 6; do
+          # The API's Vercel deployment can be queued after this workflow starts;
+          # wait up to 3 minutes for the new production alias to become active.
+          for attempt in $(seq 1 18); do
             if ! status=$(curl --silent --show-error --max-time 30 \
               --output "$response_file" --write-out '%{http_code}' \
               --request POST \
@@ -93,10 +95,19 @@ jobs:
               exit 0
             fi
 
-            if [ "$attempt" -lt 6 ]; then
-              echo "Waiting 10 seconds for the API deployment/alias to update..."
-              sleep 10
-            fi
+            case "$status" in
+              404|000|502|503|504)
+                if [ "$attempt" -lt 18 ]; then
+                  echo "Waiting 10 seconds for the API deployment/alias to update..."
+                  sleep 10
+                fi
+                ;;
+              *)
+                echo "::error::Registration route check failed: expected Laravel 422, received HTTP $status"
+                cat "$response_file"
+                exit 1
+                ;;
+            esac
           done
 
           echo "::error::Registration route check failed: expected Laravel 422, received HTTP $status"
