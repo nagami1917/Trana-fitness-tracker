@@ -24,6 +24,7 @@ import { KM_TO_MI, isImperial } from './units.js';
 const STORAGE_PREFIX = 'trana:live_tracker:';
 const BACKUP_PREFIX = 'trana:live_tracker_backup:';
 const MAX_STORED_POINTS = 2000;
+const MIN_ACTIVITY_DISTANCE_KM = 0.05; // 50 m: below this, GPS pace/speed is too noisy to show
 
 let activeUserId = null;
 let userWeightKg = $state(60);
@@ -321,10 +322,12 @@ function appendGpsFix(fix) {
 async function startGps() {
   gpsStatus = 'requesting';
   gpsMessage = 'Acquiring GPS…';
+  let initialPoint = null;
 
   try {
     const first = await getCurrentPosition({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
     if (!tracking) return;
+    initialPoint = first;
     appendGpsFix(first);
   } catch (error) {
     if (!tracking) return;
@@ -353,6 +356,7 @@ async function startGps() {
 
   watcher = watch({
     activityType,
+    initialPoint,
     onPoint: (pt) => {
       if (!tracking || paused) return;
       appendGpsFix(pt);
@@ -394,8 +398,13 @@ const distanceKm = $derived.by(() => {
   return total;
 });
 
-const avgSpeedKmh = $derived(durationMin > 0 && distanceKm > 0 ? distanceKm / (durationMin / 60) : 0);
-const avgPaceMinKm = $derived(distanceKm > 0 && durationMin > 0 ? durationMin / distanceKm : 0);
+// Avoid displaying absurd pace/speed from a few noisy startup GPS fixes.
+const avgSpeedKmh = $derived(
+  distanceKm >= MIN_ACTIVITY_DISTANCE_KM && durationMin > 0 ? distanceKm / (durationMin / 60) : 0,
+);
+const avgPaceMinKm = $derived(
+  distanceKm >= MIN_ACTIVITY_DISTANCE_KM && durationMin > 0 ? durationMin / distanceKm : 0,
+);
 const elevationM = $derived(points.length >= 2 ? elevationGainM(points) : 0);
 
 const estimatedCalories = $derived.by(() => {
@@ -440,7 +449,7 @@ const fuelDue = $derived(
   tracking && !paused && (activeFuelTargets.carbsPerHourG > 0 || durationMin >= 45) && durationSec >= 1200 && nextFuelInSec === 0,
 );
 
-const canSaveStationary = $derived(!saving && tracking && durationMin >= 1 && distanceKm < 0.05);
+const canSaveStationary = $derived(!saving && tracking && durationMin >= 1 && distanceKm < MIN_ACTIVITY_DISTANCE_KM);
 
 const recordedCoords = $derived(
   points.map((p) => [p.latitude, p.longitude]),
@@ -752,7 +761,7 @@ async function stopActivity({ currentTodaySession = null, allowStationary = fals
   const finalDurationMin = Math.round(durationMin * 10) / 10;
   let finalDistanceKm = Math.round(distanceKm * 100) / 100;
 
-  if (finalDurationMin < 1 || (finalDistanceKm < 0.05 && !allowStationary)) {
+  if (finalDurationMin < 1 || (finalDistanceKm < MIN_ACTIVITY_DISTANCE_KM && !allowStationary)) {
     if (!paused) pauseActivity();
     statusNote = 'Record at least 0.05 km (50 m) and 1:00 to save — resume moving or tap Discard.';
     persist();
@@ -760,8 +769,8 @@ async function stopActivity({ currentTodaySession = null, allowStationary = fals
     return { saved: false, reason: 'too_short' };
   }
 
-  if (finalDistanceKm < 0.05 && allowStationary) {
-    finalDistanceKm = 0.05;
+  if (finalDistanceKm < MIN_ACTIVITY_DISTANCE_KM && allowStationary) {
+    finalDistanceKm = MIN_ACTIVITY_DISTANCE_KM;
   }
 
   saving = true;
@@ -802,7 +811,7 @@ async function stopActivity({ currentTodaySession = null, allowStationary = fals
 
     const endedAt = new Date().toISOString();
     const intakeParts = [];
-    if (allowStationary && distanceKm < 0.05) intakeParts.push('Indoor / stationary session');
+    if (allowStationary && distanceKm < MIN_ACTIVITY_DISTANCE_KM) intakeParts.push('Indoor / stationary session');
     if (fluidLoggedMl > 0 || carbsLoggedG > 0) {
       intakeParts.push(`Intake during session: ${fluidLoggedMl} ml fluid, ${carbsLoggedG} g carbs`);
     }
@@ -821,7 +830,7 @@ async function stopActivity({ currentTodaySession = null, allowStationary = fals
       route_geojson: routeGeojson,
       notes: intakeParts.length ? intakeParts.join(' · ') : null,
       gear_id: gearId || null,
-      source: allowStationary && distanceKm < 0.05 ? 'manual' : 'gps',
+      source: allowStationary && distanceKm < MIN_ACTIVITY_DISTANCE_KM ? 'manual' : 'gps',
     };
 
     const previousActivities = get(activities);

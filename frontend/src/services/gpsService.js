@@ -79,15 +79,16 @@ export function trackPoint(coords, timestamp) {
  * @param {Object} [params.options] - Geolocation watchPosition options
  * @param {boolean} [params.snapToRoadEnabled=false] - Snap points to nearest road
  * @param {string} [params.activityType='run'] - Activity type for speed-spike rejection
+ * @param {Object|null} [params.initialPoint=null] - Seed fix from the one-shot startup position
  */
-export function watch({ onPoint, onError, options = {}, snapToRoadEnabled = false, activityType = 'run' } = {}) {
+export function watch({ onPoint, onError, options = {}, snapToRoadEnabled = false, activityType = 'run', initialPoint = null } = {}) {
   const geolocation = typeof navigator !== 'undefined' ? navigator.geolocation : null;
   if (!geolocation || typeof geolocation.watchPosition !== 'function') {
     onError?.(new GpsError('unsupported'));
     return { stop: () => {} };
   }
 
-  const smoother = createGpsSmoother({ activityType });
+  const smoother = createGpsSmoother({ activityType, initialPoint });
 
   const watchId = geolocation.watchPosition(
     async (position) => {
