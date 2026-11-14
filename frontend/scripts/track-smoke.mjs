@@ -107,7 +107,7 @@ try {
   assert.ok(haversineKm([14.676, 121.0437], [14.686, 121.0537]) > 1);
   assert.equal(elevationGainM([{ altitudeM: 10 }, { altitudeM: 24 }, { altitudeM: 19 }, { altitudeM: 29 }]), 24);
 
-  const { trackPoint } = await vite.ssrLoadModule('/src/services/gpsService.js');
+  const { trackPoint, watch } = await vite.ssrLoadModule('/src/services/gpsService.js');
   const { createGpsSmoother, computeBearingDeg } = await vite.ssrLoadModule('/src/services/gpsFilter.js');
   const { validateTrackPoint, activityApi } = await vite.ssrLoadModule('/src/services/activityService.js');
   const sample = trackPoint({ latitude: 14.676, longitude: 121.0437, altitude: 32, speed: 3.0, accuracy: 8, heading: 92 }, 1762872400000);
@@ -128,6 +128,91 @@ try {
   const fDrift = smoother.push({ latitude: 14.676008, longitude: 121.043708, accuracy: 8, speedKmh: 0, timestamp: 6000 });
   assert.equal(fDrift.suppressedDrift, true);
   assert.equal(fDrift.latitude, 14.676);
+
+  // Regression: the first watchPosition fix can be ~18 m from the one-shot
+  // start fix while the phone is stationary. Seed the watch filter so that
+  // startup jitter does not become distance or a fabricated pace/speed.
+  const startupFix = trackPoint({
+    latitude: 14.676,
+    longitude: 121.0437,
+    accuracy: 8,
+    speed: 0,
+  }, 1000);
+  const originalNavigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  let onGpsPosition;
+  let clearedWatchId = null;
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    value: {
+      geolocation: {
+        watchPosition(success) {
+          onGpsPosition = success;
+          return 17;
+        },
+        clearWatch(id) {
+          clearedWatchId = id;
+        },
+      },
+    },
+  });
+  try {
+    const watchedPoints = [];
+    const watchHandle = watch({
+      activityType: 'run',
+      initialPoint: startupFix,
+      onPoint: (point) => watchedPoints.push(point),
+    });
+    await onGpsPosition({
+      coords: {
+        latitude: 14.67616,
+        longitude: 121.0437,
+        accuracy: 8,
+        speed: null,
+        altitude: null,
+        heading: null,
+      },
+      timestamp: 11000,
+    });
+    assert.equal(watchedPoints.length, 1);
+    assert.equal(watchedPoints[0].suppressedDrift, true);
+    assert.equal(watchedPoints[0].latitude, startupFix.latitude);
+    await onGpsPosition({
+      coords: {
+        latitude: 14.67616,
+        longitude: 121.0437,
+        accuracy: 8,
+        speed: 2, // noisy device reading of 7.2 km/h while still stationary
+        altitude: null,
+        heading: null,
+      },
+      timestamp: 16000,
+    });
+    assert.equal(watchedPoints.length, 2);
+    assert.equal(watchedPoints[1].suppressedDrift, true, 'stationary GPS jitter must be suppressed even with a noisy high device speed');
+    assert.equal(watchedPoints[1].latitude, startupFix.latitude);
+    await onGpsPosition({
+      coords: {
+        latitude: 14.6764,
+        longitude: 121.0437,
+        accuracy: 8,
+        speed: null,
+        altitude: null,
+        heading: null,
+      },
+      timestamp: 21000,
+    });
+    assert.equal(watchedPoints.length, 3);
+    assert.equal(watchedPoints[2].suppressedDrift, false, 'real movement must still pass without a device speed reading');
+    watchHandle.stop();
+    assert.equal(clearedWatchId, 17);
+  } finally {
+    if (originalNavigatorDescriptor) {
+      Object.defineProperty(globalThis, 'navigator', originalNavigatorDescriptor);
+    } else {
+      delete globalThis.navigator;
+    }
+  }
+
   // Genuine movement (~40 m north) updates smoothly and derives North heading (~0 deg)
   const fMove = smoother.push({ latitude: 14.6764, longitude: 121.0437, accuracy: 8, speedKmh: 10, timestamp: 20000 });
   assert.equal(fMove.suppressedDrift, false);

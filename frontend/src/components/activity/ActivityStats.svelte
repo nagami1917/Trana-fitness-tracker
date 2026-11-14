@@ -14,6 +14,7 @@
   } = $props();
 
   let timeText = $derived(durationSec !== null ? clock(durationSec) : formatDuration(durationMin));
+  let waitingForReliablePace = $derived(durationSec !== null && durationSec > 0 && distanceKm < 0.05);
 
   let stats = $derived([
     { label: 'Distance', value: formatDistance(distanceKm, $unitSystem), unit: ` ${distanceUnit($unitSystem)}` },
@@ -35,3 +36,8 @@
     </div>
   {/each}
 </div>
+{#if waitingForReliablePace}
+  <p class="mt-2 text-center text-xs font-semibold text-ink-400" role="status">
+    Pace and speed appear after 50 m of reliable GPS movement.
+  </p>
+{/if}

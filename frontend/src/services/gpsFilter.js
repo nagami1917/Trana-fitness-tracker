@@ -38,7 +38,7 @@ export function computeBearingDeg([lat1, lng1], [lat2, lng2]) {
  * - Suppresses sub-threshold stationary GPS drift
  * - Smooths coordinates with accuracy-aware EMA and calculates heading
  */
-export function createGpsSmoother({ activityType = 'run' } = {}) {
+export function createGpsSmoother({ activityType = 'run', initialPoint = null } = {}) {
   let sport = activityType;
   let lastAccepted = null; // { latitude, longitude, accuracy, timestampMs, heading }
 
@@ -120,10 +120,14 @@ export function createGpsSmoother({ activityType = 'run' } = {}) {
       }
     }
 
-    // 3. Suppress stationary GPS wobble so the dot doesn't jitter in place.
-    const driftThresholdM = Math.max(3, Math.min(12, (accuracy ?? 10) * 0.45));
-    const lowSpeed = speedKmh === null ? distM < 3 : speedKmh < 0.5;
-    if (distM < driftThresholdM && lowSpeed) {
+    // 3. Suppress GPS wobble inside the combined uncertainty of the old and
+    // new fixes. A single 15–25 m jump can be multipath noise, especially on
+    // phones starting a watch after a one-shot location request. Device speed
+    // is not a safe override here: it can be noisy while the phone is still.
+    const previousAccuracy = lastAccepted.accuracy ?? 10;
+    const currentAccuracy = accuracy ?? 10;
+    const driftThresholdM = Math.max(6, Math.min(30, (previousAccuracy + currentAccuracy) * 1.25));
+    if (distM <= driftThresholdM) {
       if (accuracy !== null && (lastAccepted.accuracy === null || accuracy < lastAccepted.accuracy)) {
         lastAccepted.accuracy = accuracy;
       }
@@ -183,6 +187,8 @@ export function createGpsSmoother({ activityType = 'run' } = {}) {
       suppressedDrift: false,
     };
   }
+
+  if (initialPoint) push(initialPoint);
 
   return { push, reset, setActivityType };
 }

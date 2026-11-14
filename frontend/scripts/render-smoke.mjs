@@ -234,6 +234,40 @@ try {
     console.error(`✘ SessionCard: ${error.message}`);
   }
 
+  // Live pace/speed stay hidden while the first 50 m are within GPS startup noise.
+  try {
+    const mod = await vite.ssrLoadModule('/src/components/activity/ActivityStats.svelte');
+    const early = render(mod.default, {
+      props: {
+        distanceKm: 0.02,
+        durationMin: 10 / 60,
+        durationSec: 10,
+        avgSpeedKmh: 0,
+        avgPaceMinKm: 0,
+        elevationGainM: 0,
+        calories: 0,
+      },
+    }).body;
+    assert.match(early, /Pace and speed appear after 50 m of reliable GPS movement/);
+
+    const moving = render(mod.default, {
+      props: {
+        distanceKm: 0.1,
+        durationMin: 2,
+        durationSec: 120,
+        avgSpeedKmh: 3,
+        avgPaceMinKm: 20,
+        elevationGainM: 0,
+        calories: 20,
+      },
+    }).body;
+    assert.doesNotMatch(moving, /Pace and speed appear after 50 m of reliable GPS movement/);
+    console.log('✔ Track metrics wait for reliable GPS distance before showing pace/speed');
+  } catch (error) {
+    failures += 1;
+    console.error(`✘ Track metric GPS warmup: ${error.message}`);
+  }
+
   // App shell + auth gate
   try {
     const mod = await vite.ssrLoadModule('/src/App.svelte');
