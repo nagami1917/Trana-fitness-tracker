@@ -11,7 +11,7 @@ import { getLeafletMaps } from './leaflet-interactive.js';
 const target = document.getElementById('app');
 let component = null;
 
-function seedStores(initialActivities = []) {
+function seedStores(initialActivities = [], initialPlans = []) {
   profile.set({
     id: 7,
     name: 'Test Athlete',
@@ -30,7 +30,7 @@ function seedStores(initialActivities = []) {
   session.set({ id: 7, name: 'Test Athlete', email: 'athlete@example.test' });
   activities.set(initialActivities);
   goals.set({ daily_calories: 2400, daily_distance_km: 10, daily_active_min: 60 });
-  plans.set([]);
+  plans.set(initialPlans);
   modelCard.set({ training_source: 'synthetic', version: 'test' });
 }
 

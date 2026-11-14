@@ -194,6 +194,30 @@ try {
   await harness.mountDashboard();
   assert.match(document.body.textContent, /Track Activity/);
   assert.match(document.body.textContent, /Ready/);
+  assert.match(document.body.textContent, /No route saved yet/);
+  assert.match(document.body.textContent, /Route preview only; the estimate uses the distance and elevation you entered/);
+
+  // When there is no recorded route, clearly label the plan-route fallback.
+  harness.seedStores([], [{
+    id: 20,
+    activity_type: 'run',
+    distance_km: 2,
+    duration: { minutes: 15 },
+    fueling: {
+      calories: { total: 120 },
+      carbs: { perHourG: 0 },
+      sodium: { perHourMg: 500 },
+      fluid: { perHourMl: 400 },
+    },
+    created_at: new Date().toISOString(),
+    route: [[14.676, 121.0437], [14.682, 121.049]],
+  }]);
+  await harness.mountDashboard();
+  assert.match(document.body.textContent, /Saved plan route/);
+
+  // Reset to a clean dashboard before testing the live tracking flow.
+  harness.seedStores([]);
+  await harness.mountDashboard();
   const startNavBtn = buttonsWithText('Start in Track Activity')[0];
   assert.ok(startNavBtn, 'Dashboard idle state should render Start in Track Activity button');
   startNavBtn.click();
@@ -298,6 +322,7 @@ try {
   );
   assert.match(document.body.textContent, /Saved to Activities and Today's Summary/);
   assert.ok(harness.getActivities().length === 1, 'Global activities store refreshed on Dashboard');
+  assert.match(document.body.textContent, /Latest recorded route/, 'Quick Plan route preview should switch to the newly saved GPS route');
 
   // 7. Discard flow -> Dashboard records Discarded status and Dismiss restores latest saved GPS activity
   await harness.mountTrack();
