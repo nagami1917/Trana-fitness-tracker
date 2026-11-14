@@ -150,10 +150,12 @@ jobs:
                 printf '%s\n' "$plain" | sed -n '/\(FAILURES\|ERRORS\)!/,$p' | cut -c1-450 | head -10
               fi
             else
-              {
-                printf '%s\n' "$plain" | grep -E 'Tests:|^[[:space:]]*OK \(|WARN  |FAIL  ' | head -6
-                printf '%s\n' "$plain" | tail -8
-              } | cut -c1-450 | head -10
+              details=$(printf '%s\n' "$plain" | grep -E 'FAIL|FAILED|⨯|Failed asserting|Expected|Error:|Exception:|Tests:' | head -10 || true)
+              if [ -n "$details" ]; then
+                printf '%s\n' "$details" | cut -c1-450
+              else
+                printf '%s\n' "$plain" | tail -10 | cut -c1-450
+              fi
             fi | while IFS= read -r line; do [ -n "$line" ] && echo "::error::$line"; done
             exit "$code"
           fi
