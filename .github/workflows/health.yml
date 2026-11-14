@@ -62,6 +62,47 @@ jobs:
           print("API docs: TRANA API")
           '
 
+      - name: Registration endpoint is routed to current Laravel API
+        run: |
+          response_file=$(mktemp)
+          trap 'rm -f "$response_file"' EXIT
+
+          # An empty signup must stop at Laravel's required-field validation
+          # (422), not the generic API 404. It cannot create an account or send mail.
+          for attempt in 1 2 3 4 5 6; do
+            if ! status=$(curl --silent --show-error --max-time 30 \
+              --output "$response_file" --write-out '%{http_code}' \
+              --request POST \
+              --header 'Accept: application/json' \
+              --header 'Content-Type: application/json' \
+              --data '{}' "$API_URL/api/auth/register"); then
+              status=000
+            fi
+            echo "POST /api/auth/register attempt $attempt: HTTP $status"
+
+            if [ "$status" = "422" ]; then
+              python3 - "$response_file" <<'PY'
+          import json, pathlib, sys
+          payload = json.loads(pathlib.Path(sys.argv[1]).read_text())
+          errors = payload.get("errors", {})
+          expected = {"name", "username", "email", "password"}
+          missing = expected.difference(errors)
+          assert not missing, f"Registration route returned 422 without expected validation errors: {missing}"
+          print("Registration route reached Laravel validation (no account was created).")
+          PY
+              exit 0
+            fi
+
+            if [ "$attempt" -lt 6 ]; then
+              echo "Waiting 10 seconds for the API deployment/alias to update..."
+              sleep 10
+            fi
+          done
+
+          echo "::error::Registration route check failed: expected Laravel 422, received HTTP $status"
+          cat "$response_file"
+          exit 1
+
       - name: ML service health (model readiness)
         if: ${{ vars.ML_HEALTH_URL != '' }}
         run: |

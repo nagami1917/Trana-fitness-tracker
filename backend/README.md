@@ -65,8 +65,8 @@ database/seeders/         no sample accounts or activities are seeded
   separate account-deletion code retains its ten-minute expiry. The default
   seeder creates no sample records.
 * **Rate limits**: auth 10/min/IP, predictions 60/min/user.
-* **Deploy**: `vercel.json` + `api/index.php` give a serverless PHP entry point;
-  any Laravel host works too.
+* **Deploy**: `vercel.json` builds the FrankenPHP image from `Dockerfile` and
+  routes requests to the Laravel container; any Laravel host works too.
 
 ## Testing
 
