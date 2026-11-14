@@ -170,12 +170,10 @@ export const api = {
         throw error;
       }
     },
-    async login({ email, password }) {
-      const data = await request('/auth/login', { method: 'POST', body: { email, password }, auth: false });
-      return saveSession(data);
-    },
-    async register(payload) {
-      const data = await request('/auth/register', { method: 'POST', body: payload, auth: false });
+    requestLoginCode: (email) => request('/auth/login', { method: 'POST', body: { email }, auth: false }),
+    requestRegistrationCode: (payload) => request('/auth/register', { method: 'POST', body: payload, auth: false }),
+    async verifyOtp({ email, code }) {
+      const data = await request('/auth/otp/verify', { method: 'POST', body: { email, code }, auth: false });
       return saveSession(data);
     },
     async logout() {
@@ -186,12 +184,6 @@ export const api = {
       }
     },
 
-    // Password recovery — always server-answered with a generic message.
-    forgotPassword: (email) => request('/password/forgot', { method: 'POST', body: { email }, auth: false }),
-    resetPassword: (payload) => request('/password/reset', { method: 'POST', body: payload, auth: false }),
-
-    // Email verification (resend uses the signed-in athlete's address).
-    resendVerification: () => request('/email/verify/resend', { method: 'POST' }),
   },
 
   profile: {
@@ -215,7 +207,11 @@ export const api = {
 
   // Data rights: export lives under activities; erasure removes everything.
   account: {
-    delete: (password) => request('/account', { method: 'DELETE', body: { password } }),
+    requestDeleteCode: () => request('/account/delete-code', { method: 'POST' }),
+    delete: (code) => request('/account', {
+      method: 'DELETE',
+      body: { code, confirmation: 'DELETE' },
+    }),
   },
 
   // Body-weight timeline — one weigh-in per day, profile auto-synced.

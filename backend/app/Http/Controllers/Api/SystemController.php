@@ -40,10 +40,9 @@ class SystemController extends Controller
             'endpoints' => [
                 'POST /api/auth/register',
                 'POST /api/auth/login',
-                'POST /api/password/forgot',
-                'POST /api/password/reset',
-                'POST /api/email/verify/resend',
-                'GET  /api/email/verify/{id}/{hash}  (signed)',
+                'POST /api/auth/otp/verify',
+                'POST /api/account/delete-code',
+                'DELETE /api/account',
                 'GET  /api/notifications',
                 'POST /api/notifications/read-all',
                 'POST /api/notifications/{id}/read',

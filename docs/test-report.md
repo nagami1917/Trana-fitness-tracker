@@ -5,8 +5,15 @@
 > [`user-manual.md`](user-manual.md); architecture context in
 > [`architecture.md`](architecture.md).
 
-**Report status:** current as of main `a44715b` (CI run
-[`43007197431`](https://github.com/nagami1917/Trana-fitness-tracker/actions/runs/43007197431) — all jobs green).
+**Last verified backend/ML baseline:** main `a44715b` (CI run
+[`43007197431`](https://github.com/nagami1917/Trana-fitness-tracker/actions/runs/43007197431) — all jobs green). This branch replaces password/link authentication with email OTP; historical backend/ML counts below do not cover that change.
+
+**Branch-specific validation (2026-11-10):** `frontend/npm test` passed
+(`svelte-check`: 0 errors, 0 warnings; all 22 frontend smoke scripts passed),
+`npm run build` passed, and `python supabase/tests/check_baseline.py` passed.
+The production build still reports the existing large MapLibre chunk warning.
+Backend PHPUnit and PHP migration smoke scripts were not run because PHP and
+Composer are not installed in this environment.
 
 ---
 
@@ -16,33 +23,34 @@
 | --- | --- | --- | --- |
 | Backend (Laravel) | PHPUnit via `php artisan test` (SQLite `:memory:`) | **82 tests / 13 feature files** | CI `API (Laravel)` on every push & PR |
 | Backend (HTTP smoke) | `scripts/test_stateless_api_http.py` + live-server boot checks | 2 suites | CI `API (Laravel)` |
-| Frontend | 10 Node smoke scripts (`happy-dom` + Vite lib build) | **10 scripts** | CI `Frontend (Svelte + Tailwind)` |
+| Frontend | Node smoke scripts (`happy-dom` + Vite lib build) | **22 scripts** | CI `Frontend (Svelte + Tailwind)`; all passed on this branch |
 | Frontend static | `svelte-check` (types, runes, accessibility) + `vite build` | 0 errors required | CI `Frontend (Svelte + Tailwind)` |
 | ML (FastAPI) | `pytest -q tests` | **48 tests / 4 files** | CI `ML (FastAPI + scikit-learn)` |
 | ML (regression gate) | `evaluation.sanity_check` + `evaluation.geolife_validation` | metric thresholds vs GeoLife | CI `ML` — failure fails the build |
 
-Total automated checks: **82 backend + 48 ML + 10 frontend smoke suites**
-(plus lint, baseline and migration scripts, and the scheduled production
-[health workflow](../.github/workflows/health.yml)).
+The last green main baseline counted 82 backend + 48 ML + 10 frontend smoke
+suites. This branch's frontend suite now has 22 smoke scripts; backend and ML
+counts above remain historical until branch CI runs (plus lint, baseline and
+migration scripts, and the scheduled production [health workflow](../.github/workflows/health.yml)).
 
 ---
 
-## 2. Backend inventory (82 tests)
+## 2. Backend inventory (last green main: 82 tests; current branch not run)
 
 | File | Tests | What it pins down |
 | --- | ---: | --- |
 | `AdminAccessTest` | 12 | Admin console: guest 401, athlete 403 on every admin route, KPI structure, user search/suspension lifecycle (suspend → sessions die → login refused → reactivate), self-suspend blocked, read-only model viewer (200/503), error triage validation, `admin:promote` CLI, login exposes `role` |
-| `ProfileApiTest` | 11 | Profile read/update, units, sweat profile, onboarding payload, account deletion (self-service, password-gated) |
+| `ProfileApiTest` | 11 | Profile read/update, units, sweat profile, onboarding payload |
 | `EnergyExpenditureTest` | 11 | ACSM energy path, MET derivation, bounds/clamping |
 | `PredictionCreationTest` | 9 | Plan creation, duration prediction payload, saved plans, sport-type handling |
 | `ErrorMonitoringTest` | 8 | Exception capture into `error_logs`, fingerprinting/dedup, client-error intake + throttle, `errors:report` command, status triage API |
-| `LiveAccountTest` | 6 | Full account lifecycle over HTTP: register (Gmail-only) → verify → login → token use → logout |
+| `LiveAccountTest` | 6 | Full account lifecycle over HTTP: Gmail-only registration code → OTP verification → passwordless login → token use → logout |
 | `CalibrationRegressionTest` | 6 | Wearable calibration: sample import → personal factor learned (0.5×–2.0× clamp), regression stability |
 | `WeightLogTest` | 5 | Weight timeline API: log, list order, delete, validation |
-| `PasswordRecoveryTest` | 5 | Forgot → reset flow, token validity, expired/used tokens |
+| `EmailOtpAuthTest` | 13 (not run here) | OTP registration/sign-in, code expiry/replay/attempt limits, anti-enumeration, legacy-token revocation, passwordless payloads, mail configuration, per-email limits/purpose changes, and deletion confirmation |
 | `NotificationCenterTest` | 3 | Notification synthesis, unread counts, mark-read |
 | `StatelessApiTest` | 2 | Bearer-token statelessness of the API surface |
-| `GmailOnlyRegistrationTest` | 2 | Exact-suffix `@gmail.com` acceptance, other domains rejected, emails stored lowercase |
+| `GmailOnlyRegistrationTest` | 2 | Exact-suffix `@gmail.com` acceptance, other domains rejected, email stored lowercase after OTP verification |
 | `DatabaseConfigurationTest` | 2 | DB config/baseline integrity |
 
 **Conventions:** every test boots a fresh schema (`RefreshDatabase`), auth
@@ -62,7 +70,8 @@ requires network access.
 | `draw-smoke` | **The draw-test**: road-routing profiles & waypoint thinning, straight-line fallback contract (zero network calls without an ORS key), and road-snapping success/failure paths against a mocked Overpass API |
 | `location-smoke` | Location detection, privacy rules, cancellation, error paths |
 | `location-ui-smoke` | Location input & onboarding/profile/settings save flows (UI) |
-| `login-ui-smoke` | Login password visibility, accessibility attributes, mocked sign-in |
+| `login-ui-smoke` | Passwordless sign-in code request, leading-zero input, invalid-code retry, and verified session |
+| `register-ui-smoke` | Gmail-only registration, code verification, retry behavior, and verified session |
 | `render-smoke` | **Every route renders** (11 routes incl. `/admin`) with fixture data; fails on `NaN`/`undefined`/`[object Object]` leaks; screen inventory output |
 | `error-monitor-smoke` | Client error mirror: dedupe, payload shape, wiring, buffer cap |
 
@@ -119,7 +128,7 @@ intact, and — once the repository variable `ML_HEALTH_URL` is set — ML
 | Professor item / feature | Covered by |
 | --- | --- |
 | Gmail-only registration | `GmailOnlyRegistrationTest` + `LiveAccountTest` + `render-smoke` (register screen) |
-| Password recovery | `PasswordRecoveryTest` |
+| Passwordless email auth | `EmailOtpAuthTest` + `login-ui-smoke` + `register-ui-smoke` |
 | Profile & onboarding | `ProfileApiTest`, `location-ui-smoke` |
 | Duration prediction & plans | `PredictionCreationTest` + ML GeoLife gate |
 | Energy expenditure | `EnergyExpenditureTest` |
@@ -130,7 +139,7 @@ intact, and — once the repository variable `ML_HEALTH_URL` is set — ML
 | Notification center | `NotificationCenterTest` |
 | Error monitoring (all 3 services) | `ErrorMonitoringTest` + `error-monitor-smoke` + `test_error_monitor` |
 | Admin module (server-side roles) | `AdminAccessTest` (12) + `/admin` render + role-gated nav |
-| Account deletion (self-service only) | `ProfileApiTest` |
+| Account deletion (self-service only) | `EmailOtpAuthTest` (email code + exact `DELETE` confirmation) |
 | Database/baseline integrity | `DatabaseConfigurationTest` + CI baseline scripts |
 
 ---
@@ -158,7 +167,7 @@ and 0 errors.
 - [x] Avatar menu and notification panel close via explicit close controls
 - [x] Focus-visible styling present on interactive elements (buttons, links, inputs)
 - [x] Keyboard path: sidebar nav → page content → forms → table actions
-- [x] Login screen password visibility toggle is a real button with label
+- [ ] OTP email/code forms have been checked for accessibility after the passwordless auth rewrite
 - [x] Status conveyed by text as well as colour (suspended/active badges, error kinds)
 - [ ] Screen-reader pass with a live AT tool (manual, see §8)
 
@@ -202,12 +211,12 @@ cd frontend
 npm ci
 npx svelte-check --output human   # 0 errors, 0 a11y warnings
 npm run build
-npm run smoke                     # all 10 scripts
+npm run smoke                     # all frontend smoke scripts, including OTP UI coverage
 
 # Backend (PHP 8.3+ / composer)
 cd backend
-composer update
-php artisan test                  # 82 tests, SQLite :memory:
+composer install
+php artisan test                  # current feature suite; report results for this branch before updating counts
 
 # ML (Python 3.11)
 pip install -r requirements-dev.txt

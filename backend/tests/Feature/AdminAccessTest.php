@@ -6,24 +6,21 @@ use App\Models\ErrorLog;
 use App\Models\User;
 use App\Services\MlClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\EmailOtpTestHelpers;
 use Tests\TestCase;
 
 class AdminAccessTest extends TestCase
 {
     use RefreshDatabase;
+    use EmailOtpTestHelpers;
 
     /** Register returns a fresh token; guards are cleared (they persist in-process). */
     private function registerAthlete(string $email, string $name = 'Athlete'): array
     {
-        $response = $this->postJson('/api/auth/register', [
-            'name' => $name,
-            'email' => $email,
-            'password' => 'test-password-123',
-        ])->assertCreated();
-
+        $response = $this->registerWithOtp($name, $email);
         app('auth')->forgetGuards();
 
-        return ['id' => $response->json('user.id'), 'token' => $response->json('token')];
+        return ['id' => $response['user']['id'], 'token' => $response['token']];
     }
 
     private function makeAdmin(int $userId): void
@@ -135,7 +132,6 @@ class AdminAccessTest extends TestCase
         // And a fresh login is refused with a clear reason.
         $this->postJson('/api/auth/login', [
             'email' => 'suspended.athlete@gmail.com',
-            'password' => 'test-password-123',
         ])->assertStatus(403)->assertJsonPath('message', 'This account has been suspended.');
 
         $switch();
@@ -146,10 +142,7 @@ class AdminAccessTest extends TestCase
         // The revoked token stays dead; a new login works again.
         $switch();
         $this->getJson('/api/auth/me', $victimAuth)->assertUnauthorized();
-        $this->postJson('/api/auth/login', [
-            'email' => 'suspended.athlete@gmail.com',
-            'password' => 'test-password-123',
-        ])->assertOk()->assertJsonPath('user.role', 'athlete');
+        $this->assertSame('athlete', $this->loginWithOtp('suspended.athlete@gmail.com')['user']['role']);
     }
 
     public function test_suspension_middleware_refuses_a_live_session(): void
@@ -290,9 +283,7 @@ class AdminAccessTest extends TestCase
         $athlete = $this->registerAthlete('shaped.athlete@gmail.com');
         $this->makeAdmin($athlete['id']);
 
-        $this->postJson('/api/auth/login', [
-            'email' => 'shaped.athlete@gmail.com',
-            'password' => 'test-password-123',
-        ])->assertOk()->assertJsonPath('user.role', 'admin');
+        $response = $this->loginWithOtp('shaped.athlete@gmail.com');
+        $this->assertSame('admin', $response['user']['role']);
     }
 }

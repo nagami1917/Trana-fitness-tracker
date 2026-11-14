@@ -5,25 +5,18 @@ namespace Tests\Feature;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Route;
+use Tests\Support\EmailOtpTestHelpers;
 use Tests\TestCase;
 
 class LiveAccountTest extends TestCase
 {
     use RefreshDatabase;
-
-    private const PASSWORD = 'test-password-123';
+    use EmailOtpTestHelpers;
 
     private function registerAthlete(string $name, string $email): string
     {
-        $response = $this->postJson('/api/auth/register', [
-            'name' => $name,
-            'email' => $email,
-            'password' => self::PASSWORD,
-        ])->assertCreated();
-
-        return $response->json('token');
+        return $this->registerWithOtp($name, $email)['token'];
     }
 
     private function bearer(string $token): array
@@ -78,7 +71,7 @@ class LiveAccountTest extends TestCase
         $this->getJson('/api/profile')->assertUnauthorized();
         $tokenA = $this->registerAthlete('Alice', 'alice@gmail.com');
         $alice = User::where('email', 'alice@gmail.com')->firstOrFail();
-        $this->assertTrue(Hash::check(self::PASSWORD, $alice->password));
+        $this->assertNull($alice->password, 'Passwordless accounts do not store a password.');
         $this->assertDatabaseHas('fitness_profiles', ['user_id' => $alice->id]);
         $this->assertDatabaseHas('goals', ['user_id' => $alice->id]);
 
@@ -111,9 +104,7 @@ class LiveAccountTest extends TestCase
 
         $this->postJson('/api/auth/logout', [], $this->bearer($tokenA))->assertOk();
         $this->getJson('/api/auth/me', $this->bearer($tokenA))->assertUnauthorized();
-        $newToken = $this->postJson('/api/auth/login', [
-            'email' => 'alice@gmail.com', 'password' => self::PASSWORD,
-        ])->assertOk()->json('token');
+        $newToken = $this->loginWithOtp('alice@gmail.com')['token'];
         $this->getJson('/api/profile', $this->bearer($newToken))
             ->assertOk()->assertJsonPath('data.city', 'Lusacan')->assertJsonPath('data.onboarded', true);
         $this->getJson('/api/goals', $this->bearer($newToken))

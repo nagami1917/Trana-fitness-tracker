@@ -45,17 +45,6 @@ class User extends Authenticatable
         return $this->suspended_at !== null;
     }
 
-    /**
-     * Swap Laravel's default reset notification (which needs the web route
-     * `password.reset`) for our SPA-friendly one that links to /reset-password
-     * on the frontend origin. Signature must match the CanResetPassword trait
-     * exactly — untyped $token — or PHP fatals on class load.
-     */
-    public function sendPasswordResetNotification(#[\SensitiveParameter] $token)
-    {
-        $this->notify(new \App\Notifications\ResetPasswordNotification($token));
-    }
-
     public function fitnessProfile(): HasOne
     {
         return $this->hasOne(FitnessProfile::class);

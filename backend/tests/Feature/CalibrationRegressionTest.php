@@ -27,6 +27,7 @@ class CalibrationRegressionTest extends TestCase
             'email' => $email,
             'password' => 'test-password-123',
         ]);
+        $user->forceFill(['email_verified_at' => now()])->save();
         $user->ensureProfile()->update(['weight_kg' => $weightKg]);
 
         return $user;

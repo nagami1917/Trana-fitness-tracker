@@ -1,44 +1,88 @@
 <script>
-  import { Lock, Mail, User, Eye, EyeOff, Sparkles, ArrowRight, LoaderCircle, Timer, Flame, Salad } from 'lucide-svelte';
-  import { register, notify } from '../../stores/index.js';
+  import { onDestroy } from 'svelte';
+  import { Mail, User, Sparkles, ArrowRight, ArrowLeft, LoaderCircle, Timer, Flame, Salad, KeyRound, Inbox } from 'lucide-svelte';
+  import { requestRegistrationCode, verifyOtpAndSignIn, notify } from '../../stores/index.js';
   import { navigate, link } from '../../lib/router.js';
 
   let name = $state('');
   let email = $state('');
-  let password = $state('');
-  let showPassword = $state(false);
+  let code = $state('');
+  let stage = $state('details');
   let loading = $state(false);
   let error = $state('');
+  let resendSeconds = $state(0);
+  let resendTimer;
 
-  async function submit(event) {
-    event.preventDefault();
+  function startResendCooldown() {
+    clearInterval(resendTimer);
+    resendSeconds = 60;
+    resendTimer = setInterval(() => {
+      if (resendSeconds <= 1) {
+        clearInterval(resendTimer);
+        resendSeconds = 0;
+      } else {
+        resendSeconds -= 1;
+      }
+    }, 1000);
+  }
+
+  function changeDetails() {
+    clearInterval(resendTimer);
+    resendSeconds = 0;
+    code = '';
     error = '';
+    stage = 'details';
+  }
 
-    if (!/@gmail\.com$/i.test(email.trim())) {
+  async function sendCode(event) {
+    event?.preventDefault();
+    error = '';
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!/@gmail\.com$/i.test(normalizedEmail)) {
       error = 'Sign-up is limited to Gmail addresses — please use your @gmail.com address.';
       return;
     }
-
-    if (password.length < 8 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
-      error = 'Password must be at least 8 characters and include letters and numbers.';
+    if (!name.trim()) {
+      error = 'Enter your name to create your TRANA account.';
       return;
     }
 
     loading = true;
     try {
-      await register({ name: name.trim(), email: email.trim(), password });
-      notify('Welcome to TRANA! Let’s set you up.');
-      navigate('/onboarding', { replace: true });
+      const data = await requestRegistrationCode({ name: name.trim(), email: normalizedEmail });
+      email = normalizedEmail;
+      code = '';
+      stage = 'code';
+      startResendCooldown();
+      notify(data?.message || 'A six-digit code was sent to your email.');
     } catch (err) {
-      error = err.message || 'Could not create your account';
+      error = err.errors?.email?.[0] || err.errors?.name?.[0] || err.message || 'Could not send a sign-up code.';
     } finally {
       loading = false;
     }
   }
+
+  async function verifyCode(event) {
+    event.preventDefault();
+    error = '';
+    loading = true;
+    try {
+      await verifyOtpAndSignIn({ email: email.trim().toLowerCase(), code: code.trim() });
+      notify('Email confirmed. Welcome to TRANA!');
+      navigate('/');
+    } catch (err) {
+      error = err.message || 'That code could not be verified.';
+    } finally {
+      loading = false;
+    }
+  }
+
+  onDestroy(() => clearInterval(resendTimer));
 </script>
 
+<svelte:head><title>Create account — TRANA</title></svelte:head>
+
 <div class="relative grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
-  <!-- brand panel -->
   <section class="relative flex flex-col justify-between overflow-hidden bg-gradient-to-br from-brand-100 via-brand-50 to-white px-6 py-8 sm:px-12 lg:py-14">
     <div class="pointer-events-none absolute inset-0">
       <div class="absolute -right-20 top-10 h-80 w-80 rounded-full bg-brand-200/50 blur-3xl"></div>
@@ -90,70 +134,86 @@
     />
   </section>
 
-  <!-- form panel -->
   <section class="flex items-center justify-center px-6 py-10 sm:px-12">
     <div class="w-full max-w-sm">
-      <h2 class="text-2xl">Create your account</h2>
-      <p class="mt-1 text-sm font-semibold text-ink-400">Two minutes to your first prediction.</p>
+      {#if stage === 'details'}
+        <h2 class="text-2xl">Create your account</h2>
+        <p class="mt-1 text-sm font-semibold text-ink-400">Verify your Gmail with a six-digit code. No password to create.</p>
 
-      <form class="mt-7 space-y-4" onsubmit={submit}>
-        <div>
-          <label class="label" for="name">Name</label>
-          <div class="relative">
-            <User size={16} class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink-400" />
-            <input id="name" type="text" class="input pl-11" bind:value={name} placeholder="Alex Tan" autocomplete="name" required />
+        <form class="mt-7 space-y-4" onsubmit={sendCode}>
+          <div>
+            <label class="label" for="name">Name</label>
+            <div class="relative">
+              <User size={16} class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink-400" />
+              <input id="name" type="text" class="input pl-11" bind:value={name} placeholder="Alex Tan" autocomplete="name" maxlength="80" required />
+            </div>
           </div>
-        </div>
 
-        <div>
-          <label class="label" for="email">Email</label>
-          <div class="relative">
-            <Mail size={16} class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink-400" />
-            <input id="email" type="email" class="input pl-11" bind:value={email} placeholder="you@gmail.com" autocomplete="email" required />
+          <div>
+            <label class="label" for="email">Gmail address</label>
+            <div class="relative">
+              <Mail size={16} class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink-400" />
+              <input id="email" type="email" class="input pl-11" bind:value={email} placeholder="you@gmail.com" autocomplete="email" maxlength="255" required />
+            </div>
+            <p class="mt-1.5 text-[11px] font-semibold leading-snug text-ink-400">
+              New accounts currently require an @gmail.com address. TRANA never asks for your Google password.
+            </p>
           </div>
-          <p class="mt-1.5 text-[11px] font-semibold leading-snug text-ink-400">
-            Gmail addresses only — your verification link is sent there.
-          </p>
-        </div>
 
-        <div>
-          <label class="label" for="password">Password</label>
-          <div class="relative">
-            <Lock size={16} class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink-400" />
-            <input
-              id="password"
-              type={showPassword ? 'text' : 'password'}
-              class="input pl-11 pr-24"
-              bind:value={password}
-              placeholder="8+ characters, letters and numbers"
-              autocomplete="new-password"
-              minlength="8"
-              required
-            />
-            <button
-              type="button"
-              class="absolute inset-y-0 right-1 inline-flex items-center justify-center gap-1 rounded-xl px-3 text-xs font-bold text-ink-500 transition hover:text-brand-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-200"
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
-              aria-controls="password"
-              onclick={() => (showPassword = !showPassword)}
-            >
-              {#if showPassword}<EyeOff size={16} aria-hidden="true" /> Hide{:else}<Eye size={16} aria-hidden="true" /> Show{/if}
-            </button>
-          </div>
-        </div>
-
-        {#if error}
-          <p class="rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-600">{error}</p>
-        {/if}
-
-        <button type="submit" class="btn-primary w-full !py-3" disabled={loading}>
-          {#if loading}
-            <LoaderCircle size={17} class="animate-spin" /> Creating…
-          {:else}
-            Create account <ArrowRight size={17} />
+          {#if error}
+            <p class="rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-600" role="alert">{error}</p>
           {/if}
+
+          <button type="submit" class="btn-primary w-full !py-3" disabled={loading || !name.trim() || !email.trim()}>
+            {#if loading}<LoaderCircle size={17} class="animate-spin" /> Sending…{:else}Email me a sign-up code <ArrowRight size={17} />{/if}
+          </button>
+        </form>
+      {:else}
+        <span class="pill"><Inbox size={12} /> Check your email</span>
+        <h2 class="mt-3 text-2xl">Enter your sign-up code</h2>
+        <p class="mt-1 text-sm font-semibold leading-relaxed text-ink-400">
+          We sent a six-digit code to <span class="font-extrabold text-ink-700">{email}</span>.
+          Check Spam or Promotions too. The code expires in 10 minutes.
+        </p>
+
+        <form class="mt-5 space-y-4" onsubmit={verifyCode}>
+          <div>
+            <label class="label" for="otp-code">Six-digit code</label>
+            <div class="relative">
+              <KeyRound size={16} class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink-400" />
+              <input
+                id="otp-code"
+                type="text"
+                class="input pl-11 text-center text-lg font-extrabold tracking-[0.35em]"
+                bind:value={code}
+                placeholder="000000"
+                inputmode="numeric"
+                autocomplete="one-time-code"
+                pattern="[0-9][0-9][0-9][0-9][0-9][0-9]"
+                minlength="6"
+                maxlength="6"
+                required
+              />
+            </div>
+            <p class="mt-1.5 text-[11px] font-semibold text-ink-400">Use the newest code you received. Each code works once.</p>
+          </div>
+
+          {#if error}
+            <p class="rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-600" role="alert">{error}</p>
+          {/if}
+
+          <button type="submit" class="btn-primary w-full !py-3" disabled={loading || code.trim().length !== 6}>
+            {#if loading}<LoaderCircle size={17} class="animate-spin" /> Verifying…{:else}Verify & continue <ArrowRight size={17} />{/if}
+          </button>
+        </form>
+
+        <button type="button" class="btn-ghost mt-3 w-full justify-center" onclick={changeDetails} disabled={loading}>
+          <ArrowLeft size={15} /> Change name or email
         </button>
-      </form>
+        <button type="button" class="mt-3 w-full text-center text-xs font-extrabold text-brand-600 disabled:text-ink-300" onclick={sendCode} disabled={loading || resendSeconds > 0}>
+          {#if resendSeconds > 0}<Timer size={13} class="mr-1 inline" /> Send another code in {resendSeconds}s{:else}Send another code <ArrowRight size={13} class="inline" />{/if}
+        </button>
+      {/if}
 
       <p class="mt-5 text-center text-sm font-semibold text-ink-400">
         Already have an account?

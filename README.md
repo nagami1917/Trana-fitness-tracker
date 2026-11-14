@@ -305,7 +305,8 @@ activity controller. Outputs are guidance for healthy adults, not medical advice
 
 | Method | Endpoint | Description |
 | --- | --- | --- |
-| POST | `/api/auth/register` · `/auth/login` | Bearer token issuance |
+| POST | `/api/auth/register` · `/auth/login` | Request a passwordless email code |
+| POST | `/api/auth/otp/verify` | Verify a six-digit code and issue a bearer token |
 | GET | `/api/health` | API database connectivity (no credentials exposed) |
 | GET | `/api/auth/me` | Current athlete |
 | GET/POST/PUT/PATCH | `/api/profile` | Fitness profile: create, view, edit (body mass, fitness level, age, experience, sweat profile, goals) |

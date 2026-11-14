@@ -8,21 +8,19 @@ use App\Models\InAppNotification;
 use App\Models\Prediction;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\EmailOtpTestHelpers;
 use Tests\TestCase;
 
 class NotificationCenterTest extends TestCase
 {
     use RefreshDatabase;
+    use EmailOtpTestHelpers;
 
     private function registerAthlete(string $email = 'notify@gmail.com'): array
     {
-        $response = $this->postJson('/api/auth/register', [
-            'name' => 'Notify Athlete',
-            'email' => $email,
-            'password' => 'test-password-123',
-        ])->assertCreated();
+        $response = $this->registerWithOtp('Notify Athlete', $email);
 
-        return ['Authorization' => 'Bearer '.$response->json('token')];
+        return ['Authorization' => 'Bearer '.$response['token']];
     }
 
     private function makePlan(User $user): Prediction

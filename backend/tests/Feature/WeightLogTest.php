@@ -5,24 +5,20 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Models\WeightLog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\EmailOtpTestHelpers;
 use Tests\TestCase;
 
 class WeightLogTest extends TestCase
 {
     use RefreshDatabase;
+    use EmailOtpTestHelpers;
 
     private function registerAthlete(string $email = 'weight@gmail.com'): array
     {
-        $response = $this->postJson('/api/auth/register', [
-            'name' => 'Weight Athlete',
-            'email' => $email,
-            'password' => 'test-password-123',
-        ])->assertCreated();
-
-        // Guards are reused inside one test process — clear between athletes.
+        $response = $this->registerWithOtp('Weight Athlete', $email);
         app('auth')->forgetGuards();
 
-        return ['Authorization' => 'Bearer '.$response->json('token')];
+        return ['Authorization' => 'Bearer '.$response['token']];
     }
 
     public function test_logging_weight_upserts_the_day_and_syncs_the_profile(): void

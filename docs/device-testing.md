@@ -31,11 +31,14 @@
 
 | # | Step | Expected | Status |
 | --- | --- | --- | --- |
-| C1 | Register with a non-Gmail address | Clear rejection message | ☐ |
-| C2 | Register with Gmail | Verification email arrives (check Spam/Promotions) | ☐ |
-| C3 | Tap the verification link on the phone | Lands verified in the app, dashboard loads | ☐ |
-| C4 | Forgot password → reset link → new password | Login works with the new password | ☐ |
-| C5 | Wrong password | Inline error, no crash, no information leak | ☐ |
+| C1 | Register with a non-Gmail address | Clear rejection message; no code request | ☐ |
+| C2 | Register with Gmail | Six-digit sign-up code arrives (check Spam/Promotions) | ☐ |
+| C3 | Enter a wrong/expired code | Inline rejection; no account session is created | ☐ |
+| C4 | Verify the newest valid code | Account is created and the dashboard loads | ☐ |
+| C5 | Sign in with the registered email | A six-digit code arrives; no password is requested | ☐ |
+| C6 | Enter the sign-in code | Session is created; no Google/Gmail password is used | ☐ |
+| C7 | Settings → Danger zone → request code | Deletion confirmation code arrives | ☐ |
+| C8 | Type `DELETE` and submit a valid deletion code | Account data is erased and app returns to sign-in | ☐ |
 
 ## D. Planning & drawing (the draw-test on a real map)
 

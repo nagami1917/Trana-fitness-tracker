@@ -135,12 +135,29 @@ def main():
 
                 expect_status(request(port, "GET", "/api/health"), 200, "database health")
                 registration = request(port, "POST", "/api/auth/register", body={
-                    "name": "Browser Origin Test", "email": "browser@gmail.com", "password": "test-password-123",
+                    "name": "Browser Origin Test", "email": "browser@gmail.com",
                 }, cookie="laravel_session=stale; XSRF-TOKEN=stale")
-                data = expect_status(registration, 201, "browser-origin registration without CSRF token")
-                assert data.get("token") and data.get("user"), "Registration must return a bearer token and user."
+                data = expect_status(registration, 202, "browser-origin OTP registration without CSRF token")
+                assert "token" not in data, "A bearer token must not be issued before OTP verification."
                 assert not any(name.lower() == "set-cookie" for name, _ in registration[2]), "API must not issue session cookies."
-                token = data["token"]
+
+                # This HTTP smoke focuses on browser-origin and bearer-only API
+                # behavior; the PHP feature tests exercise the OTP verification
+                # email boundary and token issuance.
+                create_token = r'''
+                    require "vendor/autoload.php";
+                    $app = require "bootstrap/app.php";
+                    $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+                    $user = App\Models\User::create([
+                        "name" => "Bearer HTTP Test",
+                        "email" => "bearer-http@gmail.com",
+                        "password" => null,
+                    ]);
+                    $user->forceFill(["email_verified_at" => now()])->save();
+                    echo $user->createToken("http-test")->plainTextToken;
+                '''
+                token = subprocess.run([php, "-r", create_token], cwd=app, env=env, check=True, capture_output=True, text=True).stdout.strip()
+                assert token, "Could not create the test bearer token."
 
                 expect_status(request(port, "GET", "/api/profile", cookie="laravel_session=stale"), 401, "cookie-only profile")
                 expect_status(request(port, "GET", "/api/profile", token=token), 200, "bearer profile")
@@ -150,9 +167,11 @@ def main():
                 }), 201, "bearer activity creation")
                 expect_status(request(port, "POST", "/api/auth/logout", token=token), 200, "bearer logout")
                 expect_status(request(port, "GET", "/api/profile", token=token), 401, "revoked bearer token")
-                expect_status(request(port, "POST", "/api/auth/login", body={
-                    "email": "browser@gmail.com", "password": "test-password-123",
-                }), 200, "browser-origin login without CSRF token")
+                login = request(port, "POST", "/api/auth/login", body={
+                    "email": "bearer-http@gmail.com",
+                })
+                login_data = expect_status(login, 202, "browser-origin OTP request without CSRF token")
+                assert "token" not in login_data, "Login must not issue a token before OTP verification."
                 print("Browser-origin bearer API smoke test passed.")
             finally:
                 server.terminate()

@@ -35,8 +35,11 @@ database password.
    confusion. The separate Python training service may use `DATABASE_URL`.
 4. Run `php artisan config:clear`, then `php artisan migrate:status` to verify the
    connection. Run `php artisan migrate` for outstanding migrations; do not
-   reapply the SQL baseline to an existing database. Generate `APP_KEY` with
-   `php artisan key:generate` only when setting up a new `.env`.
+   reapply the SQL baseline to an existing database. Current releases create the
+   private `email_otp_challenges` table and apply its RLS/revoke migration through
+   Laravel, so run outstanding migrations before enabling passwordless auth.
+   Generate `APP_KEY` with `php artisan key:generate` only when setting up a new
+   `.env`.
 
 The connected Trana project has already received the baseline migration.
 The default seeder no longer creates a shared account or sample activities, and

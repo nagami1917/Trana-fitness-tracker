@@ -20,7 +20,7 @@ create table public.users (
     name varchar(255) not null,
     email varchar(255) not null,
     email_verified_at timestamp(0) without time zone,
-    password varchar(255) not null,
+    password varchar(255),
     remember_token varchar(100),
     created_at timestamp(0) without time zone,
     updated_at timestamp(0) without time zone,
