@@ -156,7 +156,20 @@
     { id: 'minutes', label: 'Time', unit: 'min' },
   ]);
 
-  const previewRoute = $derived($activities.find((a) => a.route?.length)?.route ?? $plans[0]?.route ?? []);
+  const latestActivityWithRoute = $derived(
+    $activities.find((activity) => Array.isArray(activity.route) && activity.route.length >= 2) ?? null,
+  );
+  const firstSavedPlanWithRoute = $derived(
+    $plans.find((plan) => Array.isArray(plan.route) && plan.route.length >= 2) ?? null,
+  );
+  const previewRoute = $derived(latestActivityWithRoute?.route ?? firstSavedPlanWithRoute?.route ?? []);
+  const previewRouteLabel = $derived(
+    latestActivityWithRoute
+      ? 'Latest recorded route'
+      : firstSavedPlanWithRoute
+        ? 'Saved plan route'
+        : 'No route saved yet',
+  );
 
   const prediction = $derived.by(() => {
     if (!model || !$profile) return null;
@@ -438,9 +451,12 @@
               class="!rounded-2xl"
             >
               <div class="pointer-events-none absolute left-3 top-3 rounded-xl bg-white/90 px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide text-brand-600 shadow-soft">
-                Your last route
+                {previewRouteLabel}
               </div>
             </RouteMap>
+            <p class="mt-1 px-1 text-[10px] font-semibold leading-4 text-ink-400">
+              Route preview only; the estimate uses the distance and elevation you entered.
+            </p>
           </div>
         </div>
 
