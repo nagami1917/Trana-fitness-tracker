@@ -175,7 +175,7 @@ class EmailPasswordAuthTest extends TestCase
             ->assertJsonPath('user.username', 'pending_runner')
             ->assertJsonMissingPath('token');
 
-        $cookie = $login->getCookie('trana_session');
+        $cookie = $login->getCookie('trana_session', decrypt: false);
         $this->assertNotNull($cookie);
         $this->assertTrue($cookie->isHttpOnly());
         $this->assertSame('/api', $cookie->getPath());
@@ -267,7 +267,7 @@ class EmailPasswordAuthTest extends TestCase
                 'identifier' => $account['user']['username'],
                 'password' => 'Fixture-password-123',
             ])->assertOk();
-            $cookie = $response->getCookie('trana_session');
+            $cookie = $response->getCookie('trana_session', decrypt: false);
             $this->assertNotNull($cookie);
             $this->assertTrue($cookie->isSecure());
             $this->assertTrue($cookie->isHttpOnly());
