@@ -23,7 +23,7 @@ globalThis.localStorage = {
   setItem: (k, v) => store.set(k, String(v)),
   removeItem: (k) => store.delete(k),
 };
-const fixtureUser = { id: 1, name: 'Test Athlete', email: 'athlete@example.test', role: 'admin' };
+const fixtureUser = { id: 1, name: 'Test Athlete', username: 'test_athlete', email: 'athlete@gmail.com', role: 'admin' };
 const fixtureProfile = {
   ...fixtureUser, weight_kg: 60, height_cm: 168, birth_year: 1998, sex: 'other',
   sweat_profile: 'normal', experience_level: 2, typical_temperature_c: 26, units: 'metric',
@@ -61,8 +61,7 @@ const fixturePlans = [
 const page = (data) => ({ data, meta: { current_page: 1, last_page: 1 } });
 globalThis.fetch = async (url) => {
   let body;
-  if (url === '/api/auth/google') body = { token: 'test-token', user: fixtureUser };
-  else if (url === '/api/profile') body = { data: fixtureProfile };
+  if (url === '/api/profile') body = { data: fixtureProfile };
   else if (url.startsWith('/api/activities?')) body = page(fixtureActivities);
   else if (url.startsWith('/api/predictions?')) body = page(fixturePlans);
   else if (url === '/api/goals') body = { data: fixtureGoals };
@@ -119,7 +118,11 @@ let failures = 0;
 
 try {
   const stores = await vite.ssrLoadModule('/src/stores/index.js');
-  await stores.googleSignInAndContinue('fixture-google-id-token');
+  stores.session.set(fixtureUser);
+  stores.profile.set(fixtureProfile);
+  stores.activities.set(fixtureActivities);
+  stores.plans.set(fixturePlans);
+  stores.goals.set(fixtureGoals);
   stores.modelCard.set({ training_source: 'synthetic', version: 'test', corpus_rows: 10,
     metrics: { r2: 0.9, mape_pct: 10, mae_min: 2, interval_coverage_pct: 80, test_rows: 2 },
     feature_importance: {} });
@@ -290,6 +293,8 @@ try {
     const mod = await vite.ssrLoadModule('/src/components/common/AppShell.svelte');
     const html = render(mod.default).body;
     assert.match(html, /Open cat mascot guide/);
+    assert.match(html, /@test_athlete/);
+    assert.match(html, /aria-label="Log out"/);
     assert.doesNotMatch(html, /role="dialog"/);
   } catch (error) {
     failures += 1;
@@ -316,10 +321,11 @@ try {
       const mod = await vite.ssrLoadModule(`/src/pages/${name}/${name}.svelte`);
       const html = render(mod.default).body;
       assert.doesNotMatch(html, /Explore with demo data|demo@trana\.app/);
-      assert.doesNotMatch(html, /type="password"/);
-      assert.doesNotMatch(html, /six-digit code|email-code sign-in/i);
-      assert.match(html, /Google/i);
-      assert.match(html, /Google handles your password/i);
+      assert.match(html, /type="password"/);
+      assert.match(html, /Log in/);
+      assert.match(html, /Create account/);
+      assert.match(html, /username/);
+      assert.match(html, /Gmail/i);
       console.log(`✔ /${name.toLowerCase().padEnd(9)} ${name.padEnd(11)} ${String(html.length).padStart(5)} chars`);
     } catch (error) {
       failures += 1;

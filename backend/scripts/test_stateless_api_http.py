@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Exercise browser-origin bearer requests with CSRF checks enabled.
+"""Exercise HttpOnly-cookie API auth and CSRF checks through a real HTTP server.
 
-Laravel normally disables CSRF checks while PHPUnit runs. Run a real local
-server in a temporary copy instead, so a stateful-middleware regression cannot
-be hidden by the test environment. The temporary app uses an isolated SQLite
-database and never reads this checkout's .env or cached configuration.
+Laravel normally bypasses CSRF checks while PHPUnit runs. Run a local server in
+a temporary copy to test the browser boundary with an isolated SQLite database.
+This script never reads the checkout's .env or cached configuration.
 """
 
 from __future__ import annotations
@@ -24,11 +23,11 @@ ROOT = Path(__file__).resolve().parents[1]
 ORIGIN = "http://localhost:5173"
 
 
-def request(port: int, method: str, path: str, *, body=None, token=None, cookie=None):
+def request(port: int, method: str, path: str, *, body=None, token=None, cookie=None, csrf=None, origin=ORIGIN):
     headers = {
         "Accept": "application/json",
-        "Origin": ORIGIN,
-        "Referer": ORIGIN + "/register",
+        "Origin": origin,
+        "Referer": origin + "/register",
     }
     if body is not None:
         headers["Content-Type"] = "application/json"
@@ -37,6 +36,8 @@ def request(port: int, method: str, path: str, *, body=None, token=None, cookie=
         headers["Authorization"] = "Bearer " + token
     if cookie:
         headers["Cookie"] = cookie
+    if csrf:
+        headers["X-CSRF-TOKEN"] = csrf
     conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
     try:
         conn.request(method, path, body=body, headers=headers)
@@ -63,13 +64,11 @@ def main():
     if not (ROOT / "vendor/autoload.php").is_file():
         raise SystemExit("Install backend Composer dependencies before running this test.")
 
-    with tempfile.TemporaryDirectory(prefix="trana-stateless-api-") as temp:
+    with tempfile.TemporaryDirectory(prefix="trana-cookie-api-") as temp:
         app = Path(temp) / "app"
         app.mkdir()
-        # Do not copy .env, storage, or cached config from the developer's app.
         for folder in ("app", "bootstrap", "config", "database", "public", "routes", "vendor"):
             if folder == "bootstrap":
-                # Keep bootstrap/app.php and providers.php, but not generated cache files.
                 shutil.copytree(ROOT / folder, app / folder, ignore=shutil.ignore_patterns("cache"))
                 (app / "bootstrap/cache").mkdir()
             elif folder == "database":
@@ -83,15 +82,15 @@ def main():
 
         database = Path(temp) / "test.sqlite"
         database.touch()
-        # Keep only system variables needed to run PHP. No caller database,
-        # application, or ML secrets are inherited into the temporary app.
         system_keys = ("PATH", "HOME", "USERPROFILE", "SYSTEMROOT", "WINDIR", "TMP", "TEMP", "LANG", "LC_ALL", "PHPRC", "PHP_INI_SCAN_DIR", "LD_LIBRARY_PATH")
         env = {key: os.environ[key] for key in system_keys if key in os.environ}
         env.update({
-            "APP_ENV": "local",  # CSRF middleware must not use the PHPUnit bypass.
+            "APP_ENV": "local",
             "APP_KEY": "base64:MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=",
             "APP_DEBUG": "false",
-            "GOOGLE_CLIENT_ID": "http-test-google-client-id",
+            "APP_URL": "http://127.0.0.1",
+            "FRONTEND_URL": ORIGIN,
+            "CORS_ALLOWED_ORIGINS": ORIGIN,
             "DB_CONNECTION": "sqlite",
             "DB_DATABASE": str(database),
             "CACHE_STORE": "array",
@@ -102,15 +101,13 @@ def main():
             "SANCTUM_STATEFUL_DOMAINS": "localhost:5173,127.0.0.1:5173",
         })
         subprocess.run([php, "artisan", "migrate", "--force", "--no-interaction"], cwd=app, env=env, check=True, capture_output=True)
-        # Production deployments commonly cache config. Verify that the
-        # token-only Sanctum guard survives the package-default merge.
         subprocess.run([php, "artisan", "config:cache"], cwd=app, env=env, check=True, capture_output=True)
         guard_check = r'''
             require "vendor/autoload.php";
             $app = require "bootstrap/app.php";
             $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
             if (config("sanctum.guard") !== []) {
-                fwrite(STDERR, "Cached Sanctum config must reject web-session authentication.\n");
+                fwrite(STDERR, "Sanctum must reject web-session authentication.\n");
                 exit(1);
             }
         '''
@@ -135,49 +132,54 @@ def main():
                         time.sleep(0.1)
 
                 expect_status(request(port, "GET", "/api/health"), 200, "database health")
-                nonce_response = request(port, "POST", "/api/auth/google/nonce", body={}, cookie="laravel_session=stale; XSRF-TOKEN=stale")
-                nonce_data = expect_status(nonce_response, 200, "browser-origin Google nonce request without CSRF token")
-                assert isinstance(nonce_data.get("nonce"), str) and nonce_data["nonce"], "Google auth must return a short-lived nonce."
-                assert not any(name.lower() == "set-cookie" for name, _ in nonce_response[2]), "API must not issue session cookies."
+                csrf_response = request(port, "GET", "/api/auth/csrf")
+                csrf_data = expect_status(csrf_response, 200, "CSRF bootstrap")
+                csrf = csrf_data.get("csrfToken")
+                assert isinstance(csrf, str) and len(csrf) == 64, "CSRF bootstrap must return a random token."
+                csrf_cookie = f"trana_csrf={csrf}"
 
-                invalid_google = request(port, "POST", "/api/auth/google", body={"credential": "not-a-signed-token"})
-                expect_status(invalid_google, 422, "invalid Google credential")
-                old_email_code = request(port, "POST", "/api/auth/register", body={})
-                expect_status(old_email_code, 404, "removed email-code registration route")
+                expect_status(request(port, "POST", "/api/auth/register", body={}, cookie=csrf_cookie), 419, "missing CSRF header")
+                expect_status(request(port, "POST", "/api/auth/register", body={}, cookie=csrf_cookie, csrf=csrf, origin="https://evil.example"), 403, "untrusted browser Origin")
+                expect_status(request(port, "POST", "/api/auth/register", body={}, cookie=csrf_cookie, csrf=csrf), 422, "trusted request reaches registration validation")
 
-                # This HTTP smoke focuses on browser-origin and bearer-only API
-                # behavior; PHP feature tests exercise Google JWT signatures and
-                # the Google-key verification boundary.
                 create_token = r'''
                     require "vendor/autoload.php";
                     $app = require "bootstrap/app.php";
                     $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
                     $user = App\Models\User::create([
-                        "name" => "Bearer HTTP Test",
-                        "email" => "bearer-http@gmail.com",
-                        "password" => null,
+                        "name" => "Cookie HTTP Test",
+                        "username" => "cookie_http_test",
+                        "email" => "cookie-http@gmail.com",
+                        "password" => Illuminate\Support\Facades\Hash::driver("bcrypt")->make("Http-test-123"),
                     ]);
                     $user->forceFill(["email_verified_at" => now()])->save();
+                    $user->ensureProfile();
+                    $user->ensureGoals();
                     echo $user->createToken("http-test")->plainTextToken;
                 '''
                 token = subprocess.run([php, "-r", create_token], cwd=app, env=env, check=True, capture_output=True, text=True).stdout.strip()
-                assert token, "Could not create the test bearer token."
+                assert token, "Could not create the test Sanctum token."
+                auth_cookie = f"trana_session={token}; {csrf_cookie}"
 
-                expect_status(request(port, "GET", "/api/profile", cookie="laravel_session=stale"), 401, "cookie-only profile")
-                expect_status(request(port, "GET", "/api/profile", token=token), 200, "bearer profile")
-                expect_status(request(port, "PUT", "/api/profile", token=token, body={"weight_kg": 68}), 200, "bearer profile update")
-                expect_status(request(port, "POST", "/api/activities", token=token, body={
+                expect_status(request(port, "GET", "/api/profile", cookie="laravel_session=stale"), 401, "web-session-only profile")
+                expect_status(request(port, "GET", "/api/profile", cookie=auth_cookie), 200, "HttpOnly-cookie profile")
+                expect_status(request(port, "GET", "/api/profile", token=token), 200, "non-browser bearer profile")
+                expect_status(request(port, "PUT", "/api/profile", cookie=auth_cookie, body={"weight_kg": 68}), 419, "cookie write missing CSRF header")
+                expect_status(request(port, "PUT", "/api/profile", cookie=auth_cookie, csrf=csrf, body={"weight_kg": 68}), 200, "cookie write with CSRF")
+                expect_status(request(port, "PUT", "/api/profile", cookie=auth_cookie, csrf=csrf, body={"weight_kg": 69}, origin="https://evil.example"), 403, "cookie write from untrusted Origin")
+                expect_status(request(port, "POST", "/api/activities", cookie=auth_cookie, csrf=csrf, body={
                     "activity_type": "run", "distance_km": 5, "duration_min": 30, "started_at": "2026-01-01T08:00:00Z",
-                }), 201, "bearer activity creation")
-                expect_status(request(port, "POST", "/api/auth/logout", token=token), 200, "bearer logout")
-                expect_status(request(port, "GET", "/api/profile", token=token), 401, "revoked bearer token")
-                removed_login = request(port, "POST", "/api/auth/login", body={})
-                expect_status(removed_login, 404, "removed email-code login route")
-                password_attempt = request(port, "POST", "/api/auth/google", body={
-                    "credential": "not-a-signed-token", "password": "must-not-be-collected",
-                })
-                expect_status(password_attempt, 422, "Google endpoint rejects TRANA password fields")
-                print("Browser-origin Google and bearer API smoke test passed.")
+                }), 201, "cookie-authenticated activity creation")
+                expect_status(request(port, "POST", "/api/auth/logout", cookie=auth_cookie, csrf=csrf, body={}), 200, "cookie logout")
+                expect_status(request(port, "GET", "/api/profile", cookie=auth_cookie), 401, "revoked cookie token")
+
+                invalid_login = request(port, "POST", "/api/auth/login", body={
+                    "identifier": "missing@gmail.com", "password": "Http-test-123",
+                }, cookie=csrf_cookie, csrf=csrf)
+                login_data = expect_status(invalid_login, 401, "generic invalid credentials")
+                assert login_data.get("message") == "Invalid credentials.", "Login errors must be generic."
+                expect_status(request(port, "POST", "/api/auth/google", body={}), 404, "removed Google-only endpoint")
+                print("HttpOnly-cookie auth, CSRF/origin protection, and stateless API smoke test passed.")
             finally:
                 server.terminate()
                 try:

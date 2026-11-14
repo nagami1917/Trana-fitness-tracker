@@ -52,6 +52,7 @@ const postedPayloads = [];
 let savedPlans = [];
 
 window.localStorage.setItem('trana.token', 'test-token');
+const csrfToken = '8'.repeat(64);
 const jsonResp = (body, status = 200) => ({
   ok: status >= 200 && status < 300,
   status,
@@ -65,6 +66,7 @@ window.fetch = async (url, init = {}) => {
   if (path === '/models/duration_model.json') {
     return { ok: true, status: 200, text: async () => modelJson, json: async () => JSON.parse(modelJson) };
   }
+  if (path === '/api/auth/csrf') return jsonResp({ csrfToken });
   if (path === '/api/profile') {
     return jsonResp({
       data: {
@@ -83,6 +85,8 @@ window.fetch = async (url, init = {}) => {
     return jsonResp({ data: savedPlans, meta: { current_page: 1, last_page: 1 } });
   }
   if (path === '/api/predictions' && method === 'POST') {
+    assert.equal(init.headers['X-CSRF-TOKEN'], csrfToken);
+    assert.equal(init.credentials, 'include');
     const body = JSON.parse(init.body);
     postedPayloads.push(body);
     const created = {

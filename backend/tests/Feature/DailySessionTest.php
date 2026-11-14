@@ -5,23 +5,17 @@ namespace Tests\Feature;
 use App\Models\DailySession;
 use App\Models\DailySessionFood;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\Support\GoogleAuthTestHelpers;
+use Tests\Support\AuthTestHelpers;
 use Tests\TestCase;
 
 class DailySessionTest extends TestCase
 {
     use RefreshDatabase;
-    use GoogleAuthTestHelpers;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->prepareGoogleAuth();
-    }
+    use AuthTestHelpers;
 
     private function registerAthlete(string $email = 'session@gmail.com'): array
     {
-        $response = $this->createGoogleAccount('Track Athlete', $email);
+        $response = $this->createVerifiedAccount('Track Athlete', $email);
         app('auth')->forgetGuards();
 
         return ['Authorization' => 'Bearer '.$response['token']];

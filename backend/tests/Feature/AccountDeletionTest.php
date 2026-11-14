@@ -7,24 +7,21 @@ use App\Models\User;
 use App\Services\EmailOtpService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
+use Tests\Support\AuthTestHelpers;
 use Tests\Support\EmailOtpTestHelpers;
 use Tests\TestCase;
 
 class AccountDeletionTest extends TestCase
 {
     use RefreshDatabase;
+    use AuthTestHelpers;
     use EmailOtpTestHelpers;
 
     public function test_deletion_still_requires_a_fresh_email_code_and_exact_delete_confirmation(): void
     {
-        $user = User::create([
-            'name' => 'Delete Athlete',
-            'email' => 'delete@example.com',
-            'google_sub' => 'google-delete-sub',
-            'password' => null,
-        ]);
-        $user->forceFill(['email_verified_at' => now()])->save();
-        $token = $user->createToken('test')->plainTextToken;
+        $account = $this->createVerifiedAccount('Delete Athlete', 'delete@example.com');
+        $user = User::findOrFail($account['user']['id']);
+        $token = $account['token'];
         $headers = ['Authorization' => 'Bearer '.$token];
         Notification::fake();
 
@@ -59,13 +56,9 @@ class AccountDeletionTest extends TestCase
 
     public function test_deletion_code_expires_and_allows_only_five_failed_attempts(): void
     {
-        $user = User::create([
-            'name' => 'Expiry Athlete',
-            'email' => 'expiry@example.com',
-            'password' => null,
-        ]);
-        $user->forceFill(['email_verified_at' => now()])->save();
-        $token = $user->createToken('test')->plainTextToken;
+        $account = $this->createVerifiedAccount('Expiry Athlete', 'expiry@example.com');
+        $user = User::findOrFail($account['user']['id']);
+        $token = $account['token'];
         $headers = ['Authorization' => 'Bearer '.$token];
         Notification::fake();
 
@@ -96,13 +89,9 @@ class AccountDeletionTest extends TestCase
 
     public function test_expired_deletion_code_cannot_delete_an_account(): void
     {
-        $user = User::create([
-            'name' => 'Expired Athlete',
-            'email' => 'expired@example.com',
-            'password' => null,
-        ]);
-        $user->forceFill(['email_verified_at' => now()])->save();
-        $token = $user->createToken('test')->plainTextToken;
+        $account = $this->createVerifiedAccount('Expired Athlete', 'expired@example.com');
+        $user = User::findOrFail($account['user']['id']);
+        $token = $account['token'];
         $headers = ['Authorization' => 'Bearer '.$token];
         Notification::fake();
 
@@ -119,13 +108,9 @@ class AccountDeletionTest extends TestCase
 
     public function test_production_does_not_claim_a_log_mailer_delivered_a_deletion_code(): void
     {
-        $user = User::create([
-            'name' => 'No Mail Athlete',
-            'email' => 'no-mail@example.com',
-            'password' => null,
-        ]);
-        $user->forceFill(['email_verified_at' => now()])->save();
-        $token = $user->createToken('test')->plainTextToken;
+        $account = $this->createVerifiedAccount('No Mail Athlete', 'no-mail@example.com');
+        $user = User::findOrFail($account['user']['id']);
+        $token = $account['token'];
         $previousEnvironment = app()->environment();
         app()->instance('env', 'production');
         config(['mail.default' => 'log']);
@@ -142,13 +127,9 @@ class AccountDeletionTest extends TestCase
 
     public function test_active_deletion_code_is_cooldown_limited(): void
     {
-        $user = User::create([
-            'name' => 'Cooldown Athlete',
-            'email' => 'cooldown@example.com',
-            'password' => null,
-        ]);
-        $user->forceFill(['email_verified_at' => now()])->save();
-        $token = $user->createToken('test')->plainTextToken;
+        $account = $this->createVerifiedAccount('Cooldown Athlete', 'cooldown@example.com');
+        $user = User::findOrFail($account['user']['id']);
+        $token = $account['token'];
         $headers = ['Authorization' => 'Bearer '.$token];
         Notification::fake();
 

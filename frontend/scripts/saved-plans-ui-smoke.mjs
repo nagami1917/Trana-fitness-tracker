@@ -83,6 +83,7 @@ let failNextDelete = false;
 const deletedIds = [];
 
 window.localStorage.setItem('trana.token', 'test-token');
+const csrfToken = '9'.repeat(64);
 const jsonResp = (body, status = 200) => ({
   ok: status >= 200 && status < 300,
   status,
@@ -94,6 +95,7 @@ window.fetch = async (url, init = {}) => {
   const path = String(url);
   const method = (init.method || 'GET').toUpperCase();
   if (path.startsWith('/models/')) return jsonResp({}, 404);
+  if (path === '/api/auth/csrf') return jsonResp({ csrfToken });
   if (path === '/api/profile') {
     return jsonResp({
       data: {
@@ -113,6 +115,8 @@ window.fetch = async (url, init = {}) => {
   }
   const delMatch = path.match(/^\/api\/predictions\/(\d+)$/);
   if (delMatch && method === 'DELETE') {
+    assert.equal(init.headers['X-CSRF-TOKEN'], csrfToken);
+    assert.equal(init.credentials, 'include');
     if (failNextDelete) {
       failNextDelete = false;
       return jsonResp({ message: 'Server busy' }, 500);

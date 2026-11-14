@@ -16,8 +16,13 @@ return Application::configure(basePath: dirname(__DIR__))
         // Vercel / any reverse proxy terminates TLS in front of the app.
         $middleware->trustProxies(at: '*');
 
-        // API requests use Sanctum bearer tokens, not cookie sessions. Do not
-        // enable Sanctum's stateful SPA middleware: it requires a CSRF cookie.
+        // Authentication tokens are stored in HttpOnly cookies. Translate the
+        // cookie into a server-side Sanctum bearer token and verify Origin/CSRF
+        // headers before API writes; the token is never exposed to JavaScript.
+        $middleware->api(append: [
+            \App\Http\Middleware\AuthenticateFromHttpOnlyCookie::class,
+            \App\Http\Middleware\VerifyApiCsrf::class,
+        ]);
 
         $middleware->alias([
             'abilities' => \Laravel\Sanctum\Http\Middleware\CheckAbilities::class,

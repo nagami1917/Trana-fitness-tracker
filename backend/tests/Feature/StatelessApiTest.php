@@ -4,76 +4,63 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\Support\GoogleAuthTestHelpers;
+use Tests\Support\AuthTestHelpers;
 use Tests\TestCase;
 
 class StatelessApiTest extends TestCase
 {
     use RefreshDatabase;
-    use GoogleAuthTestHelpers;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->prepareGoogleAuth();
-    }
+    use AuthTestHelpers;
 
     private const FRONTEND = [
         'Origin' => 'http://localhost:5173',
         'Referer' => 'http://localhost:5173/register',
     ];
 
-    public function test_browser_origin_can_register_and_write_without_cookie_csrf(): void
+    public function test_cookie_authenticated_writes_require_matching_csrf_and_trusted_origin(): void
     {
-        // PHPUnit normally bypasses CSRF middleware. Simulate a real local
-        // server so this test fails if stateful SPA middleware is re-enabled.
-        config(['sanctum.stateful' => ['localhost:5173']]);
-        $previousEnvironment = app()->environment();
-        app()->instance('env', 'local');
+        $csrf = $this->getJson('/api/auth/csrf', self::FRONTEND)->assertOk()->json('csrfToken');
+        $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $csrf);
 
-        try {
-            $nonce = $this->requestGoogleNonce(self::FRONTEND);
-            $verified = $this->postJson('/api/auth/google', [
-                'credential' => $this->googleCredential($nonce, [
-                    'sub' => 'browser-google-sub',
-                    'email' => 'browser@example.com',
-                    'name' => 'Browser Athlete',
-                ]),
-            ], self::FRONTEND)->assertOk();
-            $verified->assertCookieMissing(config('session.cookie'));
-            $token = $verified->json('token');
+        // Having the CSRF cookie without its matching header is rejected.
+        $this->withCookie('trana_csrf', $csrf)
+            ->postJson('/api/auth/register', [], self::FRONTEND)
+            ->assertStatus(419);
 
-            app('auth')->forgetGuards();
-            $this->putJson('/api/profile', ['weight_kg' => 68], self::FRONTEND + [
-                'Authorization' => 'Bearer '.$token,
-            ])->assertOk()->assertJsonPath('data.weight_kg', 68);
-        } finally {
-            app()->instance('env', $previousEnvironment);
-        }
+        // A matching token is still not enough when the browser Origin is untrusted.
+        $this->withCookie('trana_csrf', $csrf)
+            ->postJson('/api/auth/register', [], [
+                'Origin' => 'https://evil.example',
+                'X-CSRF-TOKEN' => $csrf,
+            ])->assertForbidden();
+
+        // The configured SPA origin plus the matching double-submit token reaches validation.
+        $this->withCookie('trana_csrf', $csrf)
+            ->postJson('/api/auth/register', [], self::FRONTEND + ['X-CSRF-TOKEN' => $csrf])
+            ->assertUnprocessable();
     }
 
-    public function test_cookie_session_cannot_authenticate_the_token_only_api(): void
+    public function test_http_only_auth_cookie_works_without_web_sessions_and_bearer_token_takes_precedence(): void
     {
-        // Simulate an already-authenticated web guard. The API must neither
-        // accept that session alone nor prefer it over a different bearer user.
-        $this->assertSame([], config('sanctum.guard'));
-        $sessionUser = User::create([
-            'name' => 'Session User', 'email' => 'session@gmail.com', 'password' => null,
-        ]);
-        $sessionUser->forceFill(['email_verified_at' => now()])->save();
-        $tokenUser = User::create([
-            'name' => 'Bearer User', 'email' => 'bearer@gmail.com', 'password' => null,
-        ]);
-        $tokenUser->forceFill(['email_verified_at' => now()])->save();
-        $token = $tokenUser->createToken('test')->plainTextToken;
+        $cookieAccount = $this->createVerifiedAccount('Cookie User', 'cookie@gmail.com');
+        $bearerAccount = $this->createVerifiedAccount('Bearer User', 'bearer@gmail.com');
 
-        $this->actingAs($sessionUser, 'web');
-        $this->getJson('/api/auth/me', self::FRONTEND)->assertUnauthorized();
+        // API routes remain stateless: a Laravel web guard session cannot grant API access.
+        $this->assertSame([], config('sanctum.guard'));
+        $this->actingAs(User::findOrFail($cookieAccount['user']['id']), 'web');
+        $this->getJson('/api/auth/me')->assertUnauthorized();
 
         app('auth')->forgetGuards();
-        $this->actingAs($sessionUser, 'web');
-        $this->getJson('/api/auth/me', self::FRONTEND + [
-            'Authorization' => 'Bearer '.$token,
-        ])->assertOk()->assertJsonPath('user.id', $tokenUser->id);
+        $this->withCookie('trana_session', $cookieAccount['token'])
+            ->getJson('/api/auth/me')
+            ->assertOk()
+            ->assertJsonPath('user.id', $cookieAccount['user']['id'])
+            ->assertJsonPath('user.username', $cookieAccount['user']['username']);
+
+        app('auth')->forgetGuards();
+        $this->withCookie('trana_session', $cookieAccount['token'])
+            ->getJson('/api/auth/me', ['Authorization' => 'Bearer '.$bearerAccount['token']])
+            ->assertOk()
+            ->assertJsonPath('user.id', $bearerAccount['user']['id']);
     }
 }

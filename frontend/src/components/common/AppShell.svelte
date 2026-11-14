@@ -294,7 +294,7 @@
           <p class="truncate text-sm font-bold leading-tight">{$profile?.name ?? 'Athlete'}</p>
           <p class="truncate text-[11px] font-semibold text-ink-400">{$profile?.city?.trim() || 'TRANA member'}</p>
         </div>
-        <button class="rounded-xl p-2 text-ink-400 transition hover:bg-brand-100 hover:text-brand-700" onclick={signOut} title="Sign out" aria-label="Sign out">
+        <button class="rounded-xl p-2 text-ink-400 transition hover:bg-brand-100 hover:text-brand-700" onclick={signOut} title="Log out" aria-label="Log out">
           <LogOut size={16} />
         </button>
       </div>
@@ -400,6 +400,7 @@
                 <span class="grid h-8 w-8 place-items-center rounded-full bg-brand-gradient font-display text-xs font-extrabold text-white">
                   {initial}
                 </span>
+                <span class="hidden max-w-28 truncate text-xs font-extrabold text-ink-600 sm:inline">{$session?.username ? `@${$session.username}` : 'Account'}</span>
                 <ChevronDown size={14} class="text-ink-400" />
               </button>
 
@@ -407,6 +408,7 @@
                 <div class="absolute right-0 top-12 z-40 w-56 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-2xl border border-brand-100 bg-white p-1.5 shadow-card animate-pop">
                   <div class="px-3 py-2">
                     <p class="truncate text-sm font-bold">{$profile?.name ?? 'Athlete'}</p>
+                    <p class="truncate text-[11px] font-extrabold text-brand-700">{`@${$session?.username ?? ''}`}</p>
                     <p class="truncate text-[11px] font-semibold text-ink-400">{$session?.email ?? ''}</p>
                   </div>
                   <div class="divider my-1"></div>
@@ -446,7 +448,7 @@
                     <Compass size={15} /> Tour with mascot
                   </button>
                   <button class="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-rose-500 hover:bg-rose-50" onclick={signOut}>
-                    <LogOut size={15} /> Sign out
+                    <LogOut size={15} /> Log out
                   </button>
                 </div>
                 <button class="fixed inset-0 z-30 cursor-default" aria-label="Close menu" onclick={() => (menuOpen = false)}></button>

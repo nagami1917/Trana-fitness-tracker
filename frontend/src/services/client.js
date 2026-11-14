@@ -3,11 +3,18 @@ import { resolveApiConfig } from './config.js';
 import { reportClientError } from '../lib/errorMonitor.js';
 
 const { base: BASE } = resolveApiConfig(import.meta.env);
-const TOKEN_KEY = 'trana.token';
+const LEGACY_TOKEN_KEY = 'trana.token';
 const unauthorizedListeners = new Set();
+let csrfToken = null;
+let csrfPromise = null;
+let sessionAvailable = false;
 
-const getToken = () => localStorage.getItem(TOKEN_KEY);
-const setToken = (token) => (token ? localStorage.setItem(TOKEN_KEY, token) : localStorage.removeItem(TOKEN_KEY));
+// Remove tokens issued by older releases; all new sessions are HttpOnly cookies.
+try {
+  globalThis.localStorage?.removeItem(LEGACY_TOKEN_KEY);
+} catch {
+  // Storage may be unavailable in private browsing or during SSR.
+}
 
 export function onUnauthorized(listener) {
   unauthorizedListeners.add(listener);
@@ -32,18 +39,52 @@ function queryString(params) {
   return out ? `?${out}` : '';
 }
 
+async function ensureCsrfToken() {
+  if (csrfToken) return csrfToken;
+  if (csrfPromise) return csrfPromise;
+
+  csrfPromise = (async () => {
+    let response;
+    try {
+      response = await fetch(`${BASE}/api/auth/csrf`, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        credentials: 'include',
+      });
+    } catch {
+      throw new Error('Could not reach the TRANA API. Check that the backend is running and try again.');
+    }
+    const text = await response.text();
+    const data = text ? safeJson(text) : null;
+    if (!response.ok || typeof data?.csrfToken !== 'string' || !/^[a-f0-9]{64}$/.test(data.csrfToken)) {
+      const error = new Error(data?.message || 'Could not prepare a secure request. Refresh the page and try again.');
+      error.status = response.status;
+      throw error;
+    }
+    csrfToken = data.csrfToken;
+    return csrfToken;
+  })().finally(() => {
+    csrfPromise = null;
+  });
+
+  return csrfPromise;
+}
+
 async function request(path, { method = 'GET', body, auth = true } = {}) {
+  const requestMethod = String(method).toUpperCase();
   const headers = { Accept: 'application/json' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
-  const token = getToken();
-  if (auth && token) headers.Authorization = `Bearer ${token}`;
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(requestMethod)) {
+    headers['X-CSRF-TOKEN'] = await ensureCsrfToken();
+  }
 
   let res;
   try {
     res = await fetch(`${BASE}/api${path}`, {
-      method,
+      method: requestMethod,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
+      credentials: 'include',
     });
   } catch {
     throw new Error('Could not reach the TRANA API. Check that the backend is running and try again.');
@@ -53,18 +94,16 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
   const data = text ? safeJson(text) : null;
 
   if (!res.ok) {
-    // 5xx = the server already recorded its own fault; mirror it from the
-    // client's viewpoint (which request the user was on) for correlation.
     if (res.status >= 500) {
       reportClientError({
-        message: `HTTP ${res.status} ${method} ${path}`,
+        message: `HTTP ${res.status} ${requestMethod} ${path}`,
         stack: data?.message || '',
       });
     }
-    // Only an actual 401 invalidates the token. A network/server outage must
-    // not sign the user out; also avoid clearing a newer token from a late reply.
-    if (res.status === 401 && auth && token && getToken() === token) {
-      setToken(null);
+    if (res.status === 419) csrfToken = null;
+    if (res.status === 401 && auth && sessionAvailable) {
+      sessionAvailable = false;
+      csrfToken = null;
       unauthorizedListeners.forEach((listener) => listener());
     }
     const message = data?.message || (res.status >= 500
@@ -73,6 +112,10 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
     const error = new Error(message);
     error.status = res.status;
     error.errors = data?.errors;
+    error.code = data?.code;
+    error.email = data?.email;
+    error.expires_in = data?.expires_in;
+    error.resend_after = data?.resend_after;
     throw error;
   }
   if (text && data === null) {
@@ -107,23 +150,28 @@ async function listAll(path, limit) {
   return rows;
 }
 
-// Authenticated file download (CSV export). Fetches as a blob so the bearer
-// token never lands in a plain <a href>, then hands the file to the browser.
+// Authenticated file download uses the HttpOnly cookie; credentials never
+// appear in a URL, localStorage value, or JavaScript-readable response.
 async function downloadFile(path, fallbackName) {
-  const headers = { Accept: 'text/csv' };
-  const token = getToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
-
   let res;
   try {
-    res = await fetch(`${BASE}/api${path}`, { headers });
+    res = await fetch(`${BASE}/api${path}`, {
+      headers: { Accept: 'text/csv' },
+      credentials: 'include',
+    });
   } catch {
     throw new Error('Could not reach the TRANA API. Check that the backend is running and try again.');
   }
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     const data = safeJson(text);
-    throw new Error(data?.message || `Export failed (${res.status}).`);
+    if (res.status === 401 && sessionAvailable) {
+      sessionAvailable = false;
+      unauthorizedListeners.forEach((listener) => listener());
+    }
+    const error = new Error(data?.message || `Export failed (${res.status}).`);
+    error.status = res.status;
+    throw error;
   }
 
   const blob = await res.blob();
@@ -138,10 +186,11 @@ async function downloadFile(path, fallbackName) {
 }
 
 function saveSession(data) {
-  if (!data?.token || !data?.user) {
+  if (!data?.user || typeof data.csrfToken !== 'string') {
     throw new Error('The TRANA API returned an invalid sign-in response.');
   }
-  setToken(data.token);
+  sessionAvailable = true;
+  csrfToken = data.csrfToken;
   return data.user;
 }
 
@@ -158,35 +207,44 @@ export const api = {
   },
 
   auth: {
-    hasToken: () => Boolean(getToken()),
+    // This is only an in-memory UI hint; the actual credential is HttpOnly.
+    hasToken: () => sessionAvailable,
+    hasSession: () => sessionAvailable,
     async user() {
-      if (!getToken()) return null;
       try {
-        const data = await request('/auth/me');
+        const data = await request('/auth/me', { auth: false });
         if (!data?.user) throw new Error('The TRANA API returned an invalid account response.');
+        sessionAvailable = true;
         return data.user;
       } catch (error) {
-        if (error.status === 401) return null;
+        if (error.status === 401) {
+          sessionAvailable = false;
+          return null;
+        }
         throw error;
       }
     },
-    requestGoogleNonce: () => request('/auth/google/nonce', { method: 'POST', auth: false }),
-    async signInWithGoogle(credential) {
-      const data = await request('/auth/google', {
+    register: (payload) => request('/auth/register', { method: 'POST', body: payload, auth: false }),
+    verifyEmail: (payload) => request('/auth/email/verify', { method: 'POST', body: payload, auth: false }),
+    resendVerification: (email) => request('/auth/email/resend', { method: 'POST', body: { email }, auth: false }),
+    async login(identifier, password) {
+      const data = await request('/auth/login', {
         method: 'POST',
-        body: { credential },
+        body: { identifier, password },
         auth: false,
       });
       return saveSession(data);
     },
+    forgotPassword: (email) => request('/auth/password/forgot', { method: 'POST', body: { email }, auth: false }),
+    resetPassword: (payload) => request('/auth/password/reset', { method: 'POST', body: payload, auth: false }),
     async logout() {
       try {
-        if (getToken()) await request('/auth/logout', { method: 'POST' });
+        if (sessionAvailable) await request('/auth/logout', { method: 'POST' });
       } finally {
-        setToken(null);
+        sessionAvailable = false;
+        csrfToken = null;
       }
     },
-
   },
 
   profile: {

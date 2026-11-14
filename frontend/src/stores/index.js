@@ -116,13 +116,8 @@ onUnauthorized(() => {
 export async function bootstrap() {
   bootError.set(null);
 
-  if (!api.auth.hasToken()) {
-    clearUserData();
-    ready.set(true);
-    booting.set(false);
-    return;
-  }
-
+  // HttpOnly cookies are intentionally unreadable to JavaScript. Always ask
+  // the API to validate the session rather than inferring it from localStorage.
   // Hydrate immediately from the cached account snapshot when available so
   // returning athletes skip the cold-start splash while syncing in background.
   const cached = readBootCache();
@@ -141,7 +136,7 @@ export async function bootstrap() {
   }
 
   try {
-    // Run DB health and token validation concurrently (1 parallel RTT instead of 2 serial RTTs).
+    // Run DB health and the HttpOnly-cookie session check concurrently.
     const [, user] = await Promise.all([api.health(), api.auth.user()]);
     if (user) {
       await refresh();
@@ -251,8 +246,8 @@ async function finishSignIn(user) {
   }
 }
 
-export async function googleSignInAndContinue(credential) {
-  return finishSignIn(await api.auth.signInWithGoogle(credential));
+export async function loginAndContinue(identifier, password) {
+  return finishSignIn(await api.auth.login(identifier, password));
 }
 
 export async function logout() {

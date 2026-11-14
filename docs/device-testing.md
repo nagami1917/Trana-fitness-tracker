@@ -23,7 +23,7 @@
 | --- | --- | --- | --- |
 | B1 | Open any signed-in page | Bottom navigation bar visible with 7 items | ☐ |
 | B2 | Tap each bottom-nav item | Correct page loads, active state highlights | ☐ |
-| B3 | Open the avatar menu | Dropdown shows Profile / Settings / Sign out (+ Admin if admin) | ☐ |
+| B3 | Open the avatar menu | Dropdown shows username, Profile / Settings / Log out (+ Admin if admin) | ☐ |
 | B4 | Rotate to landscape (if supported) | Layout reflows, nothing clipped | ☐ |
 | B5 | Small phone (≤5″) spot check | Tables/cards scroll or wrap — no overlap | ☐ |
 
@@ -31,14 +31,14 @@
 
 | # | Step | Expected | Status |
 | --- | --- | --- | --- |
-| C1 | Create an account with **Sign up with Google** | Google prompt completes; account and profile are created | ☐ |
-| C2 | Use a verified Google Workspace account, if available | Account is created without a Gmail-only restriction | ☐ |
-| C3 | Cancel the Google prompt | No TRANA session is created; sign-in screen remains usable | ☐ |
-| C4 | Sign in with the same Google account | Existing account opens; no email code or TRANA password is requested | ☐ |
-| C5 | Inspect the sign-in screens and requests | No Google password, TRANA password or emailed sign-in code is collected | ☐ |
-| C6 | Sign out and sign in again with Google | Session is restored and the dashboard loads | ☐ |
-| C7 | Settings → Danger zone → request code | Separate account-deletion confirmation email arrives | ☐ |
-| C8 | Type `DELETE` and submit a valid deletion code | Account data is erased and app returns to sign-in | ☐ |
+| C1 | Create an account with a unique username and Gmail | Validation accepts the exact username/password constraints | ☐ |
+| C2 | Submit signup with a configured mail provider | Six-digit email code arrives; no session is created before verification | ☐ |
+| C3 | Paste the code and verify within five minutes | Email is marked verified; login tab is shown | ☐ |
+| C4 | Log in with username and then Gmail | Both identifiers open the same account | ☐ |
+| C5 | Enter an incorrect password / unverified account | Generic invalid-credentials error / resend-code option appears | ☐ |
+| C6 | Use Forgot password with a verified account | Reset code arrives; new password works and old sessions are revoked | ☐ |
+| C7 | Log out and log in again | Session is restored with HttpOnly cookie; username and Log out are visible | ☐ |
+| C8 | Settings → Danger zone → request code and type `DELETE` | Separate account-deletion email arrives; confirmation erases account data | ☐ |
 
 ## D. Planning & drawing (the draw-test on a real map)
 

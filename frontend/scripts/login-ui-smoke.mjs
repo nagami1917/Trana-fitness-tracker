@@ -1,4 +1,4 @@
-/** Exercise Google-only sign-in with a mocked Identity Services and API boundary. */
+/** Exercise signup verification, password login, and HttpOnly-cookie client behavior. */
 import assert from 'node:assert/strict';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,7 +13,6 @@ const bundle = await build({
   envFile: false,
   logLevel: 'silent',
   plugins: [svelte()],
-  define: { 'import.meta.env.VITE_GOOGLE_CLIENT_ID': JSON.stringify('test-google-client-id') },
   build: {
     write: false,
     minify: false,
@@ -25,46 +24,23 @@ const codeBundle = outputs.find((entry) => entry.type === 'chunk').code;
 const window = new Window({ url: 'http://localhost/login' });
 const { document } = window;
 document.body.innerHTML = '<div id="app"></div>';
+window.alert = () => {};
 const requests = [];
-const googleInitializations = [];
-let nonceCount = 0;
-let rejectCredential = true;
-const user = { id: 1, name: 'Test Athlete', email: 'athlete@example.com', email_verified_at: '2026-11-10T00:00:00Z' };
+const csrf = 'a'.repeat(64);
+const user = { id: 1, name: 'Test Athlete', username: 'test_athlete', email: 'athlete@gmail.com', role: 'athlete' };
 const response = (data, status = 200) => ({
   ok: status >= 200 && status < 300,
   status,
   text: async () => JSON.stringify(data),
 });
-window.google = {
-  accounts: {
-    id: {
-      initialize: (options) => googleInitializations.push(options),
-      renderButton: (element, options) => {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.dataset.googleButton = 'true';
-        button.textContent = options.text === 'signin_with' ? 'Sign in with Google' : options.text;
-        button.addEventListener('click', () => {
-          googleInitializations.at(-1).callback({ credential: 'google-id-token-fixture' });
-        });
-        element.appendChild(button);
-      },
-    },
-  },
-};
 window.fetch = async (url, options = {}) => {
   const path = String(url).split('?')[0];
   const body = options.body && JSON.parse(options.body);
-  requests.push({ url: String(url), method: options.method, body });
-  if (path === '/api/auth/google/nonce') return response({ nonce: `test-nonce-${++nonceCount}` });
-  if (path === '/api/auth/google') {
-    return rejectCredential
-      ? response({
-        message: 'Google sign-in could not be verified. Please try again.',
-        errors: { credential: ['Google sign-in could not be verified. Please try again.'] },
-      }, 422)
-      : response({ token: 'google-login-token', user });
-  }
+  requests.push({ url: String(url), method: options.method || 'GET', body, headers: options.headers, credentials: options.credentials });
+  if (path === '/api/auth/csrf') return response({ csrfToken: csrf });
+  if (path === '/api/auth/register') return response({ email: 'athlete@gmail.com', expires_in: 300 }, 202);
+  if (path === '/api/auth/email/verify') return response({ message: 'Account verified.', verified: true });
+  if (path === '/api/auth/login') return response({ user, csrfToken: 'b'.repeat(64) });
   if (path === '/api/profile') return response({ data: { ...user, onboarded: true } });
   if (path === '/api/activities' || path === '/api/predictions') {
     return response({ data: [], meta: { current_page: 1, last_page: 1 } });
@@ -74,49 +50,83 @@ window.fetch = async (url, options = {}) => {
 };
 window.eval(codeBundle);
 const flush = () => window.flushLoginTest();
-const waitFor = async (condition) => {
+const waitFor = async (condition, description) => {
   const deadline = Date.now() + 3000;
   while (Date.now() < deadline) {
     flush();
     if (condition()) return;
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
-  throw new Error('Timed out waiting for the Google sign-in flow');
+  throw new Error(`Timed out waiting for ${description}`);
 };
 const click = (element) => { assert.ok(element); element.click(); flush(); };
+const setInput = (selector, value) => {
+  const input = document.querySelector(selector);
+  assert.ok(input, `missing input ${selector}`);
+  input.value = value;
+  input.dispatchEvent(new window.Event('input', { bubbles: true }));
+  flush();
+  return input;
+};
+const submit = (form) => {
+  assert.ok(form);
+  form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  flush();
+};
 
 try {
   flush();
-  assert.equal(document.querySelector('#password'), null, 'Sign-in must not ask for a TRANA or Google password.');
-  assert.equal(document.querySelector('#email'), null, 'Sign-in must not request an email outside the Google prompt.');
-  assert.equal(document.querySelector('#otp-code'), null, 'Sign-in must not ask for an emailed code.');
-  assert.match(document.body.textContent, /Sign in securely with your Google account/i);
-  assert.match(document.body.textContent, /never asks for or stores it/i);
+  assert.match(document.body.textContent, /Welcome back/i);
+  assert.match(document.body.textContent, /Create account/i);
+  assert.ok(document.querySelector('#identifier'));
+  assert.equal(document.querySelector('#login-password')?.maxLength, 72);
 
-  await waitFor(() => document.querySelector('[data-google-button]'));
-  assert.equal(googleInitializations[0].client_id, 'test-google-client-id');
-  assert.equal(googleInitializations[0].nonce, 'test-nonce-1');
-  assert.equal(googleInitializations[0].ux_mode, 'popup');
+  click(document.querySelector('button[role="tab"][aria-selected="false"]'));
+  assert.ok(document.querySelector('#full-name'));
+  assert.ok(document.querySelector('#username'));
+  assert.ok(document.querySelector('#signup-email'));
 
-  click(document.querySelector('[data-google-button]'));
-  await waitFor(() => document.body.textContent.includes('Google sign-in could not be verified'));
-  assert.equal(window.localStorage.getItem('trana.token'), null, 'A rejected Google credential must not create a session.');
-  await waitFor(() => document.querySelector('[data-google-button]') && nonceCount === 2);
+  setInput('#full-name', 'Test Athlete');
+  setInput('#username', 'test_athlete');
+  setInput('#signup-email', 'athlete@gmail.com');
+  setInput('#signup-password', 'Strong-pass-123');
+  setInput('#signup-confirm', 'Strong-pass-123');
+  submit(document.querySelector('form'));
+  await waitFor(() => document.querySelectorAll('.otp-row input').length === 6, 'the email verification screen');
 
-  rejectCredential = false;
-  click(document.querySelector('[data-google-button]'));
-  await waitFor(() => window.location.pathname === '/');
-
-  const googleRequests = requests.filter((request) => request.url === '/api/auth/google');
-  assert.equal(googleRequests.length, 2);
-  for (const request of googleRequests) {
-    assert.equal(request.method, 'POST');
-    assert.deepEqual(request.body, { credential: 'google-id-token-fixture' });
+  const verificationDigits = [...document.querySelectorAll('.otp-row input')];
+  for (const [index, digit] of [...'135790'].entries()) {
+    verificationDigits[index].value = digit;
+    verificationDigits[index].dispatchEvent(new window.Event('input', { bubbles: true }));
+    flush();
   }
-  assert.equal(window.localStorage.getItem('trana.token'), 'google-login-token');
-  assert.equal(requests.filter((request) => request.url === '/api/auth/google/nonce').length, 2);
-  assert.equal(requests.some((request) => JSON.stringify(request.body || {}).includes('password')), false);
-  console.log('Google-only sign-in, nonce refresh, retry and session checks passed');
+  await waitFor(() => document.body.textContent.includes('Welcome back'), 'successful email verification');
+
+  setInput('#identifier', 'test_athlete');
+  setInput('#login-password', 'Strong-pass-123');
+  submit(document.querySelector('form'));
+  await waitFor(() => window.location.pathname === '/', 'the signed-in dashboard route');
+
+  const registerRequest = requests.find((request) => request.url === '/api/auth/register');
+  assert.deepEqual(registerRequest.body, {
+    name: 'Test Athlete',
+    username: 'test_athlete',
+    email: 'athlete@gmail.com',
+    password: 'Strong-pass-123',
+    password_confirmation: 'Strong-pass-123',
+  });
+  assert.deepEqual(requests.find((request) => request.url === '/api/auth/email/verify').body, {
+    email: 'athlete@gmail.com', code: '135790',
+  });
+  const loginRequest = requests.find((request) => request.url === '/api/auth/login');
+  assert.deepEqual(loginRequest.body, { identifier: 'test_athlete', password: 'Strong-pass-123' });
+  for (const request of requests.filter((item) => item.method !== 'GET')) {
+    assert.equal(request.headers['X-CSRF-TOKEN'], csrf, `${request.url} should include a CSRF header`);
+    assert.equal(request.credentials, 'include', `${request.url} should include same-site cookies`);
+  }
+  assert.equal(window.localStorage.getItem('trana.token'), null, 'Auth tokens must never be stored in localStorage.');
+  assert.equal(requests.some((request) => JSON.stringify(request.body || {}).includes('google')), false);
+  console.log('Gmail/password signup, OTP verification, login and cookie/CSRF UI checks passed');
 } finally {
   await window.destroyLoginTest();
   await window.happyDOM.abort();

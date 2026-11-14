@@ -7,9 +7,9 @@ if [ ! -f .env ]; then
   cp .env.example .env
   php artisan key:generate
 fi
-# Set DB_* (including the private database password), ML_API_URL, and
-# GOOGLE_CLIENT_ID in .env. Match GOOGLE_CLIENT_ID to frontend's
-# VITE_GOOGLE_CLIENT_ID; see ../docs/DEPLOYMENT.md for Google Cloud setup.
+# Set DB_* (including the private database password), ML_API_URL, CORS_ALLOWED_ORIGINS,
+# TRANA_COOKIE_SAME_SITE and MAIL_* in .env. Keep mail-provider credentials in
+# the deployment environment only; see ../docs/DEPLOYMENT.md.
 # See ../supabase/README.md for the session-pooler settings.
 php artisan config:clear
 php artisan migrate:status
@@ -49,18 +49,20 @@ database/seeders/         no sample accounts or activities are seeded
 * **Database URLs**: the PostgreSQL and SQLite connections ignore `DB_URL` and
   `DATABASE_URL`; configure the individual `DB_*` values instead. The separate
   ML training service can still use its own `DATABASE_URL`.
-* **Auth**: Google Identity Services provides account creation and sign-in;
-  Laravel verifies the Google ID token and issues Sanctum personal access
-  tokens (`Authorization: Bearer …`). TRANA does not collect a Google or TRANA
-  password. The API does not authenticate with web-session cookies, so browser
-  requests do not use a CSRF cookie. If cookie authentication is added later,
-  it must include appropriate CSRF protection. Existing
-  `SANCTUM_STATEFUL_DOMAINS` values do not enable cookie auth for this API.
+* **Auth**: users register with a unique username, Gmail address, and bcrypt
+  password, then verify a six-digit email OTP. Sanctum personal-access tokens
+  are returned only in HttpOnly cookies for browser sessions (Secure in
+  production). The API's double-submit CSRF middleware validates allowlisted
+  `Origin` headers and CSRF tokens for cookie-authenticated writes. Trusted
+  non-browser clients can continue to use bearer tokens. Signup, login, and OTP
+  endpoints are rate-limited; OTPs are purpose-bound, short-lived, and stored as
+  keyed hashes. Configure `MAIL_*` in the deployment environment for delivery.
   Token abilities are ready for scoped apps (`activity:write`, `prediction:read`).
 * **Prediction**: Laravel owns no model. It gathers history, calls FastAPI, shapes
   the response for the Svelte client and stores the full payload for auditing.
-* **Data**: A verified Google identity creates/links a real user and default
-  profile/goals. There are no demo or email-code sign-in routes, and the default
+* **Data**: Email verification activates the account and creates default
+  profile/goals. Signup/password-reset codes use a five-minute expiry; the
+  separate account-deletion code retains its ten-minute expiry. The default
   seeder creates no sample records.
 * **Rate limits**: auth 10/min/IP, predictions 60/min/user.
 * **Deploy**: `vercel.json` + `api/index.php` give a serverless PHP entry point;
@@ -75,19 +77,20 @@ python3 scripts/test_stateless_api_http.py
 ```
 
 The PHPUnit suite runs against in-memory SQLite (`phpunit.xml`) and fakes the
-FastAPI service at the HTTP boundary (`Http::fake()`), so it needs no ML service
+FastAPI and mail boundaries, so it needs no ML service, provider credentials,
 or network. The HTTP smoke test uses Python's standard library and an isolated
-temporary SQLite database to exercise real browser-origin requests with CSRF
-checks enabled. It does not read the checkout's `.env` or modify its database.
-`GoogleAuthTest` signs RSA-backed Google ID-token fixtures and checks nonce,
-audience, signature, account linking and session issuance without network
-access. `AccountDeletionTest` covers the separate email-code safeguard.
-`PredictionCreationTest.php` locks in the contract that saved predictions
-persist the *effective* distance (a drawn route wins over a typed one), and
-that prediction outages return 503 without storing half-finished rows.
-`LiveAccountTest` covers Google account creation/sign-in, tokens, per-user
-isolation, pagination, health checks, and seeding behavior. Production still
-targets PostgreSQL; these tests use SQLite and do not prove a Supabase deployment.
+temporary SQLite database to exercise real browser-origin requests, HttpOnly
+cookie auth, and CSRF/origin checks. It does not read the checkout's `.env` or
+modify its database. `EmailPasswordAuthTest` covers Gmail/username constraints,
+bcrypt storage, verification OTP expiry/attempts/resends, generic login errors,
+HttpOnly cookies, password reset, and token revocation. `AccountDeletionTest`
+covers the separate email-code safeguard. `PredictionCreationTest.php` locks in
+the contract that saved predictions persist the *effective* distance (a drawn
+route wins over a typed one), and that prediction outages return 503 without
+storing half-finished rows. `LiveAccountTest` covers verified-account access,
+tokens, per-user isolation, pagination, health checks, and seeding behavior.
+Production still targets PostgreSQL; these tests use SQLite and do not prove a
+Supabase deployment or live SMTP delivery.
 
 ## Useful commands
 

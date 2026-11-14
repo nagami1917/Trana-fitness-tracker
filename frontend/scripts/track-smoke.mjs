@@ -26,8 +26,12 @@ globalThis.localStorage = {
 globalThis.window = { location: { pathname: '/track', search: '' }, addEventListener() {}, scrollTo() {} };
 
 const calls = [];
+const csrfToken = 'd'.repeat(64);
 globalThis.fetch = async (url, init = {}) => {
-  calls.push({ url: String(url), method: init.method ?? 'GET', body: init.body ? JSON.parse(init.body) : null });
+  calls.push({ url: String(url), method: init.method ?? 'GET', body: init.body ? JSON.parse(init.body) : null, headers: init.headers, credentials: init.credentials });
+  if (String(url) === '/api/auth/csrf') {
+    return new Response(JSON.stringify({ csrfToken }), { status: 200 });
+  }
   if (String(url).includes('/daily-sessions/today')) {
     return new Response(JSON.stringify({ data: { id: 7, session_date: '2026-11-11', calories_burned: 220, calories_eaten: 0, water_ml: 500, net_calories: -220, foods: [] } }), { status: 200 });
   }
@@ -246,6 +250,11 @@ try {
   assert.ok(calls.some((c) => c.url === '/api/activities'));
   assert.ok(calls.some((c) => c.url === '/api/activities/42'));
   assert.ok(calls.some((c) => c.url === '/api/routes'));
+  assert.equal(globalThis.localStorage.getItem('trana.token'), null, 'Legacy browser auth tokens are removed.');
+  for (const call of calls.filter((item) => item.method !== 'GET')) {
+    assert.equal(call.headers['X-CSRF-TOKEN'], csrfToken);
+    assert.equal(call.credentials, 'include');
+  }
 
   // Verify dailySessionApi envelope contracts and query forwarding
   const { dailySessionApi, formatSessionDate } = await vite.ssrLoadModule('/src/services/dailySessionService.js');

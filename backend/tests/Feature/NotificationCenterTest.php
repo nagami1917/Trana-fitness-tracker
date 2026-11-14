@@ -8,23 +8,17 @@ use App\Models\InAppNotification;
 use App\Models\Prediction;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\Support\GoogleAuthTestHelpers;
+use Tests\Support\AuthTestHelpers;
 use Tests\TestCase;
 
 class NotificationCenterTest extends TestCase
 {
     use RefreshDatabase;
-    use GoogleAuthTestHelpers;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->prepareGoogleAuth();
-    }
+    use AuthTestHelpers;
 
     private function registerAthlete(string $email = 'notify@gmail.com'): array
     {
-        $response = $this->createGoogleAccount('Notify Athlete', $email);
+        $response = $this->createVerifiedAccount('Notify Athlete', $email);
 
         return ['Authorization' => 'Bearer '.$response['token']];
     }

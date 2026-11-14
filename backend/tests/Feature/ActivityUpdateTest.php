@@ -4,23 +4,17 @@ namespace Tests\Feature;
 
 use App\Models\Activity;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\Support\GoogleAuthTestHelpers;
+use Tests\Support\AuthTestHelpers;
 use Tests\TestCase;
 
 class ActivityUpdateTest extends TestCase
 {
     use RefreshDatabase;
-    use GoogleAuthTestHelpers;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->prepareGoogleAuth();
-    }
+    use AuthTestHelpers;
 
     private function registerAthlete(string $email): string
     {
-        return $this->createGoogleAccount('Athlete', $email)['token'];
+        return $this->createVerifiedAccount('Athlete', $email)['token'];
     }
 
     private function bearer(string $token): array

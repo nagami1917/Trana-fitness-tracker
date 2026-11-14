@@ -6,7 +6,7 @@ use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-/** Only a Google-verified email may use the authenticated API surface. */
+/** Only an email-verified user may use the authenticated API surface. */
 class EnsureVerifiedEmail
 {
     public function handle(Request $request, Closure $next): Response
@@ -15,14 +15,14 @@ class EnsureVerifiedEmail
 
         if ($user && ! $user->email_verified_at) {
             try {
-                // Legacy tokens must not bypass the Google email-verification gate.
+                // Existing tokens must not bypass the email verification gate.
                 $user->currentAccessToken()?->delete();
             } catch (\Throwable) {
                 // The response still rejects an unverified account if its token is gone.
             }
 
             return response()->json([
-                'message' => 'Use Google sign-in to verify your email before continuing.',
+                'message' => 'Verify your email address with the code sent to your inbox before continuing.',
             ], 401);
         }
 

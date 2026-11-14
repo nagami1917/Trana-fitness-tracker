@@ -6,24 +6,18 @@ use App\Models\ErrorLog;
 use App\Models\User;
 use App\Services\MlClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\Support\GoogleAuthTestHelpers;
+use Tests\Support\AuthTestHelpers;
 use Tests\TestCase;
 
 class AdminAccessTest extends TestCase
 {
     use RefreshDatabase;
-    use GoogleAuthTestHelpers;
+    use AuthTestHelpers;
 
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->prepareGoogleAuth();
-    }
-
-    /** Google sign-in returns a fresh token; guards are cleared (they persist in-process). */
+    /** Create a verified fixture account and clear the per-process auth guard. */
     private function registerAthlete(string $email, string $name = 'Athlete'): array
     {
-        $response = $this->createGoogleAccount($name, $email);
+        $response = $this->createVerifiedAccount($name, $email);
         app('auth')->forgetGuards();
 
         return ['id' => $response['user']['id'], 'token' => $response['token']];
@@ -135,14 +129,11 @@ class AdminAccessTest extends TestCase
         // which makes the SPA drop it automatically.
         $switch();
         $this->getJson('/api/auth/me', $victimAuth)->assertUnauthorized();
-        // A fresh Google identity for the suspended account is refused.
-        $nonce = $this->requestGoogleNonce();
-        $this->postJson('/api/auth/google', [
-            'credential' => $this->googleCredential($nonce, [
-                'sub' => 'trana-test-suspended.athlete@gmail.com',
-                'email' => 'suspended.athlete@gmail.com',
-            ]),
-        ])->assertStatus(403)->assertJsonPath('message', 'This account has been suspended.');
+        // Suspended accounts cannot create a new login session.
+        $this->postJson('/api/auth/login', [
+            'identifier' => 'suspended.athlete@gmail.com',
+            'password' => 'Fixture-password-123',
+        ])->assertUnauthorized()->assertJsonPath('message', 'Invalid credentials.');
 
         $switch();
         $this->patchJson("/api/admin/users/{$victim['id']}/reactivate", [], $this->bearer($admin))
@@ -152,7 +143,10 @@ class AdminAccessTest extends TestCase
         // The revoked token stays dead; a new login works again.
         $switch();
         $this->getJson('/api/auth/me', $victimAuth)->assertUnauthorized();
-        $this->assertSame('athlete', $this->signInToGoogleAccount('suspended.athlete@gmail.com')['user']['role']);
+        $this->postJson('/api/auth/login', [
+            'identifier' => 'suspended.athlete@gmail.com',
+            'password' => 'Fixture-password-123',
+        ])->assertOk()->assertJsonPath('user.role', 'athlete')->assertJsonMissingPath('token');
     }
 
     public function test_suspension_middleware_refuses_a_live_session(): void
@@ -293,7 +287,7 @@ class AdminAccessTest extends TestCase
         $athlete = $this->registerAthlete('shaped.athlete@gmail.com');
         $this->makeAdmin($athlete['id']);
 
-        $response = $this->signInToGoogleAccount('shaped.athlete@gmail.com');
+        $response = $this->signInToAccount('shaped.athlete@gmail.com');
         $this->assertSame('admin', $response['user']['role']);
     }
 }

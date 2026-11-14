@@ -107,6 +107,7 @@ let activeAccount = {
 };
 
 window.localStorage.setItem('trana.token', 'tour-test-token');
+const csrfToken = 'f'.repeat(64);
 const jsonResp = (body, status = 200) => ({
   ok: status >= 200 && status < 300,
   status,
@@ -124,10 +125,13 @@ window.fetch = async (url, init = {}) => {
   if (path === '/models/model_card.json') {
     return jsonResp({ version: 'test', training_source: 'synthetic', corpus_rows: 10, metrics: { mape_pct: 8 } });
   }
+  if (path === '/api/auth/csrf') return jsonResp({ csrfToken });
   if (path === '/api/health') return jsonResp({ status: 'ok' });
   if (path === '/api/auth/me') return jsonResp({ user: activeAccount.user });
   if (path === '/api/profile' && method === 'GET') return jsonResp({ data: activeAccount.profile });
   if (path === '/api/profile' && method === 'PUT') {
+    assert.equal(init.headers['X-CSRF-TOKEN'], csrfToken);
+    assert.equal(init.credentials, 'include');
     const patch = JSON.parse(init.body || '{}');
     activeAccount.profile = {
       ...activeAccount.profile,

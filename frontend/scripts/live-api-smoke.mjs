@@ -1,4 +1,4 @@
-/** Exercise the Laravel facade and outage/session handling with a stubbed HTTP boundary. */
+/** Exercise the Laravel facade, HttpOnly-cookie session model, CSRF header, and outage handling. */
 import assert from 'node:assert/strict';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,7 +26,6 @@ globalThis.fetch = async (url, init = {}) => {
   return new Response(typeof next.data === 'string' ? next.data : JSON.stringify(next.data), { status: next.status });
 };
 
-// Even without any environment setting, all calls go to the real /api path.
 process.env.VITE_API_BASE_URL = '';
 const vite = await createServer({
   root,
@@ -40,24 +39,42 @@ try {
   assert.equal(api.mode, 'live');
   replies = [reply('/api/health', 200, { status: 'ok' })];
   await api.health();
+  replies = [reply('/api/auth/me', 401, { message: 'Unauthenticated.' })];
   assert.equal(await api.auth.user(), null);
 
-  replies = [reply('/api/auth/google/nonce', 200, { nonce: 'fixture-google-nonce' })];
-  assert.equal((await api.auth.requestGoogleNonce()).nonce, 'fixture-google-nonce');
+  const csrf = 'c'.repeat(64);
+  replies = [
+    reply('/api/auth/csrf', 200, { csrfToken: csrf }),
+    reply('/api/auth/register', 202, { email: 'athlete@gmail.com', expires_in: 300 }),
+  ];
+  await api.auth.register({
+    name: 'Athlete', username: 'runner_1', email: 'athlete@gmail.com',
+    password: 'Runner-pass-123', password_confirmation: 'Runner-pass-123',
+  });
   assert.equal(calls.at(-1).method, 'POST');
-  assert.equal(calls.at(-1).body, undefined);
-  assert.equal(memory.has('trana.token'), false, 'Requesting a nonce must not create a session.');
+  assert.equal(calls.at(-1).headers['X-CSRF-TOKEN'], csrf);
+  assert.equal(calls.at(-1).credentials, 'include');
+  assert.equal(memory.has('trana.token'), false, 'Signup must not store an auth token.');
 
-  replies = [reply('/api/auth/google', 200, { token: 'test-token', user: { id: 1, name: 'Athlete' } })];
-  assert.equal((await api.auth.signInWithGoogle('fixture-google-id-token')).name, 'Athlete');
+  replies = [reply('/api/auth/email/verify', 200, { message: 'Verified.' })];
+  await api.auth.verifyEmail({ email: 'athlete@gmail.com', code: '123456' });
+  assert.deepEqual(JSON.parse(calls.at(-1).body), { email: 'athlete@gmail.com', code: '123456' });
+
+  const user = { id: 1, name: 'Athlete', username: 'runner_1', email: 'athlete@gmail.com', role: 'athlete' };
+  replies = [reply('/api/auth/login', 200, { user, csrfToken: 'd'.repeat(64) })];
+  assert.equal((await api.auth.login('runner_1', 'Runner-pass-123')).username, 'runner_1');
   assert.equal(calls.at(-1).method, 'POST');
-  assert.deepEqual(JSON.parse(calls.at(-1).body), { credential: 'fixture-google-id-token' });
-  assert.equal(memory.get('trana.token'), 'test-token');
+  assert.deepEqual(JSON.parse(calls.at(-1).body), { identifier: 'runner_1', password: 'Runner-pass-123' });
+  assert.equal(calls.at(-1).headers['X-CSRF-TOKEN'], csrf);
+  assert.equal(calls.at(-1).credentials, 'include');
+  assert.equal(calls.at(-1).headers.Authorization, undefined, 'Browser auth must use the HttpOnly cookie.');
+  assert.equal(memory.has('trana.token'), false, 'The auth token must never enter localStorage.');
+  assert.equal(api.auth.hasSession(), true);
 
   replies = [reply('/api/account/delete-code', 202, { message: 'A confirmation code was sent.' })];
   await api.account.requestDeleteCode();
   assert.equal(calls.at(-1).method, 'POST');
-  assert.equal(calls.at(-1).headers.Authorization, 'Bearer test-token');
+  assert.equal(calls.at(-1).headers.Authorization, undefined);
 
   replies = [reply('/api/account', 200, { message: 'Account deleted.' })];
   await api.account.delete('012345');
@@ -66,7 +83,8 @@ try {
 
   replies = [reply('/api/profile', 200, { data: { name: 'Athlete' } })];
   assert.deepEqual(await api.profile.get(), { name: 'Athlete' });
-  assert.equal(calls.at(-1).headers.Authorization, 'Bearer test-token');
+  assert.equal(calls.at(-1).headers.Authorization, undefined);
+  assert.equal(calls.at(-1).credentials, 'include');
 
   replies = [
     reply('/api/activities?limit=500&page=1', 200, page([{ id: 2 }], 1, 2)),
@@ -76,28 +94,26 @@ try {
   replies = [reply('/api/predictions?limit=100&page=1', 200, { data: [] })];
   await assert.rejects(api.predictions.list(), /outdated or returned an invalid list/);
 
-  // Network errors and server errors must not discard a valid saved token.
+  // Network errors and server errors must not end a valid cookie session.
   replies = [{ path: '/api/auth/me', error: 'network down' }];
   await assert.rejects(api.auth.user(), /Could not reach/);
-  assert.equal(memory.get('trana.token'), 'test-token');
+  assert.equal(api.auth.hasSession(), true);
   replies = [reply('/api/auth/me', 503, { message: 'Database unavailable' })];
   await assert.rejects(api.auth.user(), /Database unavailable/);
-  assert.equal(memory.get('trana.token'), 'test-token');
+  assert.equal(api.auth.hasSession(), true);
 
   let expired = 0;
   const unsubscribe = onUnauthorized(() => { expired += 1; });
-  replies = [reply('/api/auth/me', 401, { message: 'Unauthenticated.' })];
-  assert.equal(await api.auth.user(), null);
-  assert.equal(memory.has('trana.token'), false);
+  replies = [reply('/api/goals', 401, { message: 'Unauthenticated.' })];
+  await assert.rejects(api.goals.get(), /Unauthenticated/);
+  assert.equal(api.auth.hasSession(), false);
   assert.equal(expired, 1);
   unsubscribe();
 
-  // HTML from a misconfigured proxy is not mistaken for a successful API.
   replies = [reply('/api/health', 200, '<html>not the API</html>')];
   await assert.rejects(api.health(), /unexpected response/);
 
   const stores = await vite.ssrLoadModule('/src/stores/index.js');
-  memory.set('trana.token', 'test-token');
   replies = [
     reply('/api/health', 200, { status: 'ok' }),
     { path: '/api/auth/me', error: 'network down' },
@@ -105,11 +121,11 @@ try {
   await stores.bootstrap();
   assert.match(get(stores.bootError), /Could not reach/);
   assert.equal(get(stores.session), null);
-  assert.equal(memory.get('trana.token'), 'test-token');
+  assert.equal(memory.has('trana.token'), false);
 
   replies = [
     reply('/api/health', 200, { status: 'ok' }),
-    reply('/api/auth/me', 200, { user: { id: 1, name: 'Athlete' } }),
+    reply('/api/auth/me', 200, { user }),
     reply('/api/profile', 200, { data: { name: 'Athlete', onboarded: true } }),
     reply('/api/activities?limit=500&page=1', 200, page([{ id: 1 }])),
     reply('/api/predictions?limit=100&page=1', 200, page([])),
@@ -118,22 +134,24 @@ try {
   await stores.bootstrap();
   assert.equal(get(stores.bootError), null);
   assert.equal(get(stores.session).name, 'Athlete');
-  assert.deepEqual(get(stores.activities), [{ id: 1 }]);
+  assert.equal(get(stores.activities).length, 1);
 
-  // An expired token on any authenticated data call clears account state.
   replies = [reply('/api/goals', 401, { message: 'Unauthenticated.' })];
   await assert.rejects(api.goals.get(), /Unauthenticated/);
   assert.equal(get(stores.session), null);
   assert.deepEqual(get(stores.activities), []);
-  assert.equal(memory.has('trana.token'), false);
 
-  memory.set('trana.token', 'logout-token');
-  replies = [{ path: '/api/auth/logout', error: 'network down' }];
+  replies = [
+    reply('/api/auth/csrf', 200, { csrfToken: 'e'.repeat(64) }),
+    reply('/api/auth/login', 200, { user, csrfToken: 'f'.repeat(64) }),
+    { path: '/api/auth/logout', error: 'network down' },
+  ];
+  await api.auth.login('runner_1', 'Runner-pass-123');
   await stores.logout();
-  assert.equal(memory.has('trana.token'), false);
+  assert.equal(api.auth.hasSession(), false);
   assert.match(get(stores.toast).message, /could not be revoked/);
   assert.equal(replies.length, 0);
-  console.log('Live API, pagination, retry and session checks passed');
+  console.log('HttpOnly-cookie auth, CSRF, pagination, retry and session checks passed');
 } finally {
   await vite.close();
 }
