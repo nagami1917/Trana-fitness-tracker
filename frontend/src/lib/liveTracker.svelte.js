@@ -327,8 +327,10 @@ async function startGps() {
   try {
     const first = await getCurrentPosition({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
     if (!tracking) return;
-    initialPoint = first;
-    appendGpsFix(first);
+    // A single startup fix cannot establish movement speed; leave it neutral
+    // until accepted GPS movement provides a stable estimate.
+    initialPoint = { ...first, speedKmh: 0 };
+    appendGpsFix(initialPoint);
   } catch (error) {
     if (!tracking) return;
     if (error instanceof GpsError && error.code === 'unsupported') {

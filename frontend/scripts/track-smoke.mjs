@@ -190,6 +190,7 @@ try {
     assert.equal(watchedPoints.length, 2);
     assert.equal(watchedPoints[1].suppressedDrift, true, 'stationary GPS jitter must be suppressed even with a noisy high device speed');
     assert.equal(watchedPoints[1].latitude, startupFix.latitude);
+    assert.equal(watchedPoints[1].speedKmh, 0, 'device speed must normalize to zero when GPS movement is only jitter');
     await onGpsPosition({
       coords: {
         latitude: 14.6764,
@@ -203,6 +204,7 @@ try {
     });
     assert.equal(watchedPoints.length, 3);
     assert.equal(watchedPoints[2].suppressedDrift, false, 'real movement must still pass without a device speed reading');
+    assert.ok(watchedPoints[2].speedKmh > 0 && watchedPoints[2].speedKmh < 50, 'real movement speed is inferred and normalized from filtered GPS coordinates');
     watchHandle.stop();
     assert.equal(clearedWatchId, 17);
   } finally {
@@ -212,6 +214,20 @@ try {
       delete globalThis.navigator;
     }
   }
+
+  // Speed output is derived from accepted movement, then robustly smoothed so
+  // one noisy phone-speed sample cannot create a large route-speed spike.
+  const speedSmoother = createGpsSmoother({ activityType: 'run' });
+  speedSmoother.push({ latitude: 14.676, longitude: 121.0437, accuracy: 8, speedKmh: 0, timestamp: 1000 });
+  const speedWarmup = speedSmoother.push({ latitude: 14.6761, longitude: 121.0437, accuracy: 8, speedKmh: 7.2, timestamp: 6000 });
+  assert.equal(speedWarmup.suppressedDrift, true);
+  assert.equal(speedWarmup.speedKmh, 0);
+  const steadySpeed = speedSmoother.push({ latitude: 14.6764, longitude: 121.0437, accuracy: 8, speedKmh: 7.2, timestamp: 16000 });
+  assert.equal(steadySpeed.suppressedDrift, false);
+  assert.ok(steadySpeed.speedKmh > 0 && steadySpeed.speedKmh < 15);
+  const noisySpeedSpike = speedSmoother.push({ latitude: 14.6766, longitude: 121.0437, accuracy: 8, speedKmh: 72, timestamp: 26000 });
+  assert.equal(noisySpeedSpike.suppressedDrift, false);
+  assert.ok(noisySpeedSpike.speedKmh < 20, `speed spike should be normalized, got ${noisySpeedSpike.speedKmh} km/h`);
 
   // Genuine movement (~40 m north) updates smoothly and derives North heading (~0 deg)
   const fMove = smoother.push({ latitude: 14.6764, longitude: 121.0437, accuracy: 8, speedKmh: 10, timestamp: 20000 });
