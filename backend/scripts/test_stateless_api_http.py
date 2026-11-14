@@ -57,6 +57,18 @@ def expect_status(result, expected, description):
     return data
 
 
+def run_checked(command, *, cwd, env, text=False):
+    result = subprocess.run(command, cwd=cwd, env=env, capture_output=True, text=text)
+    if result.returncode != 0:
+        stdout = result.stdout if isinstance(result.stdout, str) else result.stdout.decode(errors="replace")
+        stderr = result.stderr if isinstance(result.stderr, str) else result.stderr.decode(errors="replace")
+        output = "\n".join(part.strip() for part in (stdout, stderr) if part and part.strip())
+        raise RuntimeError(
+            f"Command {' '.join(map(str, command))} failed with exit {result.returncode}.\n{output}"
+        )
+    return result
+
+
 def main():
     php = shutil.which("php")
     if php is None:
@@ -100,8 +112,8 @@ def main():
             "BCRYPT_ROUNDS": "4",
             "SANCTUM_STATEFUL_DOMAINS": "localhost:5173,127.0.0.1:5173",
         })
-        subprocess.run([php, "artisan", "migrate", "--force", "--no-interaction"], cwd=app, env=env, check=True, capture_output=True)
-        subprocess.run([php, "artisan", "config:cache"], cwd=app, env=env, check=True, capture_output=True)
+        run_checked([php, "artisan", "migrate", "--force", "--no-interaction"], cwd=app, env=env)
+        run_checked([php, "artisan", "config:cache"], cwd=app, env=env)
         guard_check = r'''
             require "vendor/autoload.php";
             $app = require "bootstrap/app.php";
@@ -111,7 +123,7 @@ def main():
                 exit(1);
             }
         '''
-        subprocess.run([php, "-r", guard_check], cwd=app, env=env, check=True, capture_output=True)
+        run_checked([php, "-r", guard_check], cwd=app, env=env, text=True)
 
         with socket.socket() as listener:
             listener.bind(("127.0.0.1", 0))
@@ -157,7 +169,7 @@ def main():
                     $user->ensureGoals();
                     echo $user->createToken("http-test")->plainTextToken;
                 '''
-                token = subprocess.run([php, "-r", create_token], cwd=app, env=env, check=True, capture_output=True, text=True).stdout.strip()
+                token = run_checked([php, "-r", create_token], cwd=app, env=env, text=True).stdout.strip()
                 assert token, "Could not create the test Sanctum token."
                 auth_cookie = f"trana_session={token}; {csrf_cookie}"
 
