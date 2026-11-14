@@ -40,6 +40,7 @@ let savedProfile = {
   onboarded: true, total_activities: 0,
 };
 const patches = [];
+const csrfToken = 'c'.repeat(64);
 const apiResponse = (body) => ({ ok: true, status: 200, text: async () => JSON.stringify(body) });
 Object.defineProperty(window.navigator, 'geolocation', {
   value: { getCurrentPosition(success, error) { deviceCalls++; positionSuccess = success; positionError = error; } },
@@ -47,8 +48,10 @@ Object.defineProperty(window.navigator, 'geolocation', {
 window.fetch = (url, options = {}) => {
   if (String(url).startsWith('/api/')) {
     const path = String(url).split('?')[0];
+    if (path === '/api/auth/csrf') return Promise.resolve(apiResponse({ csrfToken }));
     if (path === '/api/profile') {
       if (options.method === 'PUT') {
+        assert.equal(options.headers['X-CSRF-TOKEN'], csrfToken);
         const patch = JSON.parse(options.body);
         assert.ok(!('latitude' in patch) && !('longitude' in patch));
         patches.push(patch);

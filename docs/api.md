@@ -1,10 +1,15 @@
 # TRANA API reference
 
-Base URL: `https://<your-api>/api`
-Auth: `Authorization: Bearer <sanctum-token>` except for `/health`, `/docs`, `/auth/google/nonce`, and `/auth/google`.
-The API does not authenticate with session cookies or use CSRF cookies. Do not
-add cookie-based API authentication without enabling appropriate CSRF protection.
-Responses are JSON; collections are wrapped in `{ "data": [...] }`.
+Base URL: `https://<your-api>/api` · responses are JSON; collections are wrapped
+in `{ "data": [...] }`.
+
+Browser auth uses a Sanctum personal access token held only in the `trana_session`
+HttpOnly cookie. The default lifetime is 12 hours; the cookie is Secure in
+production and scoped to `/api`. The API also accepts bearer tokens for trusted
+non-browser clients. Browser writes require an allowlisted `Origin` and, when
+TRANA cookies are present, a matching `X-CSRF-TOKEN` header and `trana_csrf`
+cookie. The CSRF bootstrap value is returned in JSON and kept in frontend memory;
+it is not an authentication credential.
 
 ---
 
@@ -16,56 +21,73 @@ This does not check FastAPI or verify that all migrations are applied.
 
 ## Auth
 
-TRANA uses **Google sign-in only** for both account creation and sign-in. The
-browser uses Google's Identity Services button and sends a signed OIDC ID token
-to Laravel. TRANA verifies the token signature against Google's rotating keys,
-checks the issuer, configured audience, expiry, verified email and one-time
-nonce, then issues a Sanctum bearer token. TRANA never collects a Google
-password and has no separate TRANA password. A Google Workspace address is
-accepted when Google reports it as verified.
+Auth endpoints are rate-limited to 10 requests/minute/IP. OTP sending additionally
+has a 60-second per-address cooldown and a five-send hourly limit. Signup and
+password reset accept only valid `@gmail.com` addresses.
 
-The OAuth Web client ID is public browser configuration, not a secret. Set the
-same value as `VITE_GOOGLE_CLIENT_ID` in the frontend build and
-`GOOGLE_CLIENT_ID` in the Laravel environment. No Google client secret is used.
-A missing server setting or unavailable Google signing keys returns `503`.
-Auth requests are rate-limited by IP.
+### `GET /auth/csrf`
 
-### `POST /auth/google/nonce`
+Returns a random 64-character CSRF token and sets the HttpOnly `trana_csrf`
+cookie. Fetch this before the first write. Send the returned token in
+`X-CSRF-TOKEN`; browser requests must use `credentials: include`.
 
-Called before rendering the Google sign-in button. Returns a random nonce that
-expires after 10 minutes:
+### `POST /auth/register`
 ```json
-{ "nonce": "..." }
+{
+  "name": "Ana Runner",
+  "username": "ana_runner7",
+  "email": "ana.runner@gmail.com",
+  "password": "Runner-pass-123",
+  "password_confirmation": "Runner-pass-123"
+}
 ```
-`503` means Google sign-in has not been configured on the server.
+Username is unique and 3–20 ASCII letters, numbers, or underscores. Passwords
+must be at least eight characters with at least one letter and one number. To
+avoid bcrypt's 72-byte truncation, passwords are limited to 72 UTF-8 bytes.
+`202` creates an unverified account with a bcrypt password hash and starts a
+five-minute email-code challenge. No token is issued at signup.
 
-### `POST /auth/google`
+### `POST /auth/email/verify` · `POST /auth/email/resend`
+
+Verification accepts `{ "email": "…@gmail.com", "code": "042817" }` and
+activates the account without signing it in. Codes are six digits, stored as
+keyed hashes, single-use, expire in five minutes, and allow five failed attempts.
+The fifth wrong attempt invalidates the challenge; request a new code after the
+60-second cooldown. Resend and forgot-password responses are generic where
+account existence could otherwise be disclosed.
+
+### `POST /auth/login`
 ```json
-{ "credential": "<Google OIDC ID token>" }
+{ "identifier": "ana_runner7", "password": "Runner-pass-123" }
 ```
-`200` → `{ "token": "1|abc…", "user": { "id": 1, "name": "Nagami",
-"email": "nagami@example.org", "email_verified_at": "…" } }`. The token
-must be Google-signed with RS256, match the configured client ID and contain a
-fresh nonce issued by this API. Nonces are single-use. Google-verified email
-and stable subject (`sub`) claims identify the account. A new identity creates
-an account and profile; a verified email matching an existing TRANA account
-links it to that Google subject. Suspended accounts receive `403`; malformed,
-expired, unverified or replayed credentials receive `422`; conflicting account
-links receive `409`. The request never accepts a password.
+`identifier` accepts the username or Gmail address. Success sets the HttpOnly
+auth cookie and returns `{ "user": { "id", "name", "username", "email",
+"role", "verified", ... }, "csrfToken": "…" }`; it never returns the auth
+token in JSON. Failed credentials always return `401 { "message": "Invalid
+credentials." }`. A correct password on an unverified account returns `403` with
+`code: EMAIL_NOT_VERIFIED` and the address so the client can offer code resend.
+
+### Password recovery: `POST /auth/password/forgot` · `POST /auth/password/reset`
+
+Request `{ "email": "…@gmail.com" }` for a five-minute reset code. The response
+does not reveal whether an account exists. Reset with
+`{ "email": "…", "code": "042817", "password": "New-pass-456",
+"password_confirmation": "New-pass-456" }`. A successful reset revokes all
+existing tokens; sign in again with the new password.
 
 ### `GET /auth/me` → `{ user: {...} }` · `POST /auth/logout` → `{ message }`
 
-Authenticated routes require a verified email. Legacy tokens for unverified
-accounts are revoked and must be replaced with Google sign-in.
+Authenticated routes require a verified email. Logout revokes the current token
+and clears both browser cookies.
 
 ### Account erasure (authed)
 
-`POST /account/delete-code` still emails a separate one-time confirmation code
-before deletion. This email code is **only** for account erasure; it is not used
-for registration or sign-in. Codes are six digits, expire after 10 minutes,
-are single-use and stored as keyed hashes. Five wrong attempts invalidate a
-code; resend requests have a 60-second cooldown and five-send hourly limit.
-`202` on send · `429` on cooldown/rate limit · `503` on mail failure.
+`POST /account/delete-code` emails a separate one-time confirmation code before
+deleting the account. Deletion codes expire after 10 minutes; registration and
+password-reset codes expire after five. All codes are single-use and stored as
+keyed hashes, allow five failed attempts, and share the 60-second resend cooldown
+and five-send hourly limit. `202` on send · `429` on cooldown/rate limit · `503`
+on mail failure.
 
 `DELETE /account` requires both the code and exact confirmation:
 ```json
@@ -79,8 +101,8 @@ code or missing confirmation. Export data first with
 
 ## Profile
 
-The athlete's fitness profile (spec step 4). One row per account, created on
-registration. Its values are attached to every prediction.
+The athlete's fitness profile (spec step 4). One row per account, created after
+successful email verification. Its values are attached to every prediction.
 
 Spec fields: `id, user_id, age, sex, height_cm, weight_kg, fitness_level,
 activity_experience, created_at, updated_at`. Responses also include the richer
@@ -521,9 +543,11 @@ of their data first.
 
 | Status | Meaning |
 | --- | --- |
-| 401 | Missing/invalid bearer token |
+| 401 | Missing/invalid auth token or generic invalid login credentials |
+| 403 | Unverified email or untrusted browser origin |
 | 404 | Not found **or** owned by another athlete |
-| 409 | The resource already exists or a Google account link conflicts with an existing account |
-| 422 | Validation — `{ message, errors: { field: [msg] } }` |
-| 429 | Rate limit (auth 10/min/IP, predictions 60/min/user, client-errors 60/min/IP) |
-| 503 | Database or ML service unavailable, Google OAuth misconfigured/signing keys unavailable, or account-deletion email transport failed |
+| 409 | The resource already exists or conflicts with an existing account |
+| 419 | Missing or invalid CSRF token on a cookie-authenticated write |
+| 422 | Validation — `{ message, errors: { field: [msg] } }`; invalid/expired OTPs |
+| 429 | Rate limit (auth 10/min/IP, OTP 5 sends/hour/address, predictions 60/min/user, client-errors 60/min/IP) |
+| 503 | Database or ML service unavailable, or mail transport failure |

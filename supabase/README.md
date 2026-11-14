@@ -37,8 +37,8 @@ database password.
    connection. Run `php artisan migrate` for outstanding migrations; do not
    reapply the SQL baseline to an existing database. Current releases create the
    private `email_otp_challenges` table and apply its RLS/revoke migration through
-   Laravel. Run all outstanding migrations before deploying Google-only sign-in
-   and the email-confirmed account-deletion flow.
+   Laravel. Run all outstanding migrations before deploying Gmail/password
+   authentication, email OTP verification, password recovery, and deletion.
    Generate `APP_KEY` with `php artisan key:generate` only when setting up a new
    `.env`.
 

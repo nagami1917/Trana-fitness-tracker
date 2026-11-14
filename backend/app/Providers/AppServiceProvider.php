@@ -21,7 +21,7 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
         });
 
-        // Auth endpoints are cheaper to guess at, so keep them tight.
+        // Authentication and OTP endpoints are cheaper to abuse than ordinary writes.
         RateLimiter::for('auth', function (Request $request) {
             return Limit::perMinute(10)->by($request->ip());
         });

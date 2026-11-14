@@ -4,8 +4,7 @@
 |--------------------------------------------------------------------------
 | Frontend origin
 |--------------------------------------------------------------------------
-| Absolute URL of the SPA. Retained for other frontend URL generation; Google
-| Identity Services uses a popup rather than an application callback URL.
+| Absolute URL of the SPA, retained for frontend URL generation.
 | Defined as config so `php artisan config:cache` keeps working.
 */
 

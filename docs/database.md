@@ -8,16 +8,15 @@ initialize a new empty project; see `supabase/README.md`.
 ## Tables
 
 ### `users` (+ `sessions`)
-Laravel user table: name, email (unique and stored lowercase), nullable
-`google_sub` (unique stable Google identity), nullable password hash (legacy
-only; Google-only accounts have no TRANA password), email verification time,
-role/suspension state and remember token. Google ID-token signatures and claims
-are verified by Laravel; the account is keyed to Google's stable `sub`, not to
-an unverified email string. Email OTP challenges are retained only for the
-account-deletion confirmation flow. The `email_otp_challenges` table stores a
-keyed HMAC of each six-digit deletion code, expiry, attempt count, purpose, and
-resend-window metadata. RLS is enabled and Data API access is revoked; codes
-are never stored in plaintext.
+Laravel user table: name, unique 3–20 character username, unique lowercase
+email, bcrypt password hash, email verification time, role/suspension state,
+and remember token. The nullable `google_sub` column is retained for legacy
+migration compatibility but is no longer used for authentication. Signup and
+password recovery require verified `@gmail.com` addresses. The
+`email_otp_challenges` table stores a purpose-bound keyed HMAC of each six-digit
+verification/reset/deletion code, expiry, attempt count, and resend-window
+metadata. RLS is enabled and Data API access is revoked; codes are never stored
+in plaintext.
 
 ### `fitness_profiles`
 One row per athlete, auto-created on first use (`User::ensureProfile()`).
@@ -105,7 +104,9 @@ One row per athlete (`User::ensureGoals()`): `daily_calories`, `daily_distance_k
 `daily_active_min`, `weekly_calories`, `weekly_distance_km`, `carb_target_g`.
 
 ### `personal_access_tokens`
-Sanctum bearer tokens (API auth). Also the standard `cache` / `jobs` tables
+Sanctum personal-access tokens (API auth). Browser tokens are held only in
+HttpOnly cookies; trusted non-browser clients may use bearer auth. Also the
+standard `cache` / `jobs` tables
 from the skeleton; both are used only if `CACHE_STORE=database` / `QUEUE_CONNECTION=database`.
 
 ## Relationships

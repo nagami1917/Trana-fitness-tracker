@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Activity;
 use App\Models\EmailOtpChallenge;
+use App\Services\AuthCookieService;
 use App\Services\EmailOtpService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -92,7 +93,7 @@ class AccountController extends Controller
      * A recent, one-time email code plus an explicit DELETE confirmation are
      * required; child rows cascade and auth tokens / sessions are purged.
      */
-    public function destroy(Request $request, EmailOtpService $otp): JsonResponse
+    public function destroy(Request $request, EmailOtpService $otp, AuthCookieService $cookies): JsonResponse
     {
         $request->validate([
             'code' => ['required', 'string', 'regex:/^[0-9]{6}$/'],
@@ -101,15 +102,19 @@ class AccountController extends Controller
         ]);
 
         $user = $request->user();
-        $otp->verifyAccountDeletionCode($user->email, $request->input('code'));
+        $otp->verify($user->email, $request->input('code'), EmailOtpService::PURPOSE_ACCOUNT_DELETION);
 
-        DB::transaction(function () use ($user) {
+        DB::transaction(function () use ($user): void {
             $user->tokens()->delete();
             DB::table('sessions')->where('user_id', $user->id)->delete();
             $user->delete();
-            EmailOtpChallenge::query()->where('email', $user->email)->delete();
+            EmailOtpChallenge::query()->where('email', strtolower($user->email))->delete();
         });
 
-        return response()->json(['message' => 'Account and all associated data have been deleted.']);
+        [$authCookie, $csrfCookie] = $cookies->forgetCookies();
+
+        return response()->json(['message' => 'Account and all associated data have been deleted.'])
+            ->withCookie($authCookie)
+            ->withCookie($csrfCookie);
     }
 }

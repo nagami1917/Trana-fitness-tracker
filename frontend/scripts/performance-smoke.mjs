@@ -51,9 +51,13 @@ globalThis.localStorage = {
 let pendingResolvers = [];
 let seenRequests = [];
 globalThis.fetch = (url) => {
-  seenRequests.push(String(url));
+  const path = String(url);
+  if (path.startsWith('/models/')) {
+    return Promise.resolve(new Response(JSON.stringify({ version: 'test', training_source: 'synthetic' }), { status: 200 }));
+  }
+  seenRequests.push(path);
   return new Promise((resolve) => {
-    pendingResolvers.push({ url: String(url), resolve });
+    pendingResolvers.push({ url: path, resolve });
   });
 };
 
@@ -70,14 +74,19 @@ try {
   const { api } = await vite.ssrLoadModule('/src/services/client.js');
   const stores = await vite.ssrLoadModule('/src/stores/index.js');
 
-  // A. Signed-out bootstrap resolves immediately with 0 blocking HTTP calls.
-  await stores.bootstrap();
-  assert.equal(get(stores.booting), false, 'Signed-out visitor must not block on /api/health');
+  // A. Signed-out bootstrap validates the cookie session and health in parallel.
+  const signedOutBootstrap = stores.bootstrap();
+  assert.equal(get(stores.booting), true);
+  assert.deepEqual(seenRequests, ['/api/health', '/api/auth/me']);
+  pendingResolvers.shift().resolve(new Response(JSON.stringify({ status: 'ok' }), { status: 200 }));
+  pendingResolvers.shift().resolve(new Response(JSON.stringify({ message: 'Unauthenticated.' }), { status: 401 }));
+  await signedOutBootstrap;
+  assert.equal(get(stores.booting), false);
   assert.equal(get(stores.ready), true);
-  assert.equal(seenRequests.length, 0);
+  seenRequests = [];
+  pendingResolvers = [];
 
   // B. Parallel listAll() pagination: page 1 -> pages 2 & 3 issued concurrently.
-  storage.set('trana.token', 'tok-123');
   const listPromise = api.activities.list();
   assert.equal(seenRequests.at(-1), '/api/activities?limit=500&page=1');
   pendingResolvers.shift().resolve(

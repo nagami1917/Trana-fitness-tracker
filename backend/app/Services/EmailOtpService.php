@@ -11,12 +11,18 @@ use InvalidArgumentException;
 use RuntimeException;
 use Throwable;
 
-/** Issues and consumes hashed, short-lived codes for account deletion only. */
+/** Issues and consumes hashed, purpose-bound, short-lived email codes. */
 class EmailOtpService
 {
+    public const PURPOSE_REGISTRATION = 'registration';
+
+    public const PURPOSE_PASSWORD_RESET = 'password_reset';
+
     public const PURPOSE_ACCOUNT_DELETION = 'account_deletion';
 
-    public const CODE_TTL_MINUTES = 10;
+    public const CODE_TTL_MINUTES = 5;
+
+    public const DELETION_CODE_TTL_MINUTES = 10;
 
     public const MAX_ATTEMPTS = 5;
 
@@ -25,23 +31,29 @@ class EmailOtpService
     public const MAX_SENDS_PER_HOUR = 5;
 
     /**
-     * Return false when the per-email cooldown or hourly limit suppresses a send.
-     * This service is deliberately not used for registration or sign-in.
+     * Create a single active challenge per email. A resend replaces the code,
+     * while preserving the hourly send window and enforcing the cooldown.
      */
     public function issue(string $email, ?string $name, string $purpose): bool
     {
-        if ($purpose !== self::PURPOSE_ACCOUNT_DELETION) {
-            throw new InvalidArgumentException('Email confirmation codes are reserved for account deletion.');
+        if (! in_array($purpose, [self::PURPOSE_REGISTRATION, self::PURPOSE_PASSWORD_RESET, self::PURPOSE_ACCOUNT_DELETION], true)) {
+            throw new InvalidArgumentException('Unsupported email confirmation purpose.');
         }
 
         $email = $this->normalizeEmail($email);
+        $name = is_string($name) && trim($name) !== ''
+            ? mb_substr(trim(strip_tags($name)), 0, 80)
+            : null;
         $this->assertRealProductionMailer();
 
         $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
         $now = now();
         $codeHash = $this->hashCode($email, $purpose, $code);
+        $ttl = $purpose === self::PURPOSE_ACCOUNT_DELETION
+            ? self::DELETION_CODE_TTL_MINUTES
+            : self::CODE_TTL_MINUTES;
 
-        $issue = DB::transaction(function () use ($email, $name, $purpose, $codeHash, $now): array {
+        $issue = DB::transaction(function () use ($email, $name, $purpose, $codeHash, $now, $ttl): array {
             // Keep the challenge table bounded without requiring a scheduled job.
             EmailOtpChallenge::query()
                 ->where('expires_at', '<', $now->copy()->subDay())
@@ -52,10 +64,7 @@ class EmailOtpService
                 ->lockForUpdate()
                 ->first();
 
-            $challengeStillUsable = $challenge
-                && (int) $challenge->attempts < self::MAX_ATTEMPTS
-                && $challenge->expires_at->gt($now);
-            if ($challengeStillUsable
+            if ($challenge
                 && $challenge->purpose === $purpose
                 && $challenge->last_sent_at?->gt($now->copy()->subSeconds(self::SEND_COOLDOWN_SECONDS))) {
                 return ['sent' => false];
@@ -79,7 +88,7 @@ class EmailOtpService
                 'name' => $name,
                 'purpose' => $purpose,
                 'code_hash' => $codeHash,
-                'expires_at' => $now->copy()->addMinutes(self::CODE_TTL_MINUTES),
+                'expires_at' => $now->copy()->addMinutes($ttl),
                 'attempts' => 0,
                 'send_count' => $sendCount,
                 'send_window_started_at' => $windowStartedAt,
@@ -98,6 +107,8 @@ class EmailOtpService
             Notification::route('mail', $email)->notify(new EmailOtpNotification(
                 $code,
                 $name ?: 'TRANA athlete',
+                $purpose,
+                $ttl,
             ));
         } catch (Throwable $exception) {
             // Do not leave a usable code behind when the transport rejects mail.
@@ -120,12 +131,15 @@ class EmailOtpService
         return true;
     }
 
-    /** Consume a fresh code sent specifically for account deletion. */
-    public function verifyAccountDeletionCode(string $email, string $code): void
+    /** Consume one code only for the purpose that requested it. */
+    public function verify(string $email, string $code, string $purpose): void
     {
-        $email = $this->normalizeEmail($email);
+        if (! in_array($purpose, [self::PURPOSE_REGISTRATION, self::PURPOSE_PASSWORD_RESET, self::PURPOSE_ACCOUNT_DELETION], true)) {
+            throw new InvalidArgumentException('Unsupported email confirmation purpose.');
+        }
 
-        $valid = DB::transaction(function () use ($email, $code): bool {
+        $email = $this->normalizeEmail($email);
+        $valid = DB::transaction(function () use ($email, $code, $purpose): bool {
             $challenge = EmailOtpChallenge::query()
                 ->where('email', $email)
                 ->lockForUpdate()
@@ -139,13 +153,13 @@ class EmailOtpService
 
                 return false;
             }
-            if ($challenge->purpose !== self::PURPOSE_ACCOUNT_DELETION) {
+            if ($challenge->purpose !== $purpose) {
                 $this->recordFailedAttempt($challenge);
 
                 return false;
             }
 
-            $expectedHash = $this->hashCode($email, $challenge->purpose, $code);
+            $expectedHash = $this->hashCode($email, $purpose, $code);
             if (! hash_equals($challenge->code_hash, $expectedHash)) {
                 $this->recordFailedAttempt($challenge);
 
@@ -159,12 +173,12 @@ class EmailOtpService
 
         if (! $valid) {
             throw ValidationException::withMessages([
-                'code' => ['That code is invalid or expired. Request a fresh one and try again.'],
+                'code' => ['That code is invalid, expired, or already used. Request a fresh code and try again.'],
             ]);
         }
     }
 
-    /** Keep the send-window counters after a code is used or expires. */
+    /** Keep send-window counters after a code is used or expires. */
     private function invalidateChallenge(EmailOtpChallenge $challenge): void
     {
         $challenge->attempts = self::MAX_ATTEMPTS;
@@ -198,7 +212,7 @@ class EmailOtpService
         }
 
         // HMAC prevents a database-only leak from enabling an offline search of
-        // the six-digit code space. Limit attempts on the server as well.
+        // the six-digit code space. Server-side attempt limits prevent guessing.
         return hash_hmac('sha256', $email."\0".$purpose."\0".$code, $key);
     }
 
@@ -210,7 +224,7 @@ class EmailOtpService
 
         $mailer = config('mail.default');
         if (! is_string($mailer) || in_array($mailer, ['log', 'array'], true)) {
-            throw new RuntimeException('Account deletion confirmation email requires a real mail transport.');
+            throw new RuntimeException('Email verification requires a real mail transport.');
         }
 
         if ($mailer === 'smtp') {

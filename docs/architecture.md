@@ -129,8 +129,9 @@ timeline = 3 h before / 30 min before / during (every 45–60 min) / recovery
 ## 8. Security
 
 * Stateless Sanctum personal access tokens (no web-session fallback), rate-limited
-  auth (`10/min/IP`) and predictions (`60/min/user`). Cookie authentication, if
-  ever added, requires CSRF protection.
+  auth (`10/min/IP`) and predictions (`60/min/user`). Browser tokens are held in
+  HttpOnly cookies; mutating browser requests require an allowlisted `Origin` and
+  double-submit CSRF token. Trusted non-browser clients may use bearer tokens.
 * All queries are scoped through the authenticated user's relations
   (`$request->user()->activities()`), so ID tampering cannot cross accounts;
   `abort_unless($model->user_id === $user->id, 404)` on every route-model binding.

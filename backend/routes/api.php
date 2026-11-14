@@ -29,8 +29,9 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 | TRANA REST API  (v1)
 |--------------------------------------------------------------------------
-| Token auth via Sanctum. The Svelte PWA sends `Authorization: Bearer …`.
-| All routes are consumed through a single base URL (`VITE_API_BASE_URL`).
+| Sanctum tokens are carried in HttpOnly cookies for browser auth; bearer
+| tokens remain supported for trusted non-browser API clients. All routes are
+| consumed through `VITE_API_BASE_URL`.
 */
 
 // The SPA checks both the API and the configured database before loading data.
@@ -45,10 +46,13 @@ Route::post('/client-errors', [ErrorReportController::class, 'store'])
     ->middleware('throttle:errors');
 
 Route::middleware('throttle:auth')->group(function () {
-    // Both account creation and sign-in use a Google OIDC ID token. The nonce
-    // endpoint is public but rate-limited and the token is verified server-side.
-    Route::post('/auth/google/nonce', [AuthController::class, 'googleNonce']);
-    Route::post('/auth/google', [AuthController::class, 'googleSignIn']);
+    Route::get('/auth/csrf', [AuthController::class, 'csrf']);
+    Route::post('/auth/register', [AuthController::class, 'register']);
+    Route::post('/auth/email/verify', [AuthController::class, 'verifyEmail']);
+    Route::post('/auth/email/resend', [AuthController::class, 'resendVerification']);
+    Route::post('/auth/login', [AuthController::class, 'login']);
+    Route::post('/auth/password/forgot', [AuthController::class, 'forgotPassword']);
+    Route::post('/auth/password/reset', [AuthController::class, 'resetPassword']);
 });
 
 // Authenticated surface. `ensure.active` re-checks the suspension flag on

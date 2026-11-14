@@ -192,6 +192,16 @@ console.log('✔ Open-Meteo hourly weather forecast');
 const { get } = await import('svelte/store');
 localStorage.removeItem('trana:pending_activities:v1');
 localStorage.setItem('trana.token', 'test-token');
+const csrfToken = 'a'.repeat(64);
+globalThis.fetch = async (url) => {
+  if (String(url) === '/api/auth/me') {
+    return new Response(JSON.stringify({ user: { id: 1, username: 'offline_test' } }), { status: 200 });
+  }
+  throw new Error(`Unexpected session bootstrap request: ${url}`);
+};
+const { api } = await import('../src/services/client.js');
+await api.auth.user();
+assert.equal(api.auth.hasSession(), true, 'The queue smoke should model an API-validated cookie session.');
 const offlineQueue = await import('../src/lib/offlineQueue.js');
 const q1 = offlineQueue.queueActivitySave({ activity_type: 'run', distance_km: 5, duration_min: 30, started_at: '2026-11-10T06:00:00Z' });
 const q2 = offlineQueue.queueActivitySave({ activity_type: 'ride', distance_km: 15, duration_min: 40, started_at: '2026-11-10T07:00:00Z' });
@@ -199,7 +209,12 @@ assert.equal(get(offlineQueue.pendingActivities).length, 2);
 
 let postAttempt = 0;
 globalThis.fetch = async (url, init) => {
+  if (String(url) === '/api/auth/csrf') {
+    return new Response(JSON.stringify({ csrfToken }), { status: 200 });
+  }
   if (String(url).includes('/api/activities') && init?.method === 'POST') {
+    assert.equal(init.headers['X-CSRF-TOKEN'], csrfToken);
+    assert.equal(init.credentials, 'include');
     postAttempt += 1;
     if (postAttempt === 1) {
       return new Response(JSON.stringify({ data: { id: 101, ...JSON.parse(init.body) } }), { status: 201 });
@@ -216,6 +231,8 @@ assert.equal(get(offlineQueue.pendingActivities).length, 1, 'Failed item must re
 
 globalThis.fetch = async (url, init) => {
   if (String(url).includes('/api/activities') && init?.method === 'POST') {
+    assert.equal(init.headers['X-CSRF-TOKEN'], csrfToken);
+    assert.equal(init.credentials, 'include');
     return new Response(JSON.stringify({ data: { id: 102, ...JSON.parse(init.body) } }), { status: 201 });
   }
   throw new Error(`Unexpected queue fetch: ${url}`);

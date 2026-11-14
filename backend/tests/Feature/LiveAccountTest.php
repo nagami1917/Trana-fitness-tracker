@@ -6,27 +6,17 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
-use Tests\Support\GoogleAuthTestHelpers;
+use Tests\Support\AuthTestHelpers;
 use Tests\TestCase;
 
 class LiveAccountTest extends TestCase
 {
     use RefreshDatabase;
-    use GoogleAuthTestHelpers;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->prepareGoogleAuth();
-    }
+    use AuthTestHelpers;
 
     private function registerAthlete(string $name, string $email): string
     {
-        return $this->signInWithGoogle([
-            'sub' => 'live-account-'.$email,
-            'email' => $email,
-            'name' => $name,
-        ])['token'];
+        return $this->createVerifiedAccount($name, $email)['token'];
     }
 
     private function bearer(string $token): array
@@ -81,8 +71,8 @@ class LiveAccountTest extends TestCase
         $this->getJson('/api/profile')->assertUnauthorized();
         $tokenA = $this->registerAthlete('Alice', 'alice@gmail.com');
         $alice = User::where('email', 'alice@gmail.com')->firstOrFail();
-        $this->assertNull($alice->password, 'Google-only accounts do not store a TRANA password.');
-        $this->assertSame('live-account-alice@gmail.com', $alice->google_sub);
+        $this->assertTrue(password_get_info($alice->password)['algoName'] === 'bcrypt');
+        $this->assertNotEmpty($alice->username);
         $this->assertDatabaseHas('fitness_profiles', ['user_id' => $alice->id]);
         $this->assertDatabaseHas('goals', ['user_id' => $alice->id]);
 
@@ -115,11 +105,7 @@ class LiveAccountTest extends TestCase
 
         $this->postJson('/api/auth/logout', [], $this->bearer($tokenA))->assertOk();
         $this->getJson('/api/auth/me', $this->bearer($tokenA))->assertUnauthorized();
-        $newToken = $this->signInWithGoogle([
-            'sub' => 'live-account-alice@gmail.com',
-            'email' => 'alice@gmail.com',
-            'name' => 'Alice',
-        ])['token'];
+        $newToken = $this->signInToAccount('alice@gmail.com')['token'];
         $this->getJson('/api/profile', $this->bearer($newToken))
             ->assertOk()->assertJsonPath('data.city', 'Lusacan')->assertJsonPath('data.onboarded', true);
         $this->getJson('/api/goals', $this->bearer($newToken))

@@ -25,7 +25,7 @@ trait EmailOtpTestHelpers
         );
 
         if (! is_string($code)) {
-            throw new RuntimeException('No account-deletion code was captured for the test address.');
+            throw new RuntimeException('No email OTP was captured for the test address.');
         }
 
         return $code;

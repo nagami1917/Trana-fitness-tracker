@@ -47,7 +47,7 @@ carbohydrate, sodium and fluid targets, and lays them out on a timeline
                          ↓
                       Vercel
                          ↓
-                 Laravel REST API           ← Sanctum bearer tokens
+           Laravel REST API           ← HttpOnly cookie + CSRF (bearer clients supported)
                    /           \
                   /             \
                  ↓               ↓
@@ -122,13 +122,12 @@ npm run dev            # http://localhost:5173
 The frontend always uses the Laravel API. An empty `VITE_API_BASE_URL` or `/`
 uses same-origin `/api`; Vite proxies it to the backend during development.
 Start Laravel and connect it to your database before signing in or registering.
-Configure the same Google OAuth Web client ID as `GOOGLE_CLIENT_ID` in
-`backend/.env` and `VITE_GOOGLE_CLIENT_ID` in `frontend/.env.local`; the Google
-sign-in flow will stay unavailable until both are set. See
-[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md#google-sign-in-required-for-account-creation-and-sign-in)
-for Google Cloud setup. No sample account or activity history is created automatically. Data from the
-previous browser-only mode remains in that browser and is not automatically
-imported; existing Supabase records are not changed by this update.
+Create an account with a unique username, Gmail address, and password, then
+verify the emailed six-digit code. Configure a real `MAIL_*` transport in the
+backend environment for delivery; keep provider credentials out of Git and the
+frontend. No sample account or activity history is created automatically. Data
+from the previous browser-only mode remains in that browser and is not
+automatically imported; existing Supabase records are not changed by this update.
 
 ```bash
 npm run build          # production bundle + service worker
@@ -180,9 +179,9 @@ Leave this open. ML runs at **http://127.0.0.1:8000**.
 
 Go to **http://localhost:5173** in your browser:
 
-1. Create/sign in with your Google account
-2. Complete onboarding
-3. Go to **Track Activity** to test the map with live GPS and road snapping
+1. Create a TRANA account with your name, username, Gmail address, and password
+2. Verify the six-digit code delivered to Gmail, then log in
+3. Complete onboarding and go to **Track Activity** to test live GPS and road snapping
 
 Keep all three terminals open while using the app.
 
@@ -204,7 +203,9 @@ cd backend
 composer install
 cp .env.example .env   # only if .env does not already exist
 php artisan key:generate  # only for a new .env
-# Set the Supabase DB_* values (including the private DB_PASSWORD) and ML_API_URL.
+# Set Supabase DB_* values and ML_API_URL. Configure MAIL_* with a real SMTP
+# provider/App Password for signup verification and password recovery.
+# Keep MAIL_PASSWORD in backend/.env or deployment secrets; never commit it.
 # For this project's connection details, see supabase/README.md.
 php artisan config:clear
 php artisan migrate:status  # verifies the connection
@@ -217,7 +218,6 @@ Point the frontend at it:
 ```bash
 # frontend/.env.local (local development)
 VITE_API_BASE_URL=/
-VITE_GOOGLE_CLIENT_ID=YOUR_WEB_CLIENT_ID.apps.googleusercontent.com
 ```
 
 Vite proxies same-origin `/api` requests to the Laravel server (by default
@@ -232,12 +232,12 @@ Vite. Never put database credentials in a `VITE_*` variable.
 | Where | Variable | Purpose |
 | --- | --- | --- |
 | frontend | `VITE_API_BASE_URL`, `VITE_PROXY_TARGET` | Blank or `/` uses same-origin `/api`; Vite forwards it to the server-side proxy target. |
-| frontend | `VITE_GOOGLE_CLIENT_ID` | Public Google OAuth Web client ID; must match backend `GOOGLE_CLIENT_ID`. |
 | frontend | `VITE_ORS_API_KEY` | OpenRouteService key — drawn routes snap onto real roads. Optional; without it the map falls back to straight lines. |
 | backend | `DB_HOST/DB_PORT/DB_DATABASE/DB_USERNAME/DB_PASSWORD/DB_SSLMODE` | Supabase Postgres (session pooler for Vercel). Laravel ignores `DB_URL`/`DATABASE_URL` for pgsql. |
-| backend | `GOOGLE_CLIENT_ID` | Same public Google OAuth Web client ID used by the frontend. |
+| backend | `MAIL_MAILER`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_ADDRESS` | SMTP/transactional mail for verification and password-reset OTPs; keep credentials in deployment secrets. |
+| backend | `TRANA_AUTH_COOKIE_MINUTES`, `TRANA_COOKIE_SAME_SITE`, `TRANA_COOKIE_DOMAIN` | HttpOnly auth-cookie lifetime and deployment scope; production cookies are Secure. |
 | backend | `ML_API_URL`, `ML_API_TOKEN`, `ML_ADMIN_TOKEN`, `ML_TIMEOUT` | Python prediction service and optional server-to-server secrets. |
-| backend | `CORS_ALLOWED_ORIGINS` | Comma-separated frontend origins. |
+| backend | `CORS_ALLOWED_ORIGINS` | Comma-separated frontend origins, required for browser CORS and CSRF checks. |
 | ml | `ML_API_TOKEN`, `ADMIN_TOKEN`, `ALLOWED_ORIGINS`, `DATABASE_URL` | API/reload secrets, CORS, and optional training source. |
 
 ---
@@ -312,8 +312,10 @@ activity controller. Outputs are guidance for healthy adults, not medical advice
 
 | Method | Endpoint | Description |
 | --- | --- | --- |
-| POST | `/api/auth/google/nonce` | Issue a short-lived nonce for Google sign-in |
-| POST | `/api/auth/google` | Verify a Google ID token; create/link account and issue bearer token |
+| GET | `/api/auth/csrf` | Bootstrap the double-submit CSRF token |
+| POST | `/api/auth/register` · `/api/auth/email/verify` | Create and verify a Gmail/password account with email OTP |
+| POST | `/api/auth/login` · `/api/auth/logout` | Sign in/out using an HttpOnly cookie |
+| POST | `/api/auth/password/forgot` · `/api/auth/password/reset` | Reset password using a five-minute email OTP |
 | GET | `/api/health` | API database connectivity (no credentials exposed) |
 | GET | `/api/auth/me` | Current athlete |
 | GET/POST/PUT/PATCH | `/api/profile` | Fitness profile: create, view, edit (body mass, fitness level, age, experience, sweat profile, goals) |

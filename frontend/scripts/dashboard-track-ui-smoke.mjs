@@ -114,6 +114,7 @@ let savedActivities = [];
 let dailySession = { id: 12, session_date: '2026-11-13', calories_burned: 0, calories_eaten: 0, water_ml: 0, net_calories: 0, foods: [] };
 const postedActivities = [];
 const savedDailyPayloads = [];
+const csrfToken = 'e'.repeat(64);
 
 window.localStorage.setItem('trana.token', 'test-token');
 const jsonResp = (body, status = 200) => ({
@@ -129,6 +130,7 @@ window.fetch = async (url, init = {}) => {
   if (path === '/models/duration_model.json') {
     return { ok: true, status: 200, text: async () => modelJson, json: async () => JSON.parse(modelJson) };
   }
+  if (path === '/api/auth/csrf') return jsonResp({ csrfToken });
   if (path === '/api/profile') {
     return jsonResp({
       data: {
@@ -143,6 +145,8 @@ window.fetch = async (url, init = {}) => {
     });
   }
   if (path.startsWith('/api/activities') && method === 'POST') {
+    assert.equal(init.headers['X-CSRF-TOKEN'], csrfToken);
+    assert.equal(init.credentials, 'include');
     const body = JSON.parse(init.body);
     postedActivities.push(body);
     const created = { id: 100 + postedActivities.length, ...body };
@@ -159,6 +163,8 @@ window.fetch = async (url, init = {}) => {
     return jsonResp({ data: { daily_calories: 2400, daily_distance_km: 10, daily_active_min: 60 } });
   }
   if (path === '/api/daily-sessions/today' && method === 'POST') {
+    assert.equal(init.headers['X-CSRF-TOKEN'], csrfToken);
+    assert.equal(init.credentials, 'include');
     const body = JSON.parse(init.body);
     savedDailyPayloads.push(body);
     dailySession = { ...dailySession, ...body };
