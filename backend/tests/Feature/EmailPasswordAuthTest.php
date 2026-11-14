@@ -59,10 +59,47 @@ class EmailPasswordAuthTest extends TestCase
             'email' => $user->email,
             'code' => $code,
         ])->assertOk()->assertJsonPath('verified', true);
+        $this->postJson('/api/auth/email/verify', [
+            'email' => $user->email,
+            'code' => $code,
+        ])->assertUnprocessable()->assertJsonValidationErrors(['code']);
         $this->assertNotNull($user->fresh()->email_verified_at);
         $this->assertDatabaseHas('fitness_profiles', ['user_id' => $user->id]);
         $this->assertDatabaseHas('goals', ['user_id' => $user->id]);
         $this->assertSame(0, $user->fresh()->tokens()->count(), 'Verification sends the user to the login screen.');
+    }
+
+    public function test_registration_returns_a_recoverable_response_when_the_verification_mailer_fails(): void
+    {
+        $email = 'mail-failure@gmail.com';
+        $otp = \Mockery::mock(EmailOtpService::class);
+        $otp->shouldReceive('issue')
+            ->once()
+            ->with($email, 'Mail Failure Athlete', EmailOtpService::PURPOSE_REGISTRATION)
+            ->andThrow(new \RuntimeException('SMTP unavailable in this test.'));
+        $this->app->instance(EmailOtpService::class, $otp);
+
+        $this->postJson('/api/auth/register', [
+            'name' => 'Mail Failure Athlete',
+            'username' => 'mail_failure',
+            'email' => $email,
+            'password' => 'Mail-failure-123',
+            'password_confirmation' => 'Mail-failure-123',
+        ])->assertStatus(503)
+            ->assertJsonPath('code', 'EMAIL_VERIFICATION_UNAVAILABLE')
+            ->assertJsonPath('email', $email)
+            ->assertJsonPath('expires_in', 0)
+            ->assertJsonMissingPath('token');
+
+        $user = User::query()->where('email', $email)->firstOrFail();
+        $this->assertNull($user->email_verified_at, 'A delivery failure must never verify the new account.');
+        $this->assertSame(0, $user->tokens()->count(), 'A delivery failure must not create an authenticated session.');
+        $this->assertDatabaseMissing('email_otp_challenges', ['email' => $email]);
+
+        $this->postJson('/api/auth/login', [
+            'identifier' => 'mail_failure',
+            'password' => 'Mail-failure-123',
+        ])->assertForbidden()->assertJsonPath('code', 'EMAIL_NOT_VERIFIED');
     }
 
     public function test_signup_enforces_unique_username_gmail_and_password_rules(): void

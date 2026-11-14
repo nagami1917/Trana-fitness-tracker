@@ -1,27 +1,117 @@
 #!/usr/bin/env python3
-"""Exercise HttpOnly-cookie API auth and CSRF checks through a real HTTP server.
+"""Exercise signup, email verification, cookies and CSRF over real local HTTP.
 
 Laravel normally bypasses CSRF checks while PHPUnit runs. Run a local server in
-a temporary copy to test the browser boundary with an isolated SQLite database.
+a temporary copy with isolated SQLite and a loopback-only SMTP capture so a
+valid synthetic signup can be verified without delivering mail externally.
 This script never reads the checkout's .env or cached configuration.
 """
 
 from __future__ import annotations
 
+from email import policy
+from email.parser import BytesParser
+from email.utils import getaddresses
 import http.client
 import json
 import os
 from pathlib import Path
+import queue
 import re
 import shutil
 import socket
+import socketserver
 import subprocess
 import tempfile
+import threading
 import time
 
 
 ROOT = Path(__file__).resolve().parents[1]
 ORIGIN = "http://localhost:5173"
+
+
+class CaptureSMTPHandler(socketserver.StreamRequestHandler):
+    """Accept one local SMTP transaction and capture it without sending mail."""
+
+    def handle(self):
+        self.wfile.write(b"220 localhost TRANA test SMTP\r\n")
+        self.wfile.flush()
+        message = []
+        in_data = False
+
+        while True:
+            line = self.rfile.readline()
+            if not line:
+                return
+
+            if in_data:
+                if line in (b".\r\n", b".\n"):
+                    self.server.messages.put(b"".join(message))
+                    self.wfile.write(b"250 2.0.0 captured locally\r\n")
+                    self.wfile.flush()
+                    message = []
+                    in_data = False
+                else:
+                    message.append(line[1:] if line.startswith(b"..") else line)
+                continue
+
+            command = line.decode("ascii", errors="replace").strip().split(" ", 1)[0].upper()
+            if command in {"EHLO", "HELO"}:
+                self.wfile.write(b"250-localhost\r\n250 SIZE 52428800\r\n")
+            elif command == "MAIL":
+                self.wfile.write(b"250 2.1.0 sender accepted\r\n")
+            elif command == "RCPT":
+                self.wfile.write(b"250 2.1.5 recipient accepted\r\n")
+            elif command == "DATA":
+                in_data = True
+                self.wfile.write(b"354 end with <CRLF>.<CRLF>\r\n")
+            elif command in {"RSET", "NOOP"}:
+                self.wfile.write(b"250 2.0.0 ok\r\n")
+            elif command == "QUIT":
+                self.wfile.write(b"221 2.0.0 bye\r\n")
+                self.wfile.flush()
+                return
+            else:
+                self.wfile.write(b"502 5.5.1 command not supported\r\n")
+            self.wfile.flush()
+
+
+class CaptureSMTPServer(socketserver.ThreadingTCPServer):
+    allow_reuse_address = True
+    daemon_threads = True
+
+    def __init__(self, address):
+        self.messages = queue.Queue()
+        super().__init__(address, CaptureSMTPHandler)
+
+
+def captured_otp(server: CaptureSMTPServer, expected_email: str) -> str:
+    try:
+        raw_message = server.messages.get(timeout=10)
+    except queue.Empty as exception:
+        raise AssertionError("Registration did not send an email to the local SMTP capture.") from exception
+
+    message = BytesParser(policy=policy.default).parsebytes(raw_message)
+    recipients = [address.lower() for _, address in getaddresses(message.get_all("to", []))]
+    assert expected_email in recipients, f"OTP email went to an unexpected recipient: {recipients}"
+
+    body = "\n".join(
+        part.get_content()
+        for part in message.walk()
+        if part.get_content_type() == "text/plain" and part.get_content_disposition() != "attachment"
+    )
+    match = re.search(r"(?<![0-9])([0-9]{6})(?![0-9])", body)
+    assert match, "Captured registration email did not contain a six-digit OTP."
+    return match.group(1)
+
+
+def set_cookie_value(headers, name: str) -> tuple[str, str]:
+    prefix = name.lower() + "="
+    for header_name, value in headers:
+        if header_name.lower() == "set-cookie" and value.lower().startswith(prefix):
+            return value.split(";", 1)[0], value
+    raise AssertionError(f"Response did not set the {name} cookie.")
 
 
 def request(port: int, method: str, path: str, *, body=None, token=None, cookie=None, csrf=None, origin=ORIGIN):
@@ -95,6 +185,9 @@ def main():
 
         database = Path(temp) / "test.sqlite"
         database.touch()
+        smtp_server = CaptureSMTPServer(("127.0.0.1", 0))
+        smtp_thread = threading.Thread(target=smtp_server.serve_forever, daemon=True)
+        smtp_thread.start()
         system_keys = ("PATH", "HOME", "USERPROFILE", "SYSTEMROOT", "WINDIR", "TMP", "TEMP", "LANG", "LC_ALL", "PHPRC", "PHP_INI_SCAN_DIR", "LD_LIBRARY_PATH")
         env = {key: os.environ[key] for key in system_keys if key in os.environ}
         env.update({
@@ -109,7 +202,12 @@ def main():
             "CACHE_STORE": "array",
             "SESSION_DRIVER": "array",
             "QUEUE_CONNECTION": "sync",
-            "MAIL_MAILER": "array",
+            "MAIL_MAILER": "smtp",
+            "MAIL_SCHEME": "smtp",
+            "MAIL_HOST": "127.0.0.1",
+            "MAIL_PORT": str(smtp_server.server_address[1]),
+            "MAIL_FROM_ADDRESS": "test@example.com",
+            "MAIL_FROM_NAME": "TRANA HTTP test",
             "BCRYPT_ROUNDS": "4",
             "SANCTUM_STATEFUL_DOMAINS": "localhost:5173,127.0.0.1:5173",
         })
@@ -149,11 +247,66 @@ def main():
                 csrf_data = expect_status(csrf_response, 200, "CSRF bootstrap")
                 csrf = csrf_data.get("csrfToken")
                 assert isinstance(csrf, str) and len(csrf) == 64, "CSRF bootstrap must return a random token."
-                csrf_cookie = f"trana_csrf={csrf}"
+                csrf_cookie, csrf_cookie_header = set_cookie_value(csrf_response[2], "trana_csrf")
+                assert csrf_cookie.partition("=")[2] == csrf, "CSRF bootstrap cookie must match its response token."
+                assert "httponly" in csrf_cookie_header.lower() and "path=/api" in csrf_cookie_header.lower(), "CSRF cookie must be HttpOnly and scoped to /api."
 
                 expect_status(request(port, "POST", "/api/auth/register", body={}, cookie=csrf_cookie), 419, "missing CSRF header")
                 expect_status(request(port, "POST", "/api/auth/register", body={}, cookie=csrf_cookie, csrf=csrf, origin="https://evil.example"), 403, "untrusted browser Origin")
                 expect_status(request(port, "POST", "/api/auth/register", body={}, cookie=csrf_cookie, csrf=csrf), 422, "trusted request reaches registration validation")
+
+                signup_email = "signup-http@gmail.com"
+                signup_password = "Http-flow-123"
+                signup = {
+                    "name": "Signup HTTP Test",
+                    "username": "signup_http_test",
+                    "email": signup_email,
+                    "password": signup_password,
+                    "password_confirmation": signup_password,
+                }
+                register_response = request(
+                    port, "POST", "/api/auth/register", body=signup,
+                    cookie=csrf_cookie, csrf=csrf,
+                )
+                register_data = expect_status(register_response, 202, "valid signup over HTTP")
+                assert register_data.get("email") == signup_email
+                assert register_data.get("expires_in") == 300
+                assert "token" not in register_data, "Registration must not sign in an unverified account."
+
+                # This disposable app sends only to the loopback SMTP capture;
+                # the six-digit code never leaves this isolated test process.
+                code = captured_otp(smtp_server, signup_email)
+                pending_login = request(port, "POST", "/api/auth/login", body={
+                    "identifier": "signup_http_test", "password": signup_password,
+                }, cookie=csrf_cookie, csrf=csrf)
+                pending_data = expect_status(pending_login, 403, "unverified account cannot sign in")
+                assert pending_data.get("code") == "EMAIL_NOT_VERIFIED"
+
+                verification = request(port, "POST", "/api/auth/email/verify", body={
+                    "email": signup_email, "code": code,
+                }, cookie=csrf_cookie, csrf=csrf)
+                verify_data = expect_status(verification, 200, "email OTP verification over HTTP")
+                assert verify_data.get("verified") is True
+                login_response = request(port, "POST", "/api/auth/login", body={
+                    "identifier": "signup_http_test", "password": signup_password,
+                }, cookie=csrf_cookie, csrf=csrf)
+                login_data = expect_status(login_response, 200, "verified signup can sign in by username")
+                assert login_data.get("user", {}).get("email") == signup_email
+                assert login_data.get("user", {}).get("verified") is True
+                assert "token" not in login_data, "API auth tokens must not appear in JSON."
+                signup_session_cookie, signup_session_header = set_cookie_value(login_response[2], "trana_session")
+                signup_csrf_cookie, signup_csrf_header = set_cookie_value(login_response[2], "trana_csrf")
+                next_csrf = login_data.get("csrfToken")
+                assert isinstance(next_csrf, str) and len(next_csrf) == 64
+                assert signup_csrf_cookie.partition("=")[2] == next_csrf
+                assert "httponly" in signup_session_header.lower() and "path=/api" in signup_session_header.lower()
+                assert "httponly" in signup_csrf_header.lower() and "path=/api" in signup_csrf_header.lower()
+                signup_auth_cookie = f"{signup_session_cookie}; {signup_csrf_cookie}"
+                me_data = expect_status(request(port, "GET", "/api/auth/me", cookie=signup_auth_cookie), 200, "authenticated signup session")
+                assert me_data.get("user", {}).get("username") == "signup_http_test"
+                assert me_data.get("user", {}).get("verified") is True
+                expect_status(request(port, "GET", "/api/profile", cookie=signup_auth_cookie), 200, "verified signup creates a profile")
+                expect_status(request(port, "GET", "/api/goals", cookie=signup_auth_cookie), 200, "verified signup creates goals")
 
                 create_token = r'''
                     require "vendor/autoload.php";
@@ -202,7 +355,7 @@ def main():
                 login_data = expect_status(invalid_login, 401, "generic invalid credentials")
                 assert login_data.get("message") == "Invalid credentials.", "Login errors must be generic."
                 expect_status(request(port, "POST", "/api/auth/google", body={}), 404, "removed Google-only endpoint")
-                print("HttpOnly-cookie auth, CSRF/origin protection, and stateless API smoke test passed.")
+                print("HTTP signup, loopback OTP email, verification, HttpOnly-cookie login, and CSRF smoke test passed.")
             finally:
                 server.terminate()
                 try:
@@ -210,6 +363,9 @@ def main():
                 except subprocess.TimeoutExpired:
                     server.kill()
                     server.wait()
+                smtp_server.shutdown()
+                smtp_server.server_close()
+                smtp_thread.join(timeout=5)
 
 
 if __name__ == "__main__":

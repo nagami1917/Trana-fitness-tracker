@@ -78,12 +78,13 @@ python3 scripts/test_stateless_api_http.py
 
 The PHPUnit suite runs against in-memory SQLite (`phpunit.xml`) and fakes the
 FastAPI and mail boundaries, so it needs no ML service, provider credentials,
-or network. The HTTP smoke test uses Python's standard library and an isolated
-temporary SQLite database to exercise real browser-origin requests, HttpOnly
-cookie auth, and CSRF/origin checks. It does not read the checkout's `.env` or
-modify its database. `EmailPasswordAuthTest` covers Gmail/username constraints,
-bcrypt storage, verification OTP expiry/attempts/resends, generic login errors,
-HttpOnly cookies, password reset, and token revocation. `AccountDeletionTest`
+or network. The HTTP smoke test uses Python's standard library, an isolated
+temporary SQLite database, and a loopback-only SMTP capture to exercise a full
+synthetic signup, OTP verification, login cookies, and CSRF/origin checks without
+sending email externally. It does not read the checkout's `.env` or modify its
+database. `EmailPasswordAuthTest` covers Gmail/username constraints, bcrypt
+storage, verification OTP expiry/attempts/resends, mailer-failure recovery,
+generic login errors, HttpOnly cookies, password reset, and token revocation. `AccountDeletionTest`
 covers the separate email-code safeguard. `PredictionCreationTest.php` locks in
 the contract that saved predictions persist the *effective* distance (a drawn
 route wins over a typed one), and that prediction outages return 503 without
