@@ -1,7 +1,7 @@
 # TRANA API reference
 
 Base URL: `https://<your-api>/api`
-Auth: `Authorization: Bearer <sanctum-token>` except for `/health`, `/docs`, `/auth/register`, and `/auth/login`.
+Auth: `Authorization: Bearer <sanctum-token>` except for `/health`, `/docs`, `/auth/register`, `/auth/login`, and `/auth/otp/verify`.
 The API does not authenticate with session cookies or use CSRF cookies. Do not
 add cookie-based API authentication without enabling appropriate CSRF protection.
 Responses are JSON; collections are wrapped in `{ "data": [...] }`.
@@ -16,55 +16,63 @@ This does not check FastAPI or verify that all migrations are applied.
 
 ## Auth
 
+TRANA uses **passwordless email OTP**. It never asks for, receives, or stores a
+Google/Gmail password; auth and account-erasure endpoints reject a `password`
+field. Email codes are six digits, expire after 10 minutes, are
+single-use, and are stored as keyed hashes. Five wrong attempts invalidate a
+code. Re-sending an active code for the same purpose is delayed by 60 seconds;
+requesting a different-purpose code replaces the active challenge. No more than five
+codes can be sent to one email per hour, including codes that were used
+successfully. Configure a real SMTP/transactional mail provider for the
+Laravel API; production refuses the development-only `log` and `array` mailers.
+
 ### `POST /auth/register`
 ```json
-{ "name": "Nagami", "email": "nagami@gmail.com", "password": "secret123" }
+{ "name": "Nagami", "email": "nagami@gmail.com" }
 ```
-`201`
-```json
-{ "token": "1|abc…", "user": { "id": 1, "name": "Nagami", "email": "nagami@gmail.com" } }
-```
-**Gmail-only sign-up**: the address must end with `@gmail.com` (case-insensitive;
-emails are stored lowercase). Non-Gmail addresses get `422` on `email`.
-Existing accounts with other domains can still log in — the gate applies to
-new registrations only.
+`202` → `{ "message": "A six-digit code was sent to your email. It expires in 10 minutes." }`.
+The account and profile are created only after the code is verified. New sign-up
+is limited to `@gmail.com` addresses (case-insensitive; stored lowercase); other
+domains receive `422` on `email`. The request never accepts a password.
+`429` means the per-email send limit is active; `503` means mail delivery failed
+or is not configured.
 
 ### `POST /auth/login`
 ```json
-{ "email": "nagami@trana.app", "password": "secret123", "device_name": "pwa" }
+{ "email": "nagami@gmail.com" }
 ```
-`200` → `{ token, user }` · `422` on bad credentials.
+`202` always has the same generic message whether or not the account exists.
+For an eligible, active account, TRANA sends a six-digit code. Existing accounts
+with other email domains can still sign in. Suspended accounts receive `403`.
+
+### `POST /auth/otp/verify`
+```json
+{ "email": "nagami@gmail.com", "code": "042817" }
+```
+`200` → `{ "token": "1|abc…", "user": { "id": 1, "name": "Nagami",
+"email": "nagami@gmail.com", "email_verified_at": "…" } }`. The code must be
+exactly six digits, including any leading zeroes. Wrong, expired, used, or
+exhausted codes receive `422`. Verification creates a new account when the
+challenge came from sign-up; otherwise it signs in the existing account and
+confirms its email address. Only a verified code creates a bearer token.
 
 ### `GET /auth/me` → `{ user: {...} }` · `POST /auth/logout` → `{ message }`
 
-Registration sends a **verification email** (best-effort) and the `user` payload
-carries `email_verified_at` (`null` until verified). Unverified athletes are
-held on the SPA's verify screen; pre-existing accounts are grandfathered as
-verified.
+Authenticated routes require a verified email. Old tokens belonging to
+unverified accounts are revoked and must be replaced by an OTP sign-in.
 
-### `POST /password/forgot`
+### Account erasure (authed)
+
+`POST /account/delete-code` emails a separate one-time code before deletion.
+`202` on send · `429` on cooldown/rate limit · `503` on mail failure.
+
+`DELETE /account` requires both the code and explicit confirmation:
 ```json
-{ "email": "nagami@trana.app" }
+{ "code": "042817", "confirmation": "DELETE" }
 ```
-`202` always — the same generic answer whether or not the account exists
-(no enumeration). Sends a link to the SPA's `/reset-password` page.
-
-### `POST /password/reset`
-```json
-{ "token": "…", "email": "nagami@trana.app",
-  "password": "new-secret1", "password_confirmation": "new-secret1" }
-```
-`200` → `{ message }` · `422` on an invalid/expired/used token. On success
-**all existing API tokens for the account are revoked** (sign-out everywhere).
-
-### `POST /email/verify/resend` (authed)
-Re-sends the signed verification link. `202` · `422` if already verified ·
-`503` when mail delivery is not configured on the server yet.
-
-### `GET /email/verify/{id}/{hash}` (signed, from the email)
-Validates the HMAC signature + 2h expiry, marks the address verified, then
-`302`-redirects to `{FRONTEND_URL}/verify-email?status=verified`
-(`?status=invalid` on a bad/expired signature). No HTML is rendered.
+`200` deletes the account and associated data · `422` for an invalid/expired
+code or missing confirmation. Export data first with
+[`GET /activities/export`](#get-activities-export).
 
 ---
 
@@ -483,8 +491,9 @@ cd backend && php artisan admin:promote you@gmail.com
 | `GET /admin/errors?status=open\|acknowledged\|resolved\|all&kind=api\|client\|ml` | Error-log viewer with traces (RLS-locked table) |
 | `PATCH /admin/errors/{id}` | Triage: `status` → `open` / `acknowledged` / `resolved` |
 
-By design **not** available over HTTP: role editing, account deletion,
-secrets/config viewing, raw database access, mass messaging. Suspension also
+By design, admin endpoints do **not** allow role editing, account deletion,
+secrets/config viewing, raw database access, or mass messaging. Self-service
+erasure is available separately under Account & data rights. Suspension also
 blocks login and every authenticated request (`ensure.active` middleware), so
 a suspended token dies even if login were bypassed.
 
@@ -495,13 +504,15 @@ a suspended token dies even if login were bypassed.
 ### `DELETE /account`
 Irreversibly deletes the account and every associated row (activities, goals,
 achievements, plans, sessions, profile… — all `ON DELETE CASCADE`), plus auth
-tokens and server sessions. Requires the password:
+tokens and server sessions. First request `POST /account/delete-code`, then
+submit the fresh six-digit code and explicit confirmation:
 ```json
-{ "password": "••••••••" }
+{ "code": "042817", "confirmation": "DELETE" }
 ```
 `200` → `{ "message": "Account and all associated data have been deleted." }` ·
-`422` on a wrong password. Use together with [`GET /activities/export`](#get-activities-export)
-so the athlete can keep a copy of their data first.
+`422` on an invalid/expired code or missing confirmation. Use together with
+[`GET /activities/export`](#get-activities-export) so the athlete can keep a copy
+of their data first.
 
 ---
 
@@ -514,4 +525,4 @@ so the athlete can keep a copy of their data first.
 | 409 | The resource already exists (for example, `POST /profile` on an account that has one) |
 | 422 | Validation — `{ message, errors: { field: [msg] } }` |
 | 429 | Rate limit (auth 10/min/IP, predictions 60/min/user, client-errors 60/min/IP) |
-| 503 | Database unavailable on `/health`, or ML service unavailable for predictions |
+| 503 | Database unavailable, ML service unavailable for predictions, or OTP email transport failed/misconfigured |

@@ -11,20 +11,22 @@
 ## 1. Creating your account
 
 1. Open the app and choose **Create your account**.
-2. Fill in your **name**, your **Gmail address** and a **password**
-   (8+ characters, letters and numbers).
-3. TRANA accepts **`@gmail.com` addresses only** — sign-up with any other
-   domain is rejected with a clear message. (Existing accounts created before
-   this rule can still log in with their old address.)
-4. Submit. A **verification link** is sent to that Gmail address.
+2. Enter your **name** and **Gmail address**. TRANA accepts `@gmail.com`
+   addresses only for new registrations; existing accounts with other email
+   domains can still sign in.
+3. Submit. TRANA emails a **six-digit sign-up code**. Enter it in the app to
+   verify your email and create your account. Use the newest code; each code
+   expires after 10 minutes and works once.
 
-**Verify your email.** Until you click the link, TRANA shows a
-*verify your email* screen instead of the dashboard. The link is only needed
-once; if it expires, use **Resend** on that screen or log in again to get a
-fresh one.
+**Sign in without a password.** Enter your email address and request a
+six-digit sign-in code. If the address is registered, TRANA emails the code;
+enter it to sign in. The login response does not disclose whether an address has
+an account. No TRANA password or Google/Gmail password is requested.
 
-**Forgot your password?** On the login screen choose *forgot password*, enter
-your Gmail address, and follow the emailed link to set a new one.
+If no message arrives, check Spam and Promotions, wait for the resend timer,
+and request a new code. Code verification still depends on TRANA's mail
+provider being correctly configured and able to deliver messages; requesting an
+OTP does not itself fix email delivery.
 
 ---
 
@@ -187,8 +189,8 @@ email marketing and no way for other users to message you.
 | **Training & sweat** | Experience level, typical temperature, sweat profile |
 | **Prediction engine** | Units (metric/imperial) and calibration preferences |
 | **Energy calibration** | *Import samples* — upload what your watch measured so TRANA can learn your personal energy gap (from 3 samples on, estimates are scaled to you, clamped 0.5×–2.0×) |
-| **Account** | Password change, email address display |
-| **Danger zone** | **Delete account** — requires your password and an explicit confirmation; removes your data permanently (self-service only) |
+| **Account** | Email address display; sign in uses email codes, not a password |
+| **Danger zone** | **Delete account** — requires a fresh email code and typing `DELETE`; removes your data permanently (self-service only) |
 | **Install TRANA** | Install the app as a PWA on phone or desktop |
 
 ---
@@ -216,10 +218,10 @@ if they navigate to `/admin` directly.
 
 | Symptom | What to do |
 | --- | --- |
-| *"Sign-up is limited to Gmail addresses"* | Register with an `@gmail.com` address (case-insensitive). |
-| Stuck on the verify screen | Check your Gmail for the link; use **Resend** if it's missing (check Promotions/Spam). |
+| *"Sign-up is limited to Gmail addresses"* | Register with an `@gmail.com` address (case-insensitive). This restriction applies to new accounts; existing accounts can still sign in. |
+| No sign-in or sign-up code arrives | Check Spam/Promotions, wait for the resend cooldown, then request a fresh code. If it still does not arrive, the TRANA mail provider may be unavailable or misconfigured; contact the operator. |
+| *"That code is invalid or expired"* | Check that you entered the newest six-digit code within 10 minutes. Request a new one if needed. |
 | *"This account has been suspended."* | An operator suspended the account — contact the operator to reactivate. |
-| Password forgotten | **Forgot password** on the login screen → Gmail link → new password. |
 | Prediction says the service is unavailable | The ML service is down or unreachable — your data is safe; retry shortly. Anchors and history remain visible. |
 | No GPS signal in Track | Use **manual entry** from Activities instead. |
 | Notification badge stuck | Open the bell → **mark all read**. |

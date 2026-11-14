@@ -15,11 +15,14 @@ class TrainingFeaturesTest extends TestCase
 
     private function athlete(string $email = 'features@gmail.com'): User
     {
-        return User::create([
+        $user = User::create([
             'name' => 'Features Athlete',
             'email' => $email,
             'password' => 'test-password-123',
         ]);
+        $user->forceFill(['email_verified_at' => now()])->save();
+
+        return $user;
     }
 
     public function test_fuel_items_crud_and_user_isolation(): void

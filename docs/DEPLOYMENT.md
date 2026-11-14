@@ -6,9 +6,11 @@ claim that this deployment has been tested.
 
 **Not production-ready yet:** Laravel 11 is end-of-life and this repository
 currently suppresses unresolved Laravel security advisories. Upgrade and audit
-the framework and dependencies before accepting real users. Password recovery,
-email verification, backups/restore testing, monitoring, privacy/consent, and a
-real-world validation of the prediction model also need work.
+the framework and dependencies before accepting real users. Backups/restore
+testing, monitoring, privacy/consent, and a real-world validation of the
+prediction model also need work. Passwordless OTP depends on a real mail provider
+configured as described below; the checked-in environment file contains only
+placeholders.
 
 ```text
 Vercel (frontend) ──► Vercel (Laravel API) ──► Supabase Postgres
@@ -82,6 +84,32 @@ Notes:
   invocations should not run `php artisan migrate` on every cold start.
 * `trustProxies('*')` is already configured so `https://` URLs and rate limits see
   the real client IP.
+
+### Mail delivery (required for passwordless auth)
+
+The API sends six-digit email codes for registration, sign-in, and account
+erasure. This is the same delivery channel that must work for every flow; OTP
+does not fix missing mail by itself. Configure a real provider using the
+`MAIL_MAILER`, `MAIL_SCHEME`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`,
+`MAIL_PASSWORD`, `MAIL_FROM_ADDRESS`, and `MAIL_FROM_NAME` variables from
+`backend/.env.example`. Replace all sample/placeholder values with the provider's
+settings and sender identity. Production rejects the development `log` and
+`array` mailers and placeholder SMTP host/sender values. Do not use a Gmail
+account password; if your provider requires SMTP authentication, create a
+provider-specific app credential and store it only in the deployment secret
+manager.
+
+Keep `APP_KEY` stable: it is used as the HMAC key for the stored OTP hashes.
+Apply all migrations, including `email_otp_challenges`, before sending traffic to
+the release. After deployment, request an OTP to an operator-controlled mailbox
+and confirm it arrives (also check Spam/Promotions) before relying on the sign-in
+flow. A `202` response for an unknown login email is intentionally generic and
+does not prove delivery. If registration/deletion delivery returns `503`, verify
+provider credentials, sender-domain verification, SMTP connectivity and provider
+logs. OTPs expire in 10 minutes, allow five attempts, and are limited to five
+sends per email per hour; re-sending an active code for the same purpose is
+delayed by 60 seconds. A different-purpose code replaces the active challenge.
+Consuming a code does not reset the hourly counter.
 
 Any Laravel-capable host (Forge, Railway, Fly.io, a VPS) works identically — just
 point `DB_*` at Supabase and drop `vercel.json`.

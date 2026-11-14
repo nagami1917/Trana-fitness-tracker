@@ -25,6 +25,7 @@ return Application::configure(basePath: dirname(__DIR__))
             // Admin console: server-side role gate + suspension re-check.
             'admin' => \App\Http\Middleware\EnsureAdmin::class,
             'ensure.active' => \App\Http\Middleware\EnsureNotSuspended::class,
+            'ensure.verified' => \App\Http\Middleware\EnsureVerifiedEmail::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

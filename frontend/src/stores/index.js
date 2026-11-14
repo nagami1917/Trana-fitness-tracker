@@ -251,12 +251,12 @@ async function finishSignIn(user) {
   }
 }
 
-export async function login(credentials) {
-  return finishSignIn(await api.auth.login(credentials));
-}
+export const requestLoginCode = (email) => api.auth.requestLoginCode(email);
 
-export async function register(payload) {
-  return finishSignIn(await api.auth.register(payload));
+export const requestRegistrationCode = (payload) => api.auth.requestRegistrationCode(payload);
+
+export async function verifyOtpAndSignIn(credentials) {
+  return finishSignIn(await api.auth.verifyOtp(credentials));
 }
 
 export async function logout() {

@@ -3,13 +3,13 @@
 namespace Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\EmailOtpTestHelpers;
 use Tests\TestCase;
 
 class GmailOnlyRegistrationTest extends TestCase
 {
     use RefreshDatabase;
-
-    private const PASSWORD = 'test-password-123';
+    use EmailOtpTestHelpers;
 
     public function test_non_gmail_sign_up_is_rejected(): void
     {
@@ -17,19 +17,18 @@ class GmailOnlyRegistrationTest extends TestCase
             $this->postJson('/api/auth/register', [
                 'name' => 'Gate Check',
                 'email' => $email,
-                'password' => self::PASSWORD,
             ])->assertStatus(422)->assertJsonValidationErrors(['email']);
-
-            app('auth')->forgetGuards();
         }
     }
 
-    public function test_gmail_sign_up_is_allowed_case_insensitively(): void
+    public function test_gmail_sign_up_is_allowed_case_insensitively_and_passwordless(): void
     {
-        $this->postJson('/api/auth/register', [
-            'name' => 'Gmail Athlete',
-            'email' => 'Person@GMAIL.COM',
-            'password' => self::PASSWORD,
-        ])->assertCreated()->assertJsonPath('user.email', 'person@gmail.com');
+        $response = $this->registerWithOtp('Gmail Athlete', 'Person@GMAIL.COM');
+
+        $this->assertSame('person@gmail.com', $response['user']['email']);
+        $this->assertDatabaseHas('users', [
+            'email' => 'person@gmail.com',
+            'password' => null,
+        ]);
     }
 }

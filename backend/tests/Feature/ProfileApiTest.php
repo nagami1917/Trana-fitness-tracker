@@ -22,11 +22,14 @@ class ProfileApiTest extends TestCase
 
     private function athlete(string $email = 'profile@trana.test'): User
     {
-        return User::create([
+        $user = User::create([
             'name' => 'Profile Athlete',
             'email' => $email,
             'password' => 'test-password-123',
         ]);
+        $user->forceFill(['email_verified_at' => now()])->save();
+
+        return $user;
     }
 
     private function fakeMl(): void

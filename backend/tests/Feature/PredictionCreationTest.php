@@ -32,12 +32,15 @@ class PredictionCreationTest extends TestCase
 
     private function athlete(): User
     {
-        return User::create([
+        $user = User::create([
             'name' => 'Test Athlete',
             'email' => 'athlete@trana.test',
             // 'hashed' cast hashes on write; no plaintext is stored.
             'password' => 'test-password-123',
         ]);
+        $user->forceFill(['email_verified_at' => now()])->save();
+
+        return $user;
     }
 
     /** Fake a healthy FastAPI response and return the fixture for reference. */

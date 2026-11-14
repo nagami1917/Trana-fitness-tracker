@@ -1,6 +1,6 @@
 <script>
   /**
-   * Layout for pages that anyone can open — Privacy, Terms, password recovery.
+   * Layout for pages that anyone can open — Preview, Privacy and Terms.
    * Brand header + centered content + footer, no app shell / sidebar.
    */
   import Logo from './Logo.svelte';

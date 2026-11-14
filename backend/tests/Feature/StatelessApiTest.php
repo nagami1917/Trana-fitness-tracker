@@ -4,11 +4,14 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
+use Tests\Support\EmailOtpTestHelpers;
 use Tests\TestCase;
 
 class StatelessApiTest extends TestCase
 {
     use RefreshDatabase;
+    use EmailOtpTestHelpers;
 
     private const FRONTEND = [
         'Origin' => 'http://localhost:5173',
@@ -24,13 +27,19 @@ class StatelessApiTest extends TestCase
         app()->instance('env', 'local');
 
         try {
-            $response = $this->postJson('/api/auth/register', [
+            Notification::fake();
+            $requested = $this->postJson('/api/auth/register', [
                 'name' => 'Browser Athlete',
                 'email' => 'browser@gmail.com',
-                'password' => 'test-password-123',
-            ], self::FRONTEND)->assertCreated();
-            $response->assertCookieMissing(config('session.cookie'));
-            $token = $response->json('token');
+            ], self::FRONTEND)->assertAccepted();
+            $requested->assertCookieMissing(config('session.cookie'));
+            $code = $this->sentOtpCodeFor('browser@gmail.com');
+            $verified = $this->postJson('/api/auth/otp/verify', [
+                'email' => 'browser@gmail.com',
+                'code' => $code,
+            ], self::FRONTEND)->assertOk();
+            $verified->assertCookieMissing(config('session.cookie'));
+            $token = $verified->json('token');
 
             app('auth')->forgetGuards();
             $this->putJson('/api/profile', ['weight_kg' => 68], self::FRONTEND + [
@@ -49,9 +58,11 @@ class StatelessApiTest extends TestCase
         $sessionUser = User::create([
             'name' => 'Session User', 'email' => 'session@gmail.com', 'password' => 'test-password-123',
         ]);
+        $sessionUser->forceFill(['email_verified_at' => now()])->save();
         $tokenUser = User::create([
             'name' => 'Bearer User', 'email' => 'bearer@gmail.com', 'password' => 'test-password-123',
         ]);
+        $tokenUser->forceFill(['email_verified_at' => now()])->save();
         $token = $tokenUser->createToken('test')->plainTextToken;
 
         $this->actingAs($sessionUser, 'web');

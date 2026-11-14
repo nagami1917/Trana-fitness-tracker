@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Activity;
+use App\Models\EmailOtpChallenge;
+use App\Services\EmailOtpService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\StreamedResponse;
-use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class AccountController extends Controller
 {
@@ -55,31 +57,57 @@ class AccountController extends Controller
         ]);
     }
 
+    /** Send a fresh email code before the irreversible account deletion action. */
+    public function requestDeletionCode(Request $request, EmailOtpService $otp): JsonResponse
+    {
+        $request->validate(['password' => ['prohibited']]);
+        $user = $request->user();
+
+        try {
+            $sent = $otp->issue($user->email, $user->name, EmailOtpService::PURPOSE_ACCOUNT_DELETION);
+        } catch (Throwable $exception) {
+            Log::warning('Account deletion OTP delivery failed', [
+                'user_id' => $user->id,
+                'exception' => get_class($exception),
+            ]);
+
+            return response()->json([
+                'message' => 'The email service could not send your code. Please try again later or contact support.',
+            ], 503);
+        }
+
+        if (! $sent) {
+            return response()->json([
+                'message' => 'Please wait a minute before requesting another code.',
+            ], 429);
+        }
+
+        return response()->json([
+            'message' => 'A six-digit confirmation code was sent to your email. It expires in 10 minutes.',
+        ], 202);
+    }
+
     /**
      * Right to erasure: delete the account and everything tied to it.
-     * The password is required so a stolen session alone cannot wipe data.
-     * Child rows (activities, goals, goal_events, plans, sessions-foods…)
-     * are removed by database-level ON DELETE CASCADE; auth tokens and
-     * database sessions have no FK, so they are purged explicitly.
+     * A recent, one-time email code plus an explicit DELETE confirmation are
+     * required; child rows cascade and auth tokens / sessions are purged.
      */
-    public function destroy(Request $request): JsonResponse
+    public function destroy(Request $request, EmailOtpService $otp): JsonResponse
     {
         $request->validate([
-            'password' => ['required', 'string'],
+            'code' => ['required', 'string', 'regex:/^[0-9]{6}$/'],
+            'confirmation' => ['required', 'in:DELETE'],
+            'password' => ['prohibited'],
         ]);
 
         $user = $request->user();
-
-        if (! Hash::check($request->input('password'), $user->password)) {
-            throw ValidationException::withMessages([
-                'password' => ['Password is incorrect.'],
-            ]);
-        }
+        $otp->verifyAccountDeletionCode($user->email, $request->input('code'));
 
         DB::transaction(function () use ($user) {
             $user->tokens()->delete();
             DB::table('sessions')->where('user_id', $user->id)->delete();
             $user->delete();
+            EmailOtpChallenge::query()->where('email', $user->email)->delete();
         });
 
         return response()->json(['message' => 'Account and all associated data have been deleted.']);

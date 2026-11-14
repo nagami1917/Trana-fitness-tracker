@@ -42,10 +42,27 @@ try {
   await api.health();
   assert.equal(await api.auth.user(), null);
 
-  replies = [reply('/api/auth/login', 200, { token: 'test-token', user: { id: 1, name: 'Athlete' } })];
-  assert.equal((await api.auth.login({ email: 'runner@example.test', password: 'example' })).name, 'Athlete');
+  replies = [reply('/api/auth/login', 202, { message: 'If an account exists, a code is on its way.' })];
+  await api.auth.requestLoginCode('runner@example.test');
   assert.equal(calls.at(-1).method, 'POST');
+  assert.deepEqual(JSON.parse(calls.at(-1).body), { email: 'runner@example.test' });
+  assert.equal(memory.has('trana.token'), false, 'Requesting a code must not create a session.');
+
+  replies = [reply('/api/auth/otp/verify', 200, { token: 'test-token', user: { id: 1, name: 'Athlete' } })];
+  assert.equal((await api.auth.verifyOtp({ email: 'runner@example.test', code: '012345' })).name, 'Athlete');
+  assert.equal(calls.at(-1).method, 'POST');
+  assert.deepEqual(JSON.parse(calls.at(-1).body), { email: 'runner@example.test', code: '012345' });
   assert.equal(memory.get('trana.token'), 'test-token');
+
+  replies = [reply('/api/account/delete-code', 202, { message: 'A confirmation code was sent.' })];
+  await api.account.requestDeleteCode();
+  assert.equal(calls.at(-1).method, 'POST');
+  assert.equal(calls.at(-1).headers.Authorization, 'Bearer test-token');
+
+  replies = [reply('/api/account', 200, { message: 'Account deleted.' })];
+  await api.account.delete('012345');
+  assert.equal(calls.at(-1).method, 'DELETE');
+  assert.deepEqual(JSON.parse(calls.at(-1).body), { code: '012345', confirmation: 'DELETE' });
 
   replies = [reply('/api/profile', 200, { data: { name: 'Athlete' } })];
   assert.deepEqual(await api.profile.get(), { name: 'Athlete' });

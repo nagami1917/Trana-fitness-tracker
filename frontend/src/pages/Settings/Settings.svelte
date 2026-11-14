@@ -23,6 +23,7 @@
     SlidersHorizontal,
     BellRing,
     Plus,
+    Mail,
   } from 'lucide-svelte';
   import Card from '../../components/common/Card.svelte';
   import Segmented from '../../components/common/Segmented.svelte';
@@ -309,7 +310,9 @@
   let exporting = $state(false);
   let deleteOpen = $state(false);
   let deleting = $state(false);
-  let deletePassword = $state('');
+  let deleteCodeSending = $state(false);
+  let deleteCodeSent = $state(false);
+  let deleteCode = $state('');
   let deleteConfirm = $state('');
 
   async function exportActivities() {
@@ -324,14 +327,28 @@
     }
   }
 
+  async function requestAccountDeletionCode() {
+    deleteCodeSending = true;
+    try {
+      const data = await api.account.requestDeleteCode();
+      deleteCode = '';
+      deleteCodeSent = true;
+      notify(data?.message || 'A confirmation code was sent to your email.');
+    } catch (error) {
+      notify(error.message || 'Could not send the confirmation code.', 'error');
+    } finally {
+      deleteCodeSending = false;
+    }
+  }
+
   async function deleteAccount() {
-    if (deleteConfirm.trim().toUpperCase() !== 'DELETE') {
-      notify('Type DELETE to confirm.', 'error');
+    if (deleteConfirm.trim() !== 'DELETE') {
+      notify('Type DELETE in uppercase to confirm.', 'error');
       return;
     }
     deleting = true;
     try {
-      await api.account.delete(deletePassword);
+      await api.account.delete(deleteCode.trim());
       notify('Account and all data deleted.');
       await logout();
       navigate('/login', { replace: true });
@@ -844,24 +861,36 @@ garmin,run,5.2,32.5,158,68,420,2026-11-09T08:00:00+08:00"
             </button>
           {:else}
             <div class="mt-3 space-y-2 rounded-2xl border border-rose-100 bg-rose-50/60 p-3">
+              <p class="text-xs font-semibold leading-relaxed text-ink-500">
+                We’ll send a one-time confirmation code to <span class="font-extrabold text-ink-700">{$session?.email ?? ''}</span>.
+                Enter it below and type DELETE to permanently erase your account.
+              </p>
+              <button class="btn-ghost w-full justify-center" onclick={requestAccountDeletionCode} disabled={deleting || deleteCodeSending}>
+                {#if deleteCodeSending}<LoaderCircle size={14} class="animate-spin" /> Sending…{:else}<Mail size={14} /> {deleteCodeSent ? 'Send a new confirmation code' : 'Email me a confirmation code'}{/if}
+              </button>
               <div>
-                <label class="label" for="delete-password">Confirm your password</label>
+                <label class="label" for="delete-code">Six-digit confirmation code</label>
                 <input
-                  id="delete-password"
-                  type="password"
-                  class="input"
-                  autocomplete="current-password"
-                  bind:value={deletePassword}
-                  placeholder="Password"
+                  id="delete-code"
+                  type="text"
+                  class="input text-center font-extrabold tracking-[0.3em]"
+                  bind:value={deleteCode}
+                  placeholder="000000"
+                  inputmode="numeric"
+                  autocomplete="one-time-code"
+                  pattern="[0-9][0-9][0-9][0-9][0-9][0-9]"
+                  minlength="6"
+                  maxlength="6"
+                  required
                 />
               </div>
               <div>
                 <label class="label" for="delete-confirm">Type DELETE to confirm</label>
-                <input id="delete-confirm" class="input" bind:value={deleteConfirm} placeholder="DELETE" />
+                <input id="delete-confirm" class="input" bind:value={deleteConfirm} placeholder="DELETE" required />
               </div>
               <div class="flex gap-2">
-                <button class="btn-ghost flex-1" onclick={() => { deleteOpen = false; deletePassword = ''; deleteConfirm = ''; }} disabled={deleting}>Cancel</button>
-                <button class="btn-primary flex-1 !bg-rose-500" onclick={deleteAccount} disabled={deleting || !deletePassword || !deleteConfirm}>
+                <button class="btn-ghost flex-1" onclick={() => { deleteOpen = false; deleteCode = ''; deleteConfirm = ''; deleteCodeSent = false; }} disabled={deleting}>Cancel</button>
+                <button class="btn-primary flex-1 !bg-rose-500" onclick={deleteAccount} disabled={deleting || !deleteCodeSent || deleteCode.trim().length !== 6 || !deleteConfirm}>
                   {#if deleting}<LoaderCircle size={15} class="animate-spin" /> Deleting…{:else}Delete forever{/if}
                 </button>
               </div>

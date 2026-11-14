@@ -10,7 +10,7 @@ begin
     foreach relation_name in array array[
         'migrations', 'users', 'sessions', 'cache', 'cache_locks', 'jobs',
         'failed_jobs', 'fitness_profiles', 'activities', 'predictions', 'goals',
-        'personal_access_tokens',
+        'personal_access_tokens', 'email_otp_challenges',
         -- Activity tracking, energy calibration and daily sessions.
         'activity_points', 'planned_routes', 'route_points',
         'energy_expenditure', 'daily_sessions', 'daily_session_foods'
@@ -42,7 +42,7 @@ begin
         foreach relation_name in array array[
             'migrations', 'users', 'sessions', 'cache', 'cache_locks', 'jobs',
             'failed_jobs', 'fitness_profiles', 'activities', 'predictions', 'goals',
-            'personal_access_tokens', 'user_profiles', 'planned_activities',
+            'personal_access_tokens', 'email_otp_challenges', 'user_profiles', 'planned_activities',
             'nutritional_predictions', 'activity_routes', 'user_goals',
             'prediction_history', 'v_athlete_pace', 'v_daily_totals', 'v_prediction_accuracy',
             'activity_points', 'planned_routes', 'route_points',
@@ -63,7 +63,7 @@ begin
         foreach sequence_name in array array[
             'migrations_id_seq', 'users_id_seq', 'jobs_id_seq', 'failed_jobs_id_seq',
             'fitness_profiles_id_seq', 'activities_id_seq', 'predictions_id_seq',
-            'goals_id_seq', 'personal_access_tokens_id_seq',
+            'goals_id_seq', 'personal_access_tokens_id_seq', 'email_otp_challenges_id_seq',
             'activity_points_id_seq', 'planned_routes_id_seq', 'route_points_id_seq',
             'energy_expenditure_id_seq', 'daily_sessions_id_seq', 'daily_session_foods_id_seq'
         ] loop
@@ -90,8 +90,10 @@ begin
         '2026_11_08_110003_add_tracking_columns_to_activities_table',
         '2026_11_08_120000_create_energy_expenditure_table',
         '2026_11_08_130000_create_daily_sessions_table',
-        '2026_11_08_130001_create_daily_session_foods_table'
-    )) <> 15 then
+        '2026_11_08_130001_create_daily_session_foods_table',
+        '2026_11_14_000001_create_email_otp_challenges_table',
+        '2026_11_14_000002_secure_email_otp_challenges'
+    )) <> 17 then
         raise exception 'Laravel migration records are incomplete — run php artisan migrate';
     end if;
 end $$;

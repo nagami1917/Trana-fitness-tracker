@@ -4,23 +4,17 @@ namespace Tests\Feature;
 
 use App\Models\Activity;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\EmailOtpTestHelpers;
 use Tests\TestCase;
 
 class ActivityUpdateTest extends TestCase
 {
     use RefreshDatabase;
-
-    private const PASSWORD = 'test-password-123';
+    use EmailOtpTestHelpers;
 
     private function registerAthlete(string $email): string
     {
-        $response = $this->postJson('/api/auth/register', [
-            'name' => 'Athlete',
-            'email' => $email,
-            'password' => self::PASSWORD,
-        ])->assertCreated();
-
-        return $response->json('token');
+        return $this->registerWithOtp('Athlete', $email)['token'];
     }
 
     private function bearer(string $token): array

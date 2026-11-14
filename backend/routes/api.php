@@ -9,7 +9,6 @@ use App\Http\Controllers\Api\AdminUserController;
 use App\Http\Controllers\Api\ActivityPointController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DailySessionController;
-use App\Http\Controllers\Api\EmailVerificationController;
 use App\Http\Controllers\Api\ErrorReportController;
 use App\Http\Controllers\Api\DailySessionFoodController;
 use App\Http\Controllers\Api\EnergyExpenditureController;
@@ -17,7 +16,6 @@ use App\Http\Controllers\Api\FuelItemController;
 use App\Http\Controllers\Api\GearController;
 use App\Http\Controllers\Api\GoalController;
 use App\Http\Controllers\Api\NotificationController;
-use App\Http\Controllers\Api\PasswordRecoveryController;
 use App\Http\Controllers\Api\PredictionController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\PushSubscriptionController;
@@ -47,29 +45,17 @@ Route::post('/client-errors', [ErrorReportController::class, 'store'])
     ->middleware('throttle:errors');
 
 Route::middleware('throttle:auth')->group(function () {
+    // Registration/login send a six-digit email code; only verification issues a token.
     Route::post('/auth/register', [AuthController::class, 'register']);
     Route::post('/auth/login', [AuthController::class, 'login']);
-
-    // Password recovery — forgot sends the link, reset consumes the token.
-    Route::post('/password/forgot', [PasswordRecoveryController::class, 'forgot']);
-    Route::post('/password/reset', [PasswordRecoveryController::class, 'reset']);
+    Route::post('/auth/otp/verify', [AuthController::class, 'verifyOtp']);
 });
-
-// Signed verification link (from the email). Validates HMAC + expiry, marks
-// the address verified, and redirects to the SPA — no session required.
-Route::get('/email/verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])
-    ->middleware('throttle:auth')
-    ->name('verification.verify');
 
 // Authenticated surface. `ensure.active` re-checks the suspension flag on
 // every request — a suspended token dies here even if login was bypassed.
-Route::middleware(['auth:sanctum', 'ensure.active'])->group(function () {
+Route::middleware(['auth:sanctum', 'ensure.active', 'ensure.verified'])->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
-
-    // Resend the verification link for the signed-in athlete.
-    Route::post('/email/verify/resend', [EmailVerificationController::class, 'resend'])
-        ->middleware('throttle:6,1');
 
     // In-app notification center (reminders synthesized lazily on read).
     Route::get('/notifications', [NotificationController::class, 'index']);
@@ -84,7 +70,9 @@ Route::middleware(['auth:sanctum', 'ensure.active'])->group(function () {
     Route::delete('/weight-logs/{weightLog}', [WeightLogController::class, 'destroy'])
         ->middleware('throttle:writes');
 
-    // Data rights: account erasure (password-confirmed) + full CSV export.
+    // Data rights: email-OTP-confirmed account erasure + full CSV export.
+    Route::post('/account/delete-code', [AccountController::class, 'requestDeletionCode'])
+        ->middleware('throttle:6,1');
     Route::delete('/account', [AccountController::class, 'destroy'])->middleware('throttle:writes');
 
     // Step 4 — fitness profile: create, view, edit, update weight/level.

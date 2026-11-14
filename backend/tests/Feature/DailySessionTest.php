@@ -5,23 +5,20 @@ namespace Tests\Feature;
 use App\Models\DailySession;
 use App\Models\DailySessionFood;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\EmailOtpTestHelpers;
 use Tests\TestCase;
 
 class DailySessionTest extends TestCase
 {
     use RefreshDatabase;
+    use EmailOtpTestHelpers;
 
     private function registerAthlete(string $email = 'session@gmail.com'): array
     {
-        $response = $this->postJson('/api/auth/register', [
-            'name' => 'Track Athlete',
-            'email' => $email,
-            'password' => 'test-password-123',
-        ])->assertCreated();
-
+        $response = $this->registerWithOtp('Track Athlete', $email);
         app('auth')->forgetGuards();
 
-        return ['Authorization' => 'Bearer '.$response->json('token')];
+        return ['Authorization' => 'Bearer '.$response['token']];
     }
 
     public function test_today_session_lifecycle_preserves_existing_values_on_partial_post(): void

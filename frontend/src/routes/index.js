@@ -20,16 +20,12 @@ const PAGE_LOADERS = {
   '/preview': () => import('../pages/Preview/Preview.svelte'),
   '/privacy': () => import('../pages/Legal/Privacy.svelte'),
   '/terms': () => import('../pages/Legal/Terms.svelte'),
-  '/forgot-password': () => import('../pages/Auth/ForgotPassword.svelte'),
-  '/reset-password': () => import('../pages/Auth/ResetPassword.svelte'),
-  '/verify-email': () => import('../pages/Auth/VerifyEmail.svelte'),
 };
 
 const VIEW_LOADERS = {
   login: () => import('../pages/Login/Login.svelte'),
   register: () => import('../pages/Register/Register.svelte'),
   onboarding: () => import('../pages/Onboarding/Onboarding.svelte'),
-  'verify-email': () => import('../pages/Auth/VerifyEmail.svelte'),
   'not-found': () => import('../pages/NotFound/NotFound.svelte'),
 };
 

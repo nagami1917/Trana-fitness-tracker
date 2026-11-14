@@ -8,7 +8,12 @@ initialize a new empty project; see `supabase/README.md`.
 ## Tables
 
 ### `users` (+ `sessions`)
-Laravel's default user table: name, email (unique), password (bcrypt), remember token.
+Laravel user table: name, email (unique), nullable password hash (legacy-only;
+new passwordless users have no password), email verification time, and remember
+token. Authentication uses short-lived email OTP challenges. The
+`email_otp_challenges` table stores a keyed HMAC of each six-digit code, expiry,
+attempt count, purpose, and resend-window metadata. RLS is enabled and Data API
+access is revoked; codes are never stored in plaintext.
 
 ### `fitness_profiles`
 One row per athlete, auto-created on first use (`User::ensureProfile()`).

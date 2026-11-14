@@ -18,16 +18,12 @@
   const isRegisterRoute = $derived($route === '/register');
   // Sign-in pages: only meaningful while signed out.
   const isAuthRoute = $derived(isLoginRoute || isRegisterRoute);
-  // Legal + recovery + interactive preview pages: viewable signed-in or signed-out, outside the shell.
-  const GUEST_PAGES = ['/preview', '/privacy', '/terms', '/forgot-password', '/reset-password', '/verify-email'];
+  // Legal pages + calculator preview: viewable signed-in or signed-out, outside the shell.
+  const GUEST_PAGES = ['/preview', '/privacy', '/terms'];
   const isGuestPage = $derived(GUEST_PAGES.includes($route));
   const isPublicRoute = $derived(isAuthRoute || isGuestPage);
   const isOnboardingRoute = $derived($route === '/onboarding');
   const needsOnboarding = $derived(Boolean($session && $profile && $profile.onboarded === false));
-  // Email-verification gate — mirrors the onboarding pattern. Pre-existing
-  // accounts are grandfathered as verified server-side.
-  const needsVerify = $derived(Boolean($session && !$session.email_verified_at));
-
   const targetSpec = $derived.by(() => {
     if (!$session) {
       if (isRegisterRoute) return { kind: 'view', key: 'register' };
@@ -35,7 +31,6 @@
       return { kind: 'view', key: 'login' };
     }
     if (isGuestPage) return { kind: 'route', key: $route };
-    if (needsVerify) return { kind: 'view', key: 'verify-email' };
     if (isOnboardingRoute) return { kind: 'view', key: 'onboarding' };
     return { kind: 'route', key: $route };
   });
@@ -77,12 +72,7 @@
       return;
     }
     if ($session && isAuthRoute) {
-      navigate(needsVerify ? '/verify-email' : needsOnboarding ? '/onboarding' : '/', { replace: true });
-      return;
-    }
-    // Verification before onboarding; privacy/terms stay readable meanwhile.
-    if (needsVerify && !isGuestPage) {
-      navigate('/verify-email', { replace: true });
+      navigate(needsOnboarding ? '/onboarding' : '/', { replace: true });
       return;
     }
     if (needsOnboarding && !isOnboardingRoute && !isGuestPage) navigate('/onboarding', { replace: true });
@@ -144,7 +134,7 @@
   {:else}
     {@render routePending()}
   {/if}
-{:else if isGuestPage || needsVerify}
+{:else if isGuestPage}
   <PublicLayout>
     {#if ActiveComponent}
       <ActiveComponent />
