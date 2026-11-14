@@ -5,17 +5,23 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Models\WeightLog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\Support\EmailOtpTestHelpers;
+use Tests\Support\GoogleAuthTestHelpers;
 use Tests\TestCase;
 
 class WeightLogTest extends TestCase
 {
     use RefreshDatabase;
-    use EmailOtpTestHelpers;
+    use GoogleAuthTestHelpers;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->prepareGoogleAuth();
+    }
 
     private function registerAthlete(string $email = 'weight@gmail.com'): array
     {
-        $response = $this->registerWithOtp('Weight Athlete', $email);
+        $response = $this->createGoogleAccount('Weight Athlete', $email);
         app('auth')->forgetGuards();
 
         return ['Authorization' => 'Bearer '.$response['token']];

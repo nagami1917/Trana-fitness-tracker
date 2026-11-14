@@ -1,4 +1,4 @@
-/** Exercise passwordless email-code sign-in with a mocked API boundary. */
+/** Exercise Google-only sign-in with a mocked Identity Services and API boundary. */
 import assert from 'node:assert/strict';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,6 +13,7 @@ const bundle = await build({
   envFile: false,
   logLevel: 'silent',
   plugins: [svelte()],
+  define: { 'import.meta.env.VITE_GOOGLE_CLIENT_ID': JSON.stringify('test-google-client-id') },
   build: {
     write: false,
     minify: false,
@@ -25,20 +26,45 @@ const window = new Window({ url: 'http://localhost/login' });
 const { document } = window;
 document.body.innerHTML = '<div id="app"></div>';
 const requests = [];
-let rejectOtp = true;
-const user = { id: 1, name: 'Test Athlete', email: 'athlete@gmail.com', email_verified_at: '2026-11-10T00:00:00Z' };
+const googleInitializations = [];
+let nonceCount = 0;
+let rejectCredential = true;
+const user = { id: 1, name: 'Test Athlete', email: 'athlete@example.com', email_verified_at: '2026-11-10T00:00:00Z' };
 const response = (data, status = 200) => ({
   ok: status >= 200 && status < 300,
   status,
   text: async () => JSON.stringify(data),
 });
+window.google = {
+  accounts: {
+    id: {
+      initialize: (options) => googleInitializations.push(options),
+      renderButton: (element, options) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.googleButton = 'true';
+        button.textContent = options.text === 'signin_with' ? 'Sign in with Google' : options.text;
+        button.addEventListener('click', () => {
+          googleInitializations.at(-1).callback({ credential: 'google-id-token-fixture' });
+        });
+        element.appendChild(button);
+      },
+    },
+  },
+};
 window.fetch = async (url, options = {}) => {
   const path = String(url).split('?')[0];
-  requests.push({ url: String(url), method: options.method, body: options.body && JSON.parse(options.body) });
-  if (path === '/api/auth/login') return response({ message: 'If that email has a TRANA account, a six-digit sign-in code is on its way.' }, 202);
-  if (path === '/api/auth/otp/verify') return rejectOtp
-    ? response({ message: 'That code is invalid or expired. Request a fresh one and try again.' }, 422)
-    : response({ token: 'fixture-token', user });
+  const body = options.body && JSON.parse(options.body);
+  requests.push({ url: String(url), method: options.method, body });
+  if (path === '/api/auth/google/nonce') return response({ nonce: `test-nonce-${++nonceCount}` });
+  if (path === '/api/auth/google') {
+    return rejectCredential
+      ? response({
+        message: 'Google sign-in could not be verified. Please try again.',
+        errors: { credential: ['Google sign-in could not be verified. Please try again.'] },
+      }, 422)
+      : response({ token: 'google-login-token', user });
+  }
   if (path === '/api/profile') return response({ data: { ...user, onboarded: true } });
   if (path === '/api/activities' || path === '/api/predictions') {
     return response({ data: [], meta: { current_page: 1, last_page: 1 } });
@@ -55,58 +81,42 @@ const waitFor = async (condition) => {
     if (condition()) return;
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
-  throw new Error('Timed out waiting for the email-code sign-in flow');
-};
-const fill = (element, value) => {
-  assert.ok(element, 'Expected a form field to exist');
-  element.value = value;
-  element.dispatchEvent(new window.Event('input', { bubbles: true }));
-  flush();
+  throw new Error('Timed out waiting for the Google sign-in flow');
 };
 const click = (element) => { assert.ok(element); element.click(); flush(); };
 
 try {
   flush();
-  assert.equal(document.querySelector('#password'), null, 'The passwordless sign-in form must not ask for a password.');
-  assert.match(document.body.textContent, /No password needed/);
-  assert.match(document.body.textContent, /never asks for your Google password/i);
+  assert.equal(document.querySelector('#password'), null, 'Sign-in must not ask for a TRANA or Google password.');
+  assert.equal(document.querySelector('#email'), null, 'Sign-in must not request an email outside the Google prompt.');
+  assert.equal(document.querySelector('#otp-code'), null, 'Sign-in must not ask for an emailed code.');
+  assert.match(document.body.textContent, /Sign in securely with your Google account/i);
+  assert.match(document.body.textContent, /never asks for or stores it/i);
 
-  fill(document.querySelector('#email'), user.email);
-  click(document.querySelector('button[type="submit"]'));
-  await waitFor(() => document.querySelector('#otp-code'));
+  await waitFor(() => document.querySelector('[data-google-button]'));
+  assert.equal(googleInitializations[0].client_id, 'test-google-client-id');
+  assert.equal(googleInitializations[0].nonce, 'test-nonce-1');
+  assert.equal(googleInitializations[0].ux_mode, 'popup');
 
-  const loginRequests = requests.filter((request) => request.url === '/api/auth/login');
-  assert.equal(loginRequests.length, 1);
-  assert.equal(loginRequests[0].method, 'POST');
-  assert.deepEqual(loginRequests[0].body, { email: user.email });
-  assert.equal(window.localStorage.getItem('trana.token'), null, 'No session is created until the OTP is verified.');
+  click(document.querySelector('[data-google-button]'));
+  await waitFor(() => document.body.textContent.includes('Google sign-in could not be verified'));
+  assert.equal(window.localStorage.getItem('trana.token'), null, 'A rejected Google credential must not create a session.');
+  await waitFor(() => document.querySelector('[data-google-button]') && nonceCount === 2);
 
-  const otpInput = document.querySelector('#otp-code');
-  assert.equal(otpInput.type, 'text', 'OTP must remain text so leading zeroes are preserved.');
-  assert.equal(otpInput.inputMode, 'numeric');
-  assert.equal(otpInput.autocomplete, 'one-time-code');
-  assert.equal(otpInput.maxLength, 6);
-  assert.equal(otpInput.pattern, '[0-9][0-9][0-9][0-9][0-9][0-9]');
-  fill(otpInput, '012345');
-
-  click(document.querySelector('form button[type="submit"]'));
-  await waitFor(() => document.body.textContent.includes('That code is invalid or expired'));
-  assert.equal(window.localStorage.getItem('trana.token'), null);
-  assert.equal(otpInput.value, '012345', 'A rejected code stays available for correction.');
-
-  rejectOtp = false;
-  click(document.querySelector('form button[type="submit"]'));
+  rejectCredential = false;
+  click(document.querySelector('[data-google-button]'));
   await waitFor(() => window.location.pathname === '/');
 
-  const otpRequests = requests.filter((request) => request.url === '/api/auth/otp/verify');
-  assert.equal(otpRequests.length, 2);
-  for (const request of otpRequests) {
+  const googleRequests = requests.filter((request) => request.url === '/api/auth/google');
+  assert.equal(googleRequests.length, 2);
+  for (const request of googleRequests) {
     assert.equal(request.method, 'POST');
-    assert.deepEqual(request.body, { email: user.email, code: '012345' });
+    assert.deepEqual(request.body, { credential: 'google-id-token-fixture' });
   }
-  assert.equal(window.localStorage.getItem('trana.token'), 'fixture-token');
+  assert.equal(window.localStorage.getItem('trana.token'), 'google-login-token');
+  assert.equal(requests.filter((request) => request.url === '/api/auth/google/nonce').length, 2);
   assert.equal(requests.some((request) => JSON.stringify(request.body || {}).includes('password')), false);
-  console.log('Passwordless OTP sign-in, leading-zero input, retry and session checks passed');
+  console.log('Google-only sign-in, nonce refresh, retry and session checks passed');
 } finally {
   await window.destroyLoginTest();
   await window.happyDOM.abort();

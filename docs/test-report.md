@@ -6,14 +6,16 @@
 > [`architecture.md`](architecture.md).
 
 **Last verified backend/ML baseline:** main `a44715b` (CI run
-[`43007197431`](https://github.com/nagami1917/Trana-fitness-tracker/actions/runs/43007197431) — all jobs green). This branch replaces password/link authentication with email OTP; historical backend/ML counts below do not cover that change.
+[`43007197431`](https://github.com/nagami1917/Trana-fitness-tracker/actions/runs/43007197431) — all jobs green). This branch replaces email-code registration/sign-in with Google OIDC; the older baseline does not cover the Google auth changes.
 
-**Branch-specific validation (2026-11-10):** `frontend/npm test` passed
-(`svelte-check`: 0 errors, 0 warnings; all 22 frontend smoke scripts passed),
-`npm run build` passed, and `python supabase/tests/check_baseline.py` passed.
-The production build still reports the existing large MapLibre chunk warning.
-Backend PHPUnit and PHP migration smoke scripts were not run because PHP and
-Composer are not installed in this environment.
+**Branch validation (2026-11-10):** `frontend/npm test` passed (`svelte-check`:
+0 errors and 0 warnings; all 22 frontend smoke scripts passed), and
+`frontend/npm run build` completed successfully. Vite emitted a bundle-size
+advisory for the large MapLibre chunk. `python supabase/tests/check_baseline.py`
+and Python syntax compilation of the backend HTTP smoke script passed. No live
+Google sign-in claim is made until a real Google OAuth Web client is configured
+and tested. PHP and Composer are unavailable in this workspace, so PHP lint,
+migrations and PHPUnit require CI.
 
 ---
 
@@ -21,57 +23,65 @@ Composer are not installed in this environment.
 
 | Layer | Tooling | Count | Runs |
 | --- | --- | --- | --- |
-| Backend (Laravel) | PHPUnit via `php artisan test` (SQLite `:memory:`) | **82 tests / 13 feature files** | CI `API (Laravel)` on every push & PR |
+| Backend (Laravel) | PHPUnit via `php artisan test` (SQLite `:memory:`) | **103 declared test methods / 16 feature files** | CI `API (Laravel)` on every push & PR; PHP unavailable locally |
 | Backend (HTTP smoke) | `scripts/test_stateless_api_http.py` + live-server boot checks | 2 suites | CI `API (Laravel)` |
 | Frontend | Node smoke scripts (`happy-dom` + Vite lib build) | **22 scripts** | CI `Frontend (Svelte + Tailwind)`; all passed on this branch |
 | Frontend static | `svelte-check` (types, runes, accessibility) + `vite build` | 0 errors required | CI `Frontend (Svelte + Tailwind)` |
 | ML (FastAPI) | `pytest -q tests` | **48 tests / 4 files** | CI `ML (FastAPI + scikit-learn)` |
 | ML (regression gate) | `evaluation.sanity_check` + `evaluation.geolife_validation` | metric thresholds vs GeoLife | CI `ML` — failure fails the build |
 
-The last green main baseline counted 82 backend + 48 ML + 10 frontend smoke
-suites. This branch's frontend suite now has 22 smoke scripts; backend and ML
-counts above remain historical until branch CI runs (plus lint, baseline and
-migration scripts, and the scheduled production [health workflow](../.github/workflows/health.yml)).
+The older green main baseline counted 82 backend tests, 48 ML tests and 10
+frontend smoke suites. This branch has 22 frontend scripts and 103 declared
+backend test methods in source; neither backend execution nor the current ML
+suite is claimed as passing until branch CI runs (along with lint, baseline and
+migration scripts, plus the scheduled production [health workflow](../.github/workflows/health.yml)).
 
 ---
 
-## 2. Backend inventory (last green main: 82 tests; current branch not run)
+## 2. Backend inventory (current source: 103 declared test methods; not run locally)
 
-| File | Tests | What it pins down |
+| File | Methods | What it pins down |
 | --- | ---: | --- |
-| `AdminAccessTest` | 12 | Admin console: guest 401, athlete 403 on every admin route, KPI structure, user search/suspension lifecycle (suspend → sessions die → login refused → reactivate), self-suspend blocked, read-only model viewer (200/503), error triage validation, `admin:promote` CLI, login exposes `role` |
-| `ProfileApiTest` | 11 | Profile read/update, units, sweat profile, onboarding payload |
-| `EnergyExpenditureTest` | 11 | ACSM energy path, MET derivation, bounds/clamping |
-| `PredictionCreationTest` | 9 | Plan creation, duration prediction payload, saved plans, sport-type handling |
-| `ErrorMonitoringTest` | 8 | Exception capture into `error_logs`, fingerprinting/dedup, client-error intake + throttle, `errors:report` command, status triage API |
-| `LiveAccountTest` | 6 | Full account lifecycle over HTTP: Gmail-only registration code → OTP verification → passwordless login → token use → logout |
+| `AccountDeletionTest` | 5 | Separate email-code deletion safeguard, exact `DELETE` confirmation, expiry, attempt limit, resend cooldown, production mail configuration |
+| `ActivityUpdateTest` | 2 | Activity ownership and metric recalculation |
+| `AdminAccessTest` | 12 | Admin role checks, KPI structure, suspension lifecycle (Google sign-in refused until reactivated), self-suspend prevention, triage, promotion, role in session payload |
 | `CalibrationRegressionTest` | 6 | Wearable calibration: sample import → personal factor learned (0.5×–2.0× clamp), regression stability |
-| `WeightLogTest` | 5 | Weight timeline API: log, list order, delete, validation |
-| `EmailOtpAuthTest` | 13 (not run here) | OTP registration/sign-in, code expiry/replay/attempt limits, anti-enumeration, legacy-token revocation, passwordless payloads, mail configuration, per-email limits/purpose changes, and deletion confirmation |
-| `NotificationCenterTest` | 3 | Notification synthesis, unread counts, mark-read |
-| `StatelessApiTest` | 2 | Bearer-token statelessness of the API surface |
-| `GmailOnlyRegistrationTest` | 2 | Exact-suffix `@gmail.com` acceptance, other domains rejected, email stored lowercase after OTP verification |
+| `DailySessionTest` | 3 | Daily session and food lifecycle, partial updates, ownership |
 | `DatabaseConfigurationTest` | 2 | DB config/baseline integrity |
+| `EnergyExpenditureTest` | 13 | ACSM energy path, MET derivation, bounds/clamping |
+| `ErrorMonitoringTest` | 8 | Exception capture, fingerprinting/dedup, client-error intake + throttle, `errors:report`, status triage |
+| `GoogleAuthTest` | 9 | RSA ID-token signature, issuer/audience/expiry/verified email, nonce replay protection, Google-sub linking, workspace emails, suspended accounts, no passwords, missing client config |
+| `LiveAccountTest` | 6 | Google account lifecycle, bearer-token use/logout, per-user isolation, pagination, health and seeding behavior |
+| `NotificationCenterTest` | 3 | Notification synthesis, unread counts, mark-read |
+| `PredictionCreationTest` | 11 | Plan creation, duration prediction payload, saved plans, sport-type handling |
+| `ProfileApiTest` | 11 | Profile read/update, units, sweat profile, onboarding payload |
+| `StatelessApiTest` | 2 | Browser-origin bearer-token statelessness without cookie/CSRF auth |
+| `TrainingFeaturesTest` | 5 | Training feature calculations and account isolation |
+| `WeightLogTest` | 5 | Weight timeline API: log, list order, delete, validation |
 
-**Conventions:** every test boots a fresh schema (`RefreshDatabase`), auth
-guards are cleared between role switches (`forgetGuards()`), and no test
-requires network access.
+The method counts above are source inventory, not a test-run result. PHP and
+Composer are unavailable locally; CI is required to run PHP lint, migrations and
+PHPUnit. Google JWT tests use local RSA fixtures and fake the Google signing-key
+HTTP endpoint; they do not need a real Google client or outbound network.
+
+**Conventions:** tests use `RefreshDatabase`, auth guards are cleared between
+role switches (`forgetGuards()`), and external services are mocked.
 
 ---
 
-## 3. Frontend smoke inventory (10 scripts)
+## 3. Frontend smoke inventory (22 scripts)
 
 | Script | What it verifies |
 | --- | --- |
-| `api-config-smoke` | API base URL/proxy configuration invariants |
+| `api-config-smoke` | API base URL/proxy and Google OAuth client-ID configuration invariants |
 | `live-api-smoke` | Live API contract: pagination, retry, session handling (mocked) |
 | `proxy-smoke` | Vite same-origin `/api` proxy wiring |
 | `smoke` | Core fueling math & sanity guards (duration/energy/carb/sodium/fluid tables, cold-start anchors) |
 | `draw-smoke` | **The draw-test**: road-routing profiles & waypoint thinning, straight-line fallback contract (zero network calls without an ORS key), and road-snapping success/failure paths against a mocked Overpass API |
 | `location-smoke` | Location detection, privacy rules, cancellation, error paths |
 | `location-ui-smoke` | Location input & onboarding/profile/settings save flows (UI) |
-| `login-ui-smoke` | Passwordless sign-in code request, leading-zero input, invalid-code retry, and verified session |
-| `register-ui-smoke` | Gmail-only registration, code verification, retry behavior, and verified session |
+| `login-ui-smoke` | Google-only sign-in button, nonce issuance/refresh, rejected credential retry and session creation |
+| `register-ui-smoke` | Google-only account creation, verified Workspace email support, nonce retry and onboarding session |
 | `render-smoke` | **Every route renders** (11 routes incl. `/admin`) with fixture data; fails on `NaN`/`undefined`/`[object Object]` leaks; screen inventory output |
 | `error-monitor-smoke` | Client error mirror: dedupe, payload shape, wiring, buffer cap |
 
@@ -106,7 +116,7 @@ Three parallel jobs on every push/PR (`.github/workflows/ci.yml`):
 
 | Job | Steps (abridged) |
 | --- | --- |
-| **Frontend (Svelte + Tailwind)** | `npm ci` → `svelte-check` → `vite build` → `npm run smoke` (all 10) |
+| **Frontend (Svelte + Tailwind)** | `npm ci` → `svelte-check` → `vite build` → `npm run smoke` (all 22) |
 | **ML (FastAPI + scikit-learn)** | deps → retrain → sanity check → **GeoLife validation gate** → `pytest` (failures surfaced as `::error::` annotations: assertion lines first, then FAILED summary, then resolved versions) |
 | **API (Laravel)** | PHP lint → Supabase baseline/security-migration checks → config checks → `composer validate` + resolve → live-server boot (`/up`, `/api/docs`) → bearer-auth HTTP suite → `php artisan test` (failures → annotations **and** full log posted to the PR as `<!-- trana-test-log -->`) |
 
@@ -127,8 +137,9 @@ intact, and — once the repository variable `ML_HEALTH_URL` is set — ML
 
 | Professor item / feature | Covered by |
 | --- | --- |
-| Gmail-only registration | `GmailOnlyRegistrationTest` + `LiveAccountTest` + `render-smoke` (register screen) |
-| Passwordless email auth | `EmailOtpAuthTest` + `login-ui-smoke` + `register-ui-smoke` |
+| Google account creation/sign-in | `GoogleAuthTest` + `LiveAccountTest` + `login-ui-smoke` + `register-ui-smoke` |
+| No TRANA/Google password collection | `GoogleAuthTest` + both auth UI smokes |
+| Google verified-email linking | `GoogleAuthTest` (existing accounts + Workspace domains) |
 | Profile & onboarding | `ProfileApiTest`, `location-ui-smoke` |
 | Duration prediction & plans | `PredictionCreationTest` + ML GeoLife gate |
 | Energy expenditure | `EnergyExpenditureTest` |
@@ -139,7 +150,7 @@ intact, and — once the repository variable `ML_HEALTH_URL` is set — ML
 | Notification center | `NotificationCenterTest` |
 | Error monitoring (all 3 services) | `ErrorMonitoringTest` + `error-monitor-smoke` + `test_error_monitor` |
 | Admin module (server-side roles) | `AdminAccessTest` (12) + `/admin` render + role-gated nav |
-| Account deletion (self-service only) | `EmailOtpAuthTest` (email code + exact `DELETE` confirmation) |
+| Account deletion (self-service only) | `AccountDeletionTest` (email code + exact `DELETE` confirmation) |
 | Database/baseline integrity | `DatabaseConfigurationTest` + CI baseline scripts |
 
 ---
@@ -167,7 +178,7 @@ and 0 errors.
 - [x] Avatar menu and notification panel close via explicit close controls
 - [x] Focus-visible styling present on interactive elements (buttons, links, inputs)
 - [x] Keyboard path: sidebar nav → page content → forms → table actions
-- [ ] OTP email/code forms have been checked for accessibility after the passwordless auth rewrite
+- [ ] Google Identity Services button, popup cancellation and auth feedback have been checked with a screen reader
 - [x] Status conveyed by text as well as colour (suspended/active badges, error kinds)
 - [ ] Screen-reader pass with a live AT tool (manual, see §8)
 
@@ -211,7 +222,7 @@ cd frontend
 npm ci
 npx svelte-check --output human   # 0 errors, 0 a11y warnings
 npm run build
-npm run smoke                     # all frontend smoke scripts, including OTP UI coverage
+npm run smoke                     # all frontend smoke scripts, including Google auth UI coverage
 
 # Backend (PHP 8.3+ / composer)
 cd backend

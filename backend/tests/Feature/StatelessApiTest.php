@@ -4,14 +4,19 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Notification;
-use Tests\Support\EmailOtpTestHelpers;
+use Tests\Support\GoogleAuthTestHelpers;
 use Tests\TestCase;
 
 class StatelessApiTest extends TestCase
 {
     use RefreshDatabase;
-    use EmailOtpTestHelpers;
+    use GoogleAuthTestHelpers;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->prepareGoogleAuth();
+    }
 
     private const FRONTEND = [
         'Origin' => 'http://localhost:5173',
@@ -27,16 +32,13 @@ class StatelessApiTest extends TestCase
         app()->instance('env', 'local');
 
         try {
-            Notification::fake();
-            $requested = $this->postJson('/api/auth/register', [
-                'name' => 'Browser Athlete',
-                'email' => 'browser@gmail.com',
-            ], self::FRONTEND)->assertAccepted();
-            $requested->assertCookieMissing(config('session.cookie'));
-            $code = $this->sentOtpCodeFor('browser@gmail.com');
-            $verified = $this->postJson('/api/auth/otp/verify', [
-                'email' => 'browser@gmail.com',
-                'code' => $code,
+            $nonce = $this->requestGoogleNonce(self::FRONTEND);
+            $verified = $this->postJson('/api/auth/google', [
+                'credential' => $this->googleCredential($nonce, [
+                    'sub' => 'browser-google-sub',
+                    'email' => 'browser@example.com',
+                    'name' => 'Browser Athlete',
+                ]),
             ], self::FRONTEND)->assertOk();
             $verified->assertCookieMissing(config('session.cookie'));
             $token = $verified->json('token');
@@ -56,11 +58,11 @@ class StatelessApiTest extends TestCase
         // accept that session alone nor prefer it over a different bearer user.
         $this->assertSame([], config('sanctum.guard'));
         $sessionUser = User::create([
-            'name' => 'Session User', 'email' => 'session@gmail.com', 'password' => 'test-password-123',
+            'name' => 'Session User', 'email' => 'session@gmail.com', 'password' => null,
         ]);
         $sessionUser->forceFill(['email_verified_at' => now()])->save();
         $tokenUser = User::create([
-            'name' => 'Bearer User', 'email' => 'bearer@gmail.com', 'password' => 'test-password-123',
+            'name' => 'Bearer User', 'email' => 'bearer@gmail.com', 'password' => null,
         ]);
         $tokenUser->forceFill(['email_verified_at' => now()])->save();
         $token = $tokenUser->createToken('test')->plainTextToken;

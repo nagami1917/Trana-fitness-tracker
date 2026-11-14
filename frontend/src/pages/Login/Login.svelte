@@ -1,73 +1,13 @@
 <script>
-  import { onDestroy } from 'svelte';
-  import { Mail, Sparkles, ArrowRight, ArrowLeft, LoaderCircle, Flame, Timer, Salad, KeyRound, Inbox } from 'lucide-svelte';
-  import { requestLoginCode, verifyOtpAndSignIn, notify, profile } from '../../stores/index.js';
+  import { Flame, Salad, Sparkles, Timer } from 'lucide-svelte';
+  import GoogleSignInButton from '../../components/auth/GoogleSignInButton.svelte';
+  import { notify, profile } from '../../stores/index.js';
   import { navigate, link } from '../../lib/router.js';
 
-  let email = $state('');
-  let code = $state('');
-  let stage = $state('email');
-  let loading = $state(false);
-  let error = $state('');
-  let resendSeconds = $state(0);
-  let resendTimer;
-
-  function startResendCooldown() {
-    clearInterval(resendTimer);
-    resendSeconds = 60;
-    resendTimer = setInterval(() => {
-      if (resendSeconds <= 1) {
-        clearInterval(resendTimer);
-        resendSeconds = 0;
-      } else {
-        resendSeconds -= 1;
-      }
-    }, 1000);
+  async function onGoogleSuccess() {
+    notify('Google sign-in successful. Let’s fuel your next move.');
+    navigate($profile?.onboarded === false ? '/onboarding' : '/');
   }
-
-  function useDifferentEmail() {
-    clearInterval(resendTimer);
-    resendSeconds = 0;
-    code = '';
-    error = '';
-    stage = 'email';
-  }
-
-  async function sendCode(event) {
-    event?.preventDefault();
-    error = '';
-    loading = true;
-    try {
-      const normalizedEmail = email.trim().toLowerCase();
-      const data = await requestLoginCode(normalizedEmail);
-      email = normalizedEmail;
-      code = '';
-      stage = 'code';
-      startResendCooldown();
-      notify(data?.message || 'If that email has a TRANA account, a six-digit sign-in code is on its way.');
-    } catch (err) {
-      error = err.message || 'Could not request a sign-in code.';
-    } finally {
-      loading = false;
-    }
-  }
-
-  async function verifyCode(event) {
-    event.preventDefault();
-    error = '';
-    loading = true;
-    try {
-      await verifyOtpAndSignIn({ email: email.trim().toLowerCase(), code: code.trim() });
-      notify('Welcome back! Let’s fuel your next move.');
-      navigate($profile?.onboarded === false ? '/onboarding' : '/');
-    } catch (err) {
-      error = err.message || 'That code could not be verified.';
-    } finally {
-      loading = false;
-    }
-  }
-
-  onDestroy(() => clearInterval(resendTimer));
 </script>
 
 <svelte:head><title>Sign in — TRANA</title></svelte:head>
@@ -127,83 +67,18 @@
 
   <section class="flex items-center justify-center px-6 py-10 sm:px-12">
     <div class="w-full max-w-sm">
-      {#if stage === 'email'}
-        <h2 class="text-2xl">Welcome back</h2>
-        <p class="mt-1 text-sm font-semibold text-ink-400">Sign in securely with a one-time email code.</p>
+      <h2 class="text-2xl">Welcome back</h2>
+      <p class="mt-1 text-sm font-semibold text-ink-400">Sign in securely with your Google account.</p>
 
-        <form class="mt-7 space-y-4" onsubmit={sendCode}>
-          <div>
-            <label class="label" for="email">Email</label>
-            <div class="relative">
-              <Mail size={16} class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink-400" />
-              <input id="email" type="email" class="input pl-11" bind:value={email} placeholder="you@gmail.com" autocomplete="email" maxlength="255" required />
-            </div>
-            <p class="mt-1.5 text-[11px] font-semibold leading-snug text-ink-400">
-              If this address has a TRANA account, we’ll email a six-digit code. No password needed.
-            </p>
-          </div>
+      <div class="mt-7">
+        <GoogleSignInButton text="signin_with" onSuccess={onGoogleSuccess} />
+      </div>
 
-          {#if error}
-            <p class="rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-600" role="alert">{error}</p>
-          {/if}
+      <p class="mt-4 text-center text-[11px] font-semibold leading-relaxed text-ink-400">
+        Google handles your password. TRANA never asks for or stores it; we receive only the verified account details needed to sign you in.
+      </p>
 
-          <button type="submit" class="btn-primary w-full !py-3" disabled={loading || !email.trim()}>
-            {#if loading}<LoaderCircle size={17} class="animate-spin" /> Sending…{:else}Email me a sign-in code <ArrowRight size={17} />{/if}
-          </button>
-        </form>
-
-        <p class="mt-4 text-center text-[11px] font-semibold leading-relaxed text-ink-400">
-          TRANA never asks for your Google password.
-        </p>
-      {:else}
-        <span class="pill"><Inbox size={12} /> Check your email</span>
-        <h2 class="mt-3 text-2xl">Enter your sign-in code</h2>
-        <p class="mt-1 text-sm font-semibold leading-relaxed text-ink-400">
-          If <span class="font-extrabold text-ink-700">{email}</span> has a TRANA account, a six-digit code is on its way.
-          Check Spam or Promotions too. The code expires in 10 minutes.
-        </p>
-
-        <form class="mt-5 space-y-4" onsubmit={verifyCode}>
-          <div>
-            <label class="label" for="otp-code">Six-digit code</label>
-            <div class="relative">
-              <KeyRound size={16} class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink-400" />
-              <input
-                id="otp-code"
-                type="text"
-                class="input pl-11 text-center text-lg font-extrabold tracking-[0.35em]"
-                bind:value={code}
-                placeholder="000000"
-                inputmode="numeric"
-                autocomplete="one-time-code"
-                pattern="[0-9][0-9][0-9][0-9][0-9][0-9]"
-                minlength="6"
-                maxlength="6"
-                aria-describedby="otp-help"
-                required
-              />
-            </div>
-            <p id="otp-help" class="mt-1.5 text-[11px] font-semibold text-ink-400">Use the newest code you received. Each code works once.</p>
-          </div>
-
-          {#if error}
-            <p class="rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-600" role="alert">{error}</p>
-          {/if}
-
-          <button type="submit" class="btn-primary w-full !py-3" disabled={loading || code.trim().length !== 6}>
-            {#if loading}<LoaderCircle size={17} class="animate-spin" /> Verifying…{:else}Verify & sign in <ArrowRight size={17} />{/if}
-          </button>
-        </form>
-
-        <button type="button" class="btn-ghost mt-3 w-full justify-center" onclick={useDifferentEmail} disabled={loading}>
-          <ArrowLeft size={15} /> Use a different email
-        </button>
-        <button type="button" class="mt-3 w-full text-center text-xs font-extrabold text-brand-600 disabled:text-ink-300" onclick={sendCode} disabled={loading || resendSeconds > 0}>
-          {#if resendSeconds > 0}<Timer size={13} class="mr-1 inline" /> Send another code in {resendSeconds}s{:else}Send another code <ArrowRight size={13} class="inline" />{/if}
-        </button>
-      {/if}
-
-      <p class="mt-6 text-center text-sm font-semibold text-ink-400">
+      <p class="mt-7 text-center text-sm font-semibold text-ink-400">
         New to TRANA?
         <button class="font-extrabold text-brand-600 transition hover:text-brand-700" onclick={() => navigate('/register')}>
           Create an account
@@ -218,7 +93,7 @@
       </p>
 
       <p class="mt-6 text-center text-[11px] font-semibold leading-relaxed text-ink-400">
-        Your account data is stored through the TRANA API.
+        Your account data is stored securely through the TRANA API.
       </p>
     </div>
   </section>

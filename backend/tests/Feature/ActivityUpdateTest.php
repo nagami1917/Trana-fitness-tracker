@@ -4,17 +4,23 @@ namespace Tests\Feature;
 
 use App\Models\Activity;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\Support\EmailOtpTestHelpers;
+use Tests\Support\GoogleAuthTestHelpers;
 use Tests\TestCase;
 
 class ActivityUpdateTest extends TestCase
 {
     use RefreshDatabase;
-    use EmailOtpTestHelpers;
+    use GoogleAuthTestHelpers;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->prepareGoogleAuth();
+    }
 
     private function registerAthlete(string $email): string
     {
-        return $this->registerWithOtp('Athlete', $email)['token'];
+        return $this->createGoogleAccount('Athlete', $email)['token'];
     }
 
     private function bearer(string $token): array

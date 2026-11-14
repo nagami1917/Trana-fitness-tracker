@@ -1,7 +1,7 @@
 # TRANA API reference
 
 Base URL: `https://<your-api>/api`
-Auth: `Authorization: Bearer <sanctum-token>` except for `/health`, `/docs`, `/auth/register`, `/auth/login`, and `/auth/otp/verify`.
+Auth: `Authorization: Bearer <sanctum-token>` except for `/health`, `/docs`, `/auth/google/nonce`, and `/auth/google`.
 The API does not authenticate with session cookies or use CSRF cookies. Do not
 add cookie-based API authentication without enabling appropriate CSRF protection.
 Responses are JSON; collections are wrapped in `{ "data": [...] }`.
@@ -16,57 +16,58 @@ This does not check FastAPI or verify that all migrations are applied.
 
 ## Auth
 
-TRANA uses **passwordless email OTP**. It never asks for, receives, or stores a
-Google/Gmail password; auth and account-erasure endpoints reject a `password`
-field. Email codes are six digits, expire after 10 minutes, are
-single-use, and are stored as keyed hashes. Five wrong attempts invalidate a
-code. Re-sending an active code for the same purpose is delayed by 60 seconds;
-requesting a different-purpose code replaces the active challenge. No more than five
-codes can be sent to one email per hour, including codes that were used
-successfully. Configure a real SMTP/transactional mail provider for the
-Laravel API; production refuses the development-only `log` and `array` mailers.
+TRANA uses **Google sign-in only** for both account creation and sign-in. The
+browser uses Google's Identity Services button and sends a signed OIDC ID token
+to Laravel. TRANA verifies the token signature against Google's rotating keys,
+checks the issuer, configured audience, expiry, verified email and one-time
+nonce, then issues a Sanctum bearer token. TRANA never collects a Google
+password and has no separate TRANA password. A Google Workspace address is
+accepted when Google reports it as verified.
 
-### `POST /auth/register`
+The OAuth Web client ID is public browser configuration, not a secret. Set the
+same value as `VITE_GOOGLE_CLIENT_ID` in the frontend build and
+`GOOGLE_CLIENT_ID` in the Laravel environment. No Google client secret is used.
+A missing server setting or unavailable Google signing keys returns `503`.
+Auth requests are rate-limited by IP.
+
+### `POST /auth/google/nonce`
+
+Called before rendering the Google sign-in button. Returns a random nonce that
+expires after 10 minutes:
 ```json
-{ "name": "Nagami", "email": "nagami@gmail.com" }
+{ "nonce": "..." }
 ```
-`202` → `{ "message": "A six-digit code was sent to your email. It expires in 10 minutes." }`.
-The account and profile are created only after the code is verified. New sign-up
-is limited to `@gmail.com` addresses (case-insensitive; stored lowercase); other
-domains receive `422` on `email`. The request never accepts a password.
-`429` means the per-email send limit is active; `503` means mail delivery failed
-or is not configured.
+`503` means Google sign-in has not been configured on the server.
 
-### `POST /auth/login`
+### `POST /auth/google`
 ```json
-{ "email": "nagami@gmail.com" }
-```
-`202` always has the same generic message whether or not the account exists.
-For an eligible, active account, TRANA sends a six-digit code. Existing accounts
-with other email domains can still sign in. Suspended accounts receive `403`.
-
-### `POST /auth/otp/verify`
-```json
-{ "email": "nagami@gmail.com", "code": "042817" }
+{ "credential": "<Google OIDC ID token>" }
 ```
 `200` → `{ "token": "1|abc…", "user": { "id": 1, "name": "Nagami",
-"email": "nagami@gmail.com", "email_verified_at": "…" } }`. The code must be
-exactly six digits, including any leading zeroes. Wrong, expired, used, or
-exhausted codes receive `422`. Verification creates a new account when the
-challenge came from sign-up; otherwise it signs in the existing account and
-confirms its email address. Only a verified code creates a bearer token.
+"email": "nagami@example.org", "email_verified_at": "…" } }`. The token
+must be Google-signed with RS256, match the configured client ID and contain a
+fresh nonce issued by this API. Nonces are single-use. Google-verified email
+and stable subject (`sub`) claims identify the account. A new identity creates
+an account and profile; a verified email matching an existing TRANA account
+links it to that Google subject. Suspended accounts receive `403`; malformed,
+expired, unverified or replayed credentials receive `422`; conflicting account
+links receive `409`. The request never accepts a password.
 
 ### `GET /auth/me` → `{ user: {...} }` · `POST /auth/logout` → `{ message }`
 
-Authenticated routes require a verified email. Old tokens belonging to
-unverified accounts are revoked and must be replaced by an OTP sign-in.
+Authenticated routes require a verified email. Legacy tokens for unverified
+accounts are revoked and must be replaced with Google sign-in.
 
 ### Account erasure (authed)
 
-`POST /account/delete-code` emails a separate one-time code before deletion.
+`POST /account/delete-code` still emails a separate one-time confirmation code
+before deletion. This email code is **only** for account erasure; it is not used
+for registration or sign-in. Codes are six digits, expire after 10 minutes,
+are single-use and stored as keyed hashes. Five wrong attempts invalidate a
+code; resend requests have a 60-second cooldown and five-send hourly limit.
 `202` on send · `429` on cooldown/rate limit · `503` on mail failure.
 
-`DELETE /account` requires both the code and explicit confirmation:
+`DELETE /account` requires both the code and exact confirmation:
 ```json
 { "code": "042817", "confirmation": "DELETE" }
 ```
@@ -522,7 +523,7 @@ of their data first.
 | --- | --- |
 | 401 | Missing/invalid bearer token |
 | 404 | Not found **or** owned by another athlete |
-| 409 | The resource already exists (for example, `POST /profile` on an account that has one) |
+| 409 | The resource already exists or a Google account link conflicts with an existing account |
 | 422 | Validation — `{ message, errors: { field: [msg] } }` |
 | 429 | Rate limit (auth 10/min/IP, predictions 60/min/user, client-errors 60/min/IP) |
-| 503 | Database unavailable, ML service unavailable for predictions, or OTP email transport failed/misconfigured |
+| 503 | Database or ML service unavailable, Google OAuth misconfigured/signing keys unavailable, or account-deletion email transport failed |

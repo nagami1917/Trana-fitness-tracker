@@ -61,8 +61,7 @@ const fixturePlans = [
 const page = (data) => ({ data, meta: { current_page: 1, last_page: 1 } });
 globalThis.fetch = async (url) => {
   let body;
-  if (url === '/api/auth/login') body = { message: 'If an account exists, a code is on its way.' };
-  else if (url === '/api/auth/otp/verify') body = { token: 'test-token', user: fixtureUser };
+  if (url === '/api/auth/google') body = { token: 'test-token', user: fixtureUser };
   else if (url === '/api/profile') body = { data: fixtureProfile };
   else if (url.startsWith('/api/activities?')) body = page(fixtureActivities);
   else if (url.startsWith('/api/predictions?')) body = page(fixturePlans);
@@ -120,8 +119,7 @@ let failures = 0;
 
 try {
   const stores = await vite.ssrLoadModule('/src/stores/index.js');
-  await stores.requestLoginCode(fixtureUser.email);
-  await stores.verifyOtpAndSignIn({ email: fixtureUser.email, code: '123456' });
+  await stores.googleSignInAndContinue('fixture-google-id-token');
   stores.modelCard.set({ training_source: 'synthetic', version: 'test', corpus_rows: 10,
     metrics: { r2: 0.9, mape_pct: 10, mae_min: 2, interval_coverage_pct: 80, test_rows: 2 },
     feature_importance: {} });
@@ -319,8 +317,9 @@ try {
       const html = render(mod.default).body;
       assert.doesNotMatch(html, /Explore with demo data|demo@trana\.app/);
       assert.doesNotMatch(html, /type="password"/);
-      assert.match(html, /six-digit code/i);
-      assert.match(html, /No password/i);
+      assert.doesNotMatch(html, /six-digit code|email-code sign-in/i);
+      assert.match(html, /Google/i);
+      assert.match(html, /Google handles your password/i);
       console.log(`✔ /${name.toLowerCase().padEnd(9)} ${name.padEnd(11)} ${String(html.length).padStart(5)} chars`);
     } catch (error) {
       failures += 1;

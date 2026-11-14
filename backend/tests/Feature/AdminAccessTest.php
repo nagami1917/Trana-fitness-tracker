@@ -6,18 +6,24 @@ use App\Models\ErrorLog;
 use App\Models\User;
 use App\Services\MlClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\Support\EmailOtpTestHelpers;
+use Tests\Support\GoogleAuthTestHelpers;
 use Tests\TestCase;
 
 class AdminAccessTest extends TestCase
 {
     use RefreshDatabase;
-    use EmailOtpTestHelpers;
+    use GoogleAuthTestHelpers;
 
-    /** Register returns a fresh token; guards are cleared (they persist in-process). */
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->prepareGoogleAuth();
+    }
+
+    /** Google sign-in returns a fresh token; guards are cleared (they persist in-process). */
     private function registerAthlete(string $email, string $name = 'Athlete'): array
     {
-        $response = $this->registerWithOtp($name, $email);
+        $response = $this->createGoogleAccount($name, $email);
         app('auth')->forgetGuards();
 
         return ['id' => $response['user']['id'], 'token' => $response['token']];
@@ -129,9 +135,13 @@ class AdminAccessTest extends TestCase
         // which makes the SPA drop it automatically.
         $switch();
         $this->getJson('/api/auth/me', $victimAuth)->assertUnauthorized();
-        // And a fresh login is refused with a clear reason.
-        $this->postJson('/api/auth/login', [
-            'email' => 'suspended.athlete@gmail.com',
+        // A fresh Google identity for the suspended account is refused.
+        $nonce = $this->requestGoogleNonce();
+        $this->postJson('/api/auth/google', [
+            'credential' => $this->googleCredential($nonce, [
+                'sub' => 'trana-test-suspended.athlete@gmail.com',
+                'email' => 'suspended.athlete@gmail.com',
+            ]),
         ])->assertStatus(403)->assertJsonPath('message', 'This account has been suspended.');
 
         $switch();
@@ -142,7 +152,7 @@ class AdminAccessTest extends TestCase
         // The revoked token stays dead; a new login works again.
         $switch();
         $this->getJson('/api/auth/me', $victimAuth)->assertUnauthorized();
-        $this->assertSame('athlete', $this->loginWithOtp('suspended.athlete@gmail.com')['user']['role']);
+        $this->assertSame('athlete', $this->signInToGoogleAccount('suspended.athlete@gmail.com')['user']['role']);
     }
 
     public function test_suspension_middleware_refuses_a_live_session(): void
@@ -283,7 +293,7 @@ class AdminAccessTest extends TestCase
         $athlete = $this->registerAthlete('shaped.athlete@gmail.com');
         $this->makeAdmin($athlete['id']);
 
-        $response = $this->loginWithOtp('shaped.athlete@gmail.com');
+        $response = $this->signInToGoogleAccount('shaped.athlete@gmail.com');
         $this->assertSame('admin', $response['user']['role']);
     }
 }

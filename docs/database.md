@@ -8,12 +8,16 @@ initialize a new empty project; see `supabase/README.md`.
 ## Tables
 
 ### `users` (+ `sessions`)
-Laravel user table: name, email (unique), nullable password hash (legacy-only;
-new passwordless users have no password), email verification time, and remember
-token. Authentication uses short-lived email OTP challenges. The
-`email_otp_challenges` table stores a keyed HMAC of each six-digit code, expiry,
-attempt count, purpose, and resend-window metadata. RLS is enabled and Data API
-access is revoked; codes are never stored in plaintext.
+Laravel user table: name, email (unique and stored lowercase), nullable
+`google_sub` (unique stable Google identity), nullable password hash (legacy
+only; Google-only accounts have no TRANA password), email verification time,
+role/suspension state and remember token. Google ID-token signatures and claims
+are verified by Laravel; the account is keyed to Google's stable `sub`, not to
+an unverified email string. Email OTP challenges are retained only for the
+account-deletion confirmation flow. The `email_otp_challenges` table stores a
+keyed HMAC of each six-digit deletion code, expiry, attempt count, purpose, and
+resend-window metadata. RLS is enabled and Data API access is revoked; codes
+are never stored in plaintext.
 
 ### `fitness_profiles`
 One row per athlete, auto-created on first use (`User::ensureProfile()`).

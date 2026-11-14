@@ -4,8 +4,8 @@
 |--------------------------------------------------------------------------
 | Frontend origin
 |--------------------------------------------------------------------------
-| Absolute URL of the SPA. Retained for other frontend URL generation; the
-| passwordless email-code auth flow does not send verification or reset links.
+| Absolute URL of the SPA. Retained for other frontend URL generation; Google
+| Identity Services uses a popup rather than an application callback URL.
 | Defined as config so `php artisan config:cache` keeps working.
 */
 

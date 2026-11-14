@@ -38,9 +38,8 @@ class SystemController extends Controller
             'name' => 'TRANA API',
             'version' => '1.0.0',
             'endpoints' => [
-                'POST /api/auth/register',
-                'POST /api/auth/login',
-                'POST /api/auth/otp/verify',
+                'POST /api/auth/google/nonce',
+                'POST /api/auth/google',
                 'POST /api/account/delete-code',
                 'DELETE /api/account',
                 'GET  /api/notifications',

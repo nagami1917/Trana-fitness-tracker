@@ -3,81 +3,135 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\RegisterRequest;
 use App\Models\User;
-use App\Services\EmailOtpService;
+use App\Services\GoogleAuthNonceService;
+use App\Services\GoogleIdentityTokenVerifier;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Throwable;
+use Illuminate\Validation\ValidationException;
+use RuntimeException;
 
 class AuthController extends Controller
 {
-    /** Start account creation; the account is persisted only after code entry. */
-    public function register(RegisterRequest $request, EmailOtpService $otp): JsonResponse
-    {
-        $data = $request->validated();
-        $email = strtolower(trim($data['email']));
-
-        try {
-            $sent = $otp->issue($email, trim($data['name']), EmailOtpService::PURPOSE_REGISTRATION);
-        } catch (Throwable $exception) {
-            return $this->emailDeliveryFailed($email, $exception);
-        }
-
-        if (! $sent) {
+    /** Issue a short-lived nonce for a Google Identity Services sign-in attempt. */
+    public function googleNonce(
+        GoogleAuthNonceService $nonces,
+        GoogleIdentityTokenVerifier $verifier,
+    ): JsonResponse {
+        if (! $verifier->isConfigured()) {
             return response()->json([
-                'message' => 'Please wait a minute before requesting another code. Check your inbox and spam folder first.',
-            ], 429);
+                'message' => 'Google sign-in is not configured for this deployment.',
+            ], 503);
         }
 
-        return response()->json([
-            'message' => 'A six-digit code was sent to your email. It expires in 10 minutes.',
-        ], 202);
+        return response()->json(['nonce' => $nonces->issue()]);
     }
 
-    /** Request a sign-in code; passwords are not used by TRANA. */
-    public function login(Request $request, EmailOtpService $otp): JsonResponse
-    {
-        $credentials = $request->validate([
-            'email' => ['required', 'email', 'max:255'],
+    /** Verify Google's signed ID token, create/link the account, and issue a Sanctum token. */
+    public function googleSignIn(
+        Request $request,
+        GoogleIdentityTokenVerifier $verifier,
+        GoogleAuthNonceService $nonces,
+    ): JsonResponse {
+        $input = $request->validate([
+            'credential' => ['required', 'string', 'max:8192'],
             'password' => ['prohibited'],
         ]);
-        $email = strtolower(trim($credentials['email']));
-        $generic = [
-            'message' => 'If that email has a TRANA account, a six-digit sign-in code is on its way.',
-        ];
 
-        $user = User::query()->where('email', $email)->first();
-        if (! $user) {
-            // Same response for unknown addresses prevents account enumeration.
-            return response()->json($generic, 202);
+        try {
+            $identity = $verifier->verify($input['credential']);
+        } catch (RuntimeException $exception) {
+            Log::warning('Google identity verification is unavailable', [
+                'exception' => get_class($exception),
+            ]);
+
+            return response()->json([
+                'message' => 'Google sign-in is temporarily unavailable. Please try again later.',
+            ], 503);
         }
-        if ($user->isSuspended()) {
+
+        // A valid ID token is still unusable unless it carries a fresh nonce
+        // issued by this API. The nonce is consumed once to block replays.
+        $nonces->consume($identity['nonce']);
+
+        try {
+            $result = DB::transaction(function () use ($identity): array {
+                $googleUser = User::query()
+                    ->where('google_sub', $identity['sub'])
+                    ->lockForUpdate()
+                    ->first();
+                $emailOwners = User::query()
+                    ->whereRaw('lower(email) = ?', [$identity['email']])
+                    ->lockForUpdate()
+                    ->get();
+
+                if ($emailOwners->count() > 1) {
+                    $this->googleAccountConflict();
+                }
+
+                /** @var User|null $emailUser */
+                $emailUser = $emailOwners->first();
+                if ($googleUser && $emailUser && $googleUser->isNot($emailUser)) {
+                    $this->googleAccountConflict();
+                }
+
+                $user = $googleUser ?? $emailUser;
+                if ($user?->isSuspended()) {
+                    return ['suspended' => true];
+                }
+
+                if ($user) {
+                    if ($user->google_sub !== null
+                        && ! hash_equals((string) $user->google_sub, $identity['sub'])) {
+                        $this->googleAccountConflict();
+                    }
+
+                    // A verified Google email can safely link a legacy TRANA
+                    // account. Keep user-edited names intact; refresh the
+                    // canonical verified email and record Google's stable sub.
+                    $user->google_sub = $identity['sub'];
+                    $user->email = $identity['email'];
+                    $user->email_verified_at ??= now();
+                    if (trim((string) $user->name) === '') {
+                        $user->name = $identity['name'];
+                    }
+                    $user->save();
+                } else {
+                    $user = User::create([
+                        'name' => $identity['name'],
+                        'email' => $identity['email'],
+                        'google_sub' => $identity['sub'],
+                        'password' => null,
+                    ]);
+                    $user->forceFill(['email_verified_at' => now()])->save();
+                }
+
+                $user->ensureProfile();
+                $user->ensureGoals();
+
+                return [
+                    'token' => $user->createToken('google-pwa')->plainTextToken,
+                    'user' => $user,
+                ];
+            });
+        } catch (QueryException $exception) {
+            // The unique email / Google-sub indexes arbitrate concurrent first
+            // sign-ins. A loser can safely retry with a newly issued nonce.
+            if (in_array((string) $exception->getCode(), ['23000', '23505', '19'], true)) {
+                return response()->json([
+                    'message' => 'This Google account could not be linked. Please try again.',
+                ], 409);
+            }
+
+            throw $exception;
+        }
+
+        if ($result['suspended'] ?? false) {
             return response()->json(['message' => 'This account has been suspended.'], 403);
         }
-
-        try {
-            // A suppressed resend still receives the same response. The UI
-            // enforces the cooldown; the server remains the source of truth.
-            $otp->issue($email, $user->name, EmailOtpService::PURPOSE_LOGIN);
-        } catch (Throwable $exception) {
-            return $this->emailDeliveryFailed($email, $exception);
-        }
-
-        return response()->json($generic, 202);
-    }
-
-    /** Consume a one-time code and issue a Sanctum bearer token. */
-    public function verifyOtp(Request $request, EmailOtpService $otp): JsonResponse
-    {
-        $credentials = $request->validate([
-            'email' => ['required', 'email', 'max:255'],
-            'code' => ['required', 'string', 'regex:/^[0-9]{6}$/'],
-            'password' => ['prohibited'],
-        ]);
-
-        $result = $otp->verify(strtolower(trim($credentials['email'])), $credentials['code']);
 
         return response()->json([
             'token' => $result['token'],
@@ -97,16 +151,11 @@ class AuthController extends Controller
         return response()->json(['message' => 'Signed out.']);
     }
 
-    private function emailDeliveryFailed(string $email, Throwable $exception): JsonResponse
+    private function googleAccountConflict(): never
     {
-        Log::warning('Email OTP delivery failed', [
-            'email_hash' => hash('sha256', strtolower($email)),
-            'exception' => get_class($exception),
+        throw ValidationException::withMessages([
+            'credential' => ['This Google account could not be linked to the TRANA account. Please contact support.'],
         ]);
-
-        return response()->json([
-            'message' => 'The email service could not send your code. Please try again later or contact support.',
-        ], 503);
     }
 
     private function userPayload(User $user): array

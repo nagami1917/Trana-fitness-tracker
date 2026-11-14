@@ -91,6 +91,7 @@ def main():
             "APP_ENV": "local",  # CSRF middleware must not use the PHPUnit bypass.
             "APP_KEY": "base64:MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=",
             "APP_DEBUG": "false",
+            "GOOGLE_CLIENT_ID": "http-test-google-client-id",
             "DB_CONNECTION": "sqlite",
             "DB_DATABASE": str(database),
             "CACHE_STORE": "array",
@@ -134,16 +135,19 @@ def main():
                         time.sleep(0.1)
 
                 expect_status(request(port, "GET", "/api/health"), 200, "database health")
-                registration = request(port, "POST", "/api/auth/register", body={
-                    "name": "Browser Origin Test", "email": "browser@gmail.com",
-                }, cookie="laravel_session=stale; XSRF-TOKEN=stale")
-                data = expect_status(registration, 202, "browser-origin OTP registration without CSRF token")
-                assert "token" not in data, "A bearer token must not be issued before OTP verification."
-                assert not any(name.lower() == "set-cookie" for name, _ in registration[2]), "API must not issue session cookies."
+                nonce_response = request(port, "POST", "/api/auth/google/nonce", body={}, cookie="laravel_session=stale; XSRF-TOKEN=stale")
+                nonce_data = expect_status(nonce_response, 200, "browser-origin Google nonce request without CSRF token")
+                assert isinstance(nonce_data.get("nonce"), str) and nonce_data["nonce"], "Google auth must return a short-lived nonce."
+                assert not any(name.lower() == "set-cookie" for name, _ in nonce_response[2]), "API must not issue session cookies."
+
+                invalid_google = request(port, "POST", "/api/auth/google", body={"credential": "not-a-signed-token"})
+                expect_status(invalid_google, 422, "invalid Google credential")
+                old_email_code = request(port, "POST", "/api/auth/register", body={})
+                expect_status(old_email_code, 404, "removed email-code registration route")
 
                 # This HTTP smoke focuses on browser-origin and bearer-only API
-                # behavior; the PHP feature tests exercise the OTP verification
-                # email boundary and token issuance.
+                # behavior; PHP feature tests exercise Google JWT signatures and
+                # the Google-key verification boundary.
                 create_token = r'''
                     require "vendor/autoload.php";
                     $app = require "bootstrap/app.php";
@@ -167,12 +171,13 @@ def main():
                 }), 201, "bearer activity creation")
                 expect_status(request(port, "POST", "/api/auth/logout", token=token), 200, "bearer logout")
                 expect_status(request(port, "GET", "/api/profile", token=token), 401, "revoked bearer token")
-                login = request(port, "POST", "/api/auth/login", body={
-                    "email": "bearer-http@gmail.com",
+                removed_login = request(port, "POST", "/api/auth/login", body={})
+                expect_status(removed_login, 404, "removed email-code login route")
+                password_attempt = request(port, "POST", "/api/auth/google", body={
+                    "credential": "not-a-signed-token", "password": "must-not-be-collected",
                 })
-                login_data = expect_status(login, 202, "browser-origin OTP request without CSRF token")
-                assert "token" not in login_data, "Login must not issue a token before OTP verification."
-                print("Browser-origin bearer API smoke test passed.")
+                expect_status(password_attempt, 422, "Google endpoint rejects TRANA password fields")
+                print("Browser-origin Google and bearer API smoke test passed.")
             finally:
                 server.terminate()
                 try:
