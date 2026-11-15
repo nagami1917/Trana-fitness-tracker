@@ -744,7 +744,7 @@
     </div>
 
     <!-- Map-first canvas with translucent floating HUD overlay -->
-    <div class="relative h-[340px] sm:h-[400px] lg:h-[430px] w-full">
+    <div class="relative h-[340px] sm:h-[400px] lg:h-[430px] w-full" data-tour="track-map">
       <TranaMap
         bind:this={tranaMap}
         {points}
