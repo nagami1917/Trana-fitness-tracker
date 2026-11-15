@@ -254,36 +254,45 @@ badly at long distances. TRANA separates the two problems:
 ```text
 base(distance)  = exp(a + b · ln distance)      ← Riegel curve fitted per athlete/sport
 duration        = base · exp(f(features))       ← what the model learns
-features        = distance, elevation, elevation/km, mass, experience, sport
+features        = distance, elevation, elevation/km, history/experience, sport
 ```
 
 `f` is a `GradientBoostingRegressor` trained with **quantile loss** at α = 0.10 /
 0.50 / 0.90 — so the UI can say “96 min, likely 88–112” instead of pretending to
-know a single exact value.
+know a single exact value. Its learned features are distance, elevation and
+ascent density, experience/history depth, and activity type; body weight is not
+a duration-model feature.
 
-**Current artifact** (bootstrapped and tested on a synthetic corpus). These test
-metrics are not evidence of real-world accuracy:
+**Current checked-in artifact.** Its model card reports these results on a
+synthetic corpus only; they are not evidence of real-world accuracy:
 
 | Metric | Value |
 | --- | --- |
-| R² | 0.952 |
-| MAE | 9.6 min |
-| MAPE | 7.2 % |
-| 80 % interval coverage | 76.8 % |
-| Training rows | 7,988 synthetic activities |
+| R² | 0.9924 |
+| MAE | 5.76 min |
+| RMSE | 14.13 min |
+| MAPE | 5.51% |
+| q10–q90 interval coverage (80% target) | 78.9% |
+| Corpus | 8,845 synthetic activities (7,011 train, 1,834 holdout) |
 
-Top learned effects: climbing per kilometre, total elevation, distance, sport.
+GeoLife trajectories are used for external evaluation only, not model training;
+that evaluation shows poor interval coverage. See
+[`docs/ml-methodology.md`](docs/ml-methodology.md) for its limitations.
 
-**Retraining on real data**
+**Consent-first real-data candidate workflow.** Keep a consented, pseudonymized
+CSV outside Git; exclude direct identifiers and raw GPS/route data. Do not query
+production Supabase or train on production data without separate approval. From
+`ml/`, audit and train a candidate with:
 
 ```bash
-cd ml
-DATABASE_URL="postgresql://..." python -m duration_model.train --source supabase
-curl -X POST "$ML_API_URL/model/reload" -H "X-Admin-Token: $ADMIN_TOKEN"
+python -m duration_model.audit --csv /secure/path/train.csv
+python -m duration_model.train --source csv --csv /secure/path/train.csv
 ```
 
-Retrain only with appropriate consent and enough representative data; deployment
-and validation of the new artifacts are separate steps.
+This writes to the Git-ignored candidate directory; it does not replace the
+shipped model. Review the model card and independent, user-disjoint validation
+before manually promoting or deploying a candidate. See [`ml/README.md`](ml/README.md)
+for the CSV contract and full workflow.
 
 **Previews.** `ml/duration_model/train.py` exports the trees to JSON for the PWA.
 The browser and server may differ if their model versions or inputs differ. The

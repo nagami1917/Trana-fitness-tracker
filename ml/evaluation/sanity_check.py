@@ -10,6 +10,7 @@ useful as a smoke test before deploying a new artifact.
 
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
 
@@ -33,7 +34,10 @@ TOLERANCE = 0.22
 
 
 def main() -> None:
-    model = DurationModel()
+    parser = argparse.ArgumentParser(description="Smoke-test a duration-model artifact against reference cases.")
+    parser.add_argument("--artifacts-dir", type=Path, default=None, help="optional candidate artifact directory")
+    args = parser.parse_args()
+    model = DurationModel(args.artifacts_dir)
     if not model.ready:
         raise SystemExit("no trained artifact found — run `python -m duration_model.train` first")
 

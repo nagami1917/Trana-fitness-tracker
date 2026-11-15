@@ -62,15 +62,16 @@ def compute_confidence(
 
 
 class DurationModel:
-    def __init__(self) -> None:
+    def __init__(self, artifacts_dir: Path | None = None) -> None:
+        self.artifacts_dir = Path(artifacts_dir) if artifacts_dir is not None else ARTIFACTS
         self.bundle: dict | None = None
         self.card: dict | None = None
         self._load()
 
     # ------------------------------------------------------------------ load
     def _load(self) -> None:
-        joblib_path = ARTIFACTS / "duration_model.joblib"
-        card_path = ARTIFACTS / "model_card.json"
+        joblib_path = self.artifacts_dir / "duration_model.joblib"
+        card_path = self.artifacts_dir / "model_card.json"
         if joblib_path.exists():
             import joblib
 

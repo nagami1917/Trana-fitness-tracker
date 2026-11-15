@@ -16,6 +16,7 @@ build/
 !.env.example
 
 # generated data / artifacts that can be rebuilt
+ml/artifacts/
 ml/data/*.csv
 # FitRec sample (Endomondo exports) — dataset terms forbid redistribution
 ml/data/external/endomondo_*.csv

@@ -382,6 +382,7 @@ def main() -> None:
     parser.add_argument("--csv", type=Path, default=CSV_PATH, help="evaluation CSV path")
     parser.add_argument("--out", type=Path, default=DEFAULT_REPORT, help="report JSON path")
     parser.add_argument("--no-write", action="store_true", help="print only; do not write the report")
+    parser.add_argument("--artifacts-dir", type=Path, default=None, help="optional candidate model artifact directory")
     args = parser.parse_args()
 
     if args.fetch:
@@ -396,7 +397,7 @@ def main() -> None:
         save_csv(derive_from_tarball(args.tarball), args.csv)
 
     frame = load_csv(args.csv)
-    model = DurationModel()
+    model = DurationModel(args.artifacts_dir)
     report = build_report(frame, model)
 
     n = report["dataset"]["rows_evaluated"]

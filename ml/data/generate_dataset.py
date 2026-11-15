@@ -7,13 +7,12 @@ physics-informed synthetic corpus built from published field formulas
 (Naismith's rule for elevation, ACSM/VAM metabolic cost) plus per-athlete
 fitness factors, flat + hilly terrain coverage, and realistic noise.
 
-Once real activities exist in Supabase, re-train with:
+For real-data candidate training, use a consented, pseudonymized local CSV
+outside Git, audit it first, and validate on separate users. Do not query
+production Supabase or train on production data without separate approval; the
+optional `--source supabase` loader is not the default workflow.
 
-    python -m duration_model.train --source supabase        # uses DATABASE_URL
-    python -m duration_model.train --source csv --csv data/my_export.csv
-
-Output: training/data/activities.csv
-Schema is identical to the `activities` table in Supabase.
+Output: ml/data/activities.csv (generated synthetic corpus, gitignored).
 """
 
 from __future__ import annotations
@@ -156,7 +155,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Generate the TRANA bootstrap corpus.")
     parser.add_argument("--users", type=int, default=240)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--out", type=Path, default=Path(__file__).parent / "data" / "activities.csv")
+    parser.add_argument("--out", type=Path, default=Path(__file__).parent / "activities.csv")
     args = parser.parse_args()
 
     df = build_corpus(n_users=args.users, seed=args.seed)
