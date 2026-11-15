@@ -198,7 +198,26 @@ try {
   assert.ok(document.querySelector('a[href="/register"]'), 'Landing page should offer account creation');
   assert.ok(document.querySelector('a[href="/login"]'), 'Landing page should offer sign-in');
   assert.ok(document.querySelector('img[src="/images/trana-landing-hero.jpg"]'), 'Landing page hero image should render');
-  assert.equal(document.querySelector('#login-password'), null, 'Signed-out home should not render the login form');
+  assert.equal(document.querySelector('#login-password'), null, 'Signed-out home should not render the login form until requested');
+
+  document.querySelector('.sign-in-link').click();
+  await waitFor(() => document.querySelector('#landing-auth-dialog #identifier'), 'sign-in popup');
+  assert.match(document.querySelector('#landing-auth-dialog').textContent, /Welcome back/);
+  assert.equal(harness.getRoute(), '/', 'Opening sign-in should keep the visitor on the landing page');
+  const createAccountTab = Array.from(document.querySelectorAll('#landing-auth-dialog [role="tab"]'))
+    .find((tab) => tab.textContent.includes('Create account'));
+  assert.ok(createAccountTab, 'The sign-in popup should allow switching to account creation');
+  createAccountTab.click();
+  await waitFor(() => document.querySelector('#landing-auth-dialog #full-name'), 'account-creation popup mode');
+  window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await waitFor(() => !document.querySelector('#landing-auth-dialog'), 'Escape closes account popup');
+
+  document.querySelector('.nav-cta').click();
+  await waitFor(() => document.querySelector('#landing-auth-dialog #signup-email'), 'create-account popup');
+  assert.match(document.querySelector('#landing-auth-dialog').textContent, /Create your account/);
+  assert.equal(harness.getRoute(), '/', 'Opening account creation should keep the visitor on the landing page');
+  document.querySelector('#landing-auth-dialog button[aria-label="Close dialog"]').click();
+  await waitFor(() => !document.querySelector('#landing-auth-dialog'), 'close button closes account popup');
 
   authenticated = true;
 
