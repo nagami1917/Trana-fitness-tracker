@@ -6,6 +6,7 @@
 
   export let navigate = routerNavigate;
   export let initialMode = 'login';
+  export let asModal = false;
 
   let mode = initialMode;
   let identifier = '';
@@ -246,7 +247,7 @@
   <meta name="description" content="Sign in or create a TRANA fitness account." />
 </svelte:head>
 
-<section class="auth-page">
+<section class="auth-page" class:modal-auth-page={asModal}>
   <div class="auth-card">
     <a class="brand" href="/" on:click|preventDefault={() => navigate('/')}>TRANA<span>.</span></a>
     {#if mode === 'verify'}
@@ -370,6 +371,8 @@
 <style>
   :global(body){margin:0;background:#f5f7f4;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#17251f}
   .auth-page{min-height:100vh;display:grid;place-items:center;padding:32px 16px;background:radial-gradient(ellipse at top left,#dff3e9 0,transparent 45%),#f5f7f4}
+  .auth-page.modal-auth-page{min-height:0;width:100%;padding:0;background:transparent;display:block}
+  .auth-page.modal-auth-page .auth-card{width:100%;border:0;border-radius:22px;box-shadow:none}
   .auth-card{box-sizing:border-box;width:min(100%,470px);padding:38px 42px;background:#fff;border:1px solid #e7ede9;border-radius:22px;box-shadow:0 18px 60px #193b2b12}
   .brand{display:inline-block;margin-bottom:32px;color:#14251e;text-decoration:none;font-weight:900;font-size:24px;letter-spacing:.08em}.brand span{color:#23a26d}
   .eyebrow{color:#16845a;font-size:11px;font-weight:800;letter-spacing:.14em}h1{margin:8px 0;font-size:30px;letter-spacing:-.04em}.subtitle{margin:0 0 24px;color:#68766f;font-size:14px;line-height:1.55}.subtitle strong{color:#24382e;overflow-wrap:anywhere}

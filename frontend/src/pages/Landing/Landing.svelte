@@ -15,13 +15,104 @@
   } from 'lucide-svelte';
   import Footer from '../../components/common/Footer.svelte';
   import Logo from '../../components/common/Logo.svelte';
-  import { link } from '../../lib/router.js';
+  import { getCachedViewComponent, loadViewComponent } from '../../routes/index.js';
+  import { link, navigate as routerNavigate } from '../../lib/router.js';
 
   let menuOpen = $state(false);
+  let authModalOpen = $state(false);
+  let authModalMode = $state('login');
+  let AuthComponent = $state(null);
+  let authLoadError = $state(false);
+  let authLoadSequence = 0;
+  let authCloseButton = $state(null);
+  let focusBeforeAuthModal = null;
 
   function closeMenu() {
     menuOpen = false;
   }
+
+  function openAuthModal(mode, event) {
+    event?.preventDefault();
+    closeMenu();
+    focusBeforeAuthModal = document.activeElement;
+    authModalMode = mode;
+    authModalOpen = true;
+    authLoadError = false;
+
+    const cached = getCachedViewComponent('login');
+    if (cached) {
+      AuthComponent = cached;
+      return;
+    }
+
+    AuthComponent = null;
+    const sequence = ++authLoadSequence;
+    loadViewComponent('login')
+      .then((component) => {
+        if (sequence === authLoadSequence && authModalOpen) AuthComponent = component;
+      })
+      .catch(() => {
+        if (sequence === authLoadSequence && authModalOpen) authLoadError = true;
+      });
+  }
+
+  function closeAuthModal() {
+    authModalOpen = false;
+    authLoadSequence += 1;
+  }
+
+  function navigateFromAuth(path) {
+    closeAuthModal();
+    routerNavigate(path);
+  }
+
+  function handleAuthKeydown(event) {
+    if (!authModalOpen) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeAuthModal();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+
+    const dialog = document.getElementById('landing-auth-dialog');
+    const focusable = dialog?.querySelectorAll(
+      'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    );
+    if (!focusable?.length) {
+      event.preventDefault();
+      return;
+    }
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  $effect(() => {
+    if (!authModalOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleAuthKeydown);
+    const focusTimer = window.setTimeout(() => authCloseButton?.focus(), 0);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleAuthKeydown);
+      window.clearTimeout(focusTimer);
+      const target = focusBeforeAuthModal;
+      if (target?.isConnected && typeof target.focus === 'function') {
+        window.setTimeout(() => target.focus(), 0);
+      }
+    };
+  });
 </script>
 
 <svelte:head>
@@ -45,8 +136,8 @@
       </nav>
 
       <div class="nav-actions">
-        <a href="/login" use:link class="sign-in-link">Sign in</a>
-        <a href="/register" use:link class="nav-cta">
+        <a href="/login" class="sign-in-link" onclick={(event) => openAuthModal('login', event)}>Sign in</a>
+        <a href="/register" class="nav-cta" onclick={(event) => openAuthModal('signup', event)}>
           Get started <ArrowRight size={15} aria-hidden="true" />
         </a>
         <button
@@ -67,7 +158,7 @@
         <a href="#features" onclick={closeMenu}>Features</a>
         <a href="#how-it-works" onclick={closeMenu}>How it works</a>
         <a href="/preview" use:link onclick={closeMenu}>Interactive preview</a>
-        <a href="/login" use:link onclick={closeMenu}>Sign in</a>
+        <a href="/login" onclick={(event) => openAuthModal('login', event)}>Sign in</a>
       </nav>
     {/if}
   </header>
@@ -92,7 +183,7 @@
           </p>
 
           <div class="hero-actions">
-            <a href="/register" use:link class="hero-primary">
+            <a href="/register" class="hero-primary" onclick={(event) => openAuthModal('signup', event)}>
               Start for free <ArrowRight size={17} aria-hidden="true" />
             </a>
             <a href="#features" class="hero-secondary">
@@ -230,7 +321,7 @@
             </div>
             <h3>Make progress visible.</h3>
             <p>See activity trends, keep an eye on your goals, and understand how your training is adding up.</p>
-            <a href="/register" use:link class="text-link">Build your training history <ArrowRight size={15} aria-hidden="true" /></a>
+            <a href="/register" class="text-link" onclick={(event) => openAuthModal('signup', event)}>Build your training history <ArrowRight size={15} aria-hidden="true" /></a>
           </div>
           <div class="progress-visual" aria-label="Illustrative weekly training progress">
             <div class="progress-visual-top"><span>THIS WEEK</span><strong>Training minutes <small>↗</small></strong></div>
@@ -267,7 +358,7 @@
           <h2 id="closing-title">Make the miles<br />feel like they’re going somewhere.</h2>
           <p>Create your free account and bring your routes, workouts, fueling, and progress together.</p>
           <div class="closing-actions">
-            <a href="/register" use:link class="hero-primary">Create your account <ArrowRight size={16} aria-hidden="true" /></a>
+            <a href="/register" class="hero-primary" onclick={(event) => openAuthModal('signup', event)}>Create your account <ArrowRight size={16} aria-hidden="true" /></a>
             <a href="/preview" use:link class="closing-preview">Try the interactive preview</a>
           </div>
         </div>
@@ -283,7 +374,46 @@
   <Footer />
 </div>
 
+{#if authModalOpen}
+  <div class="auth-overlay">
+    <button type="button" class="auth-backdrop" aria-label="Close authentication dialog" onclick={closeAuthModal}></button>
+    <div id="landing-auth-dialog" class="auth-dialog" role="dialog" aria-modal="true" aria-label="TRANA sign in or create account">
+      <button bind:this={authCloseButton} type="button" class="auth-dialog-close" aria-label="Close dialog" onclick={closeAuthModal}>
+        <X size={19} aria-hidden="true" />
+      </button>
+      {#if AuthComponent}
+        <AuthComponent navigate={navigateFromAuth} initialMode={authModalMode} asModal={true} />
+      {:else if authLoadError}
+        <div class="auth-load-message" role="alert">
+          <strong>Could not open account access.</strong>
+          <p>Please try again.</p>
+          <button type="button" onclick={(event) => openAuthModal(authModalMode, event)}>Retry</button>
+        </div>
+      {:else}
+        <div class="auth-load-message" role="status" aria-live="polite">
+          <span class="auth-loading-bar" aria-hidden="true"></span>
+          <p>Opening your TRANA account…</p>
+        </div>
+      {/if}
+    </div>
+  </div>
+{/if}
+
 <style>
+  .auth-overlay { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 16px; overflow-y: auto; background: rgba(18, 30, 24, .62); backdrop-filter: blur(6px); animation: auth-overlay-in .18s ease-out both; }
+  .auth-backdrop { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: transparent; cursor: default; }
+  .auth-dialog { position: relative; z-index: 1; width: min(100%, 470px); max-height: calc(100vh - 32px); overflow-y: auto; border-radius: 22px; background: white; box-shadow: 0 30px 100px rgba(10, 25, 18, .34); }
+  .auth-dialog-close { position: absolute; top: 9px; right: 9px; z-index: 2; display: grid; width: 36px; height: 36px; place-items: center; border: 1px solid #e7ede9; border-radius: 12px; background: rgba(255,255,255,.96); color: #576a5f; cursor: pointer; transition: background .15s ease, color .15s ease; }
+  .auth-dialog-close:hover { background: #f0f7f3; color: #14754e; }
+  .auth-load-message { display: grid; min-height: 270px; align-content: center; justify-items: center; gap: 9px; padding: 28px; color: #34483d; text-align: center; }
+  .auth-load-message p { margin: 0; color: #718077; font-size: 13px; }
+  .auth-load-message button { margin-top: 5px; padding: 9px 16px; border: 0; border-radius: 999px; background: #16845a; color: white; font-size: 12px; font-weight: 800; cursor: pointer; }
+  .auth-loading-bar { width: 76px; height: 5px; overflow: hidden; border-radius: 999px; background: #d9eee3; }
+  .auth-loading-bar::after { display: block; width: 42%; height: 100%; border-radius: inherit; background: #16845a; content: ''; animation: auth-loading 1s ease-in-out infinite alternate; }
+  @keyframes auth-overlay-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes auth-loading { from { transform: translateX(0); } to { transform: translateX(140%); } }
+  @media (prefers-reduced-motion: reduce) { .auth-overlay, .auth-loading-bar::after { animation: none; } }
+
   .landing-page { min-height: 100vh; overflow: hidden; background: #fffaf8; color: #3f2333; }
   .landing-header { position: sticky; top: 0; z-index: 40; border-bottom: 1px solid rgba(231, 211, 221, .72); background: rgba(255, 255, 255, .9); backdrop-filter: blur(16px); }
   .landing-nav { display: flex; align-items: center; justify-content: space-between; gap: 24px; width: min(100% - 40px, 1280px); min-height: 76px; margin: 0 auto; }
