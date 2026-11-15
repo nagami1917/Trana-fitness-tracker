@@ -7,7 +7,6 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Cookie;
 use Tests\TestCase;
 
@@ -84,7 +83,10 @@ class GoogleOAuthTest extends TestCase
     /** @param array{state: string, cookie: string} $flow */
     private function finishGoogleFlow(array $flow, ?string $state = null)
     {
-        return $this->withCookie(self::STATE_COOKIE, $flow['cookie'])
+        // The cookie value is already encrypted by the OAuth state helper. API
+        // routes do not run Laravel's EncryptCookies middleware, so prevent the
+        // HTTP test harness from adding its own test-cookie encryption prefix.
+        return $this->withUnencryptedCookie(self::STATE_COOKIE, $flow['cookie'])
             ->get('/api/auth/google/callback?'.http_build_query([
                 'code' => 'test-authorization-code',
                 'state' => $state ?? $flow['state'],
@@ -114,17 +116,9 @@ class GoogleOAuthTest extends TestCase
             'name' => 'New Athlete',
         ]);
         $flow = $this->beginGoogleFlow();
-        $log = Log::spy();
 
         $response = $this->finishGoogleFlow($flow);
         Http::assertSentCount(2);
-        if ($response->headers->get('Location') !== 'https://trana.test/') {
-            $log->shouldHaveReceived('warning')->withArgs(function ($message, $context): bool {
-                fwrite(STDERR, 'Google OAuth debug context: '.json_encode($context).PHP_EOL);
-
-                return $message === 'Google sign-in callback failed';
-            });
-        }
         $response->assertRedirect('https://trana.test/');
         $user = User::query()->where('google_sub', 'google-sub-112233')->firstOrFail();
 
