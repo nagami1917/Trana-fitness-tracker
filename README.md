@@ -205,6 +205,8 @@ cp .env.example .env   # only if .env does not already exist
 php artisan key:generate  # only for a new .env
 # Set Supabase DB_* values and ML_API_URL. Configure MAIL_* with a real SMTP
 # provider/App Password for signup verification and password recovery.
+# To enable Google sign-in, follow docs/GOOGLE_SIGN_IN.md; keep its client secret
+# in backend/.env or Vercel secrets, never in the frontend or source control.
 # Keep MAIL_PASSWORD in backend/.env or deployment secrets; never commit it.
 # For this project's connection details, see supabase/README.md.
 php artisan config:clear
@@ -235,6 +237,7 @@ Vite. Never put database credentials in a `VITE_*` variable.
 | frontend | `VITE_ORS_API_KEY` | OpenRouteService key — drawn routes snap onto real roads. Optional; without it the map falls back to straight lines. |
 | backend | `DB_HOST/DB_PORT/DB_DATABASE/DB_USERNAME/DB_PASSWORD/DB_SSLMODE` | Supabase Postgres (session pooler for Vercel). Laravel ignores `DB_URL`/`DATABASE_URL` for pgsql. |
 | backend | `MAIL_MAILER`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_ADDRESS` | SMTP/transactional mail for verification and password-reset OTPs; keep credentials in deployment secrets. |
+| backend | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `FRONTEND_URL` | Optional server-side Google sign-in; see [Google OAuth setup](docs/GOOGLE_SIGN_IN.md) and keep the client secret out of frontend/source control. |
 | backend | `TRANA_AUTH_COOKIE_MINUTES`, `TRANA_COOKIE_SAME_SITE`, `TRANA_COOKIE_DOMAIN` | HttpOnly auth-cookie lifetime and deployment scope; production cookies are Secure and default to `SameSite=None` for the separate web/API sites. |
 | backend | `ML_API_URL`, `ML_API_TOKEN`, `ML_ADMIN_TOKEN`, `ML_TIMEOUT` | Python prediction service and optional server-to-server secrets. |
 | backend | `CORS_ALLOWED_ORIGINS` | Comma-separated frontend origins, required for browser CORS and CSRF checks. |

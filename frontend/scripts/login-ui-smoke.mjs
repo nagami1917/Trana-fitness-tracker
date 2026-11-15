@@ -21,7 +21,7 @@ const bundle = await build({
 });
 const outputs = Array.isArray(bundle) ? bundle[0].output : bundle.output;
 const codeBundle = outputs.find((entry) => entry.type === 'chunk').code;
-const window = new Window({ url: 'http://localhost/login' });
+const window = new Window({ url: 'http://localhost/login?google=cancelled' });
 const { document } = window;
 document.body.innerHTML = '<div id="app"></div>';
 window.alert = () => {};
@@ -94,6 +94,9 @@ try {
   flush();
   assert.match(document.body.textContent, /Welcome back/i);
   assert.match(document.body.textContent, /Create account/i);
+  assert.match(document.body.textContent, /Google sign-in was cancelled\./);
+  assert.equal(window.location.search, '', 'Google callback status should be removed from the address bar.');
+  assert.equal(document.querySelector('.google-button')?.getAttribute('href'), '/api/auth/google/redirect');
   assert.ok(document.querySelector('#identifier'));
   assert.equal(document.querySelector('#login-password')?.maxLength, 72);
 

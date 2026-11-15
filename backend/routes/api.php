@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\EnergyExpenditureController;
 use App\Http\Controllers\Api\FuelItemController;
 use App\Http\Controllers\Api\GearController;
 use App\Http\Controllers\Api\GoalController;
+use App\Http\Controllers\Api\GoogleAuthController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PredictionController;
 use App\Http\Controllers\Api\ProfileController;
@@ -46,6 +47,8 @@ Route::post('/client-errors', [ErrorReportController::class, 'store'])
     ->middleware('throttle:errors');
 
 Route::middleware('throttle:auth')->group(function () {
+    Route::get('/auth/google/redirect', [GoogleAuthController::class, 'redirect']);
+    Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback']);
     Route::get('/auth/csrf', [AuthController::class, 'csrf']);
     Route::post('/auth/register', [AuthController::class, 'register']);
     Route::post('/auth/email/verify', [AuthController::class, 'verifyEmail']);
