@@ -41,9 +41,9 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r requirements-dev.txt
-      - run: python -m duration_model.train
-      - run: python -m evaluation.sanity_check
-      - run: python -m evaluation.geolife_validation
+      - run: python -m duration_model.train --source synth
+      - run: python -m evaluation.sanity_check --artifacts-dir artifacts/duration_model-candidate
+      - run: python -m evaluation.geolife_validation --artifacts-dir artifacts/duration_model-candidate --no-write
       - name: Run ML tests
         run: |
           set +e
@@ -56,7 +56,7 @@ jobs:
             # the FAILED summary, then resolved versions on one line.
             {
               grep -E '^(E |FAILED )' /tmp/ml-tests.log | head -8
-              echo "versions: $(pip list --format=freeze 2>/dev/null | grep -E '^(fastapi|starlette|httpx|pydantic|pytest|anyio)=' | tr '\n' ' ')"
+              echo "versions: $(pip list --format=freeze 2>/dev/null | grep -E '^(fastapi|starlette|httpx2?|pydantic|pytest|anyio)=' | tr '\n' ' ')"
             } | cut -c1-450 | while IFS= read -r line; do
               if [ -n "$line" ]; then echo "::error::$line"; fi
             done

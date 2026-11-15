@@ -1,304 +1,289 @@
 # ML methodology
 
-Two engines, deliberately different in kind:
+TRANA uses two deliberately different engines:
 
 | Engine | Type | Where |
 | --- | --- | --- |
-| **Duration model** | learned (quantile gradients) | `ml/duration_model/` |
-| **Fueling engine** | deterministic (sports-science formulas) | `ml/fueling_model/` |
+| **Duration model** | learned quantile regressors | `ml/duration_model/` |
+| **Fueling engine** | deterministic sports-science formulas | `ml/fueling_model/` |
 
-The split is intentional: fueling has no reliable public training corpus, and a
-rule-based engine is transparent, auditable and safe for a health-facing product.
+The fueling engine remains rule-based: retraining the duration model does not
+change fueling recommendations.
 
 ## Duration model
 
-**Problem.** Predict how long an athlete needs for a *planned* session, using their
-*own* history — not a population average.
+**Problem.** Estimate elapsed time for a planned activity, using the athlete's
+own history where available.
 
-**Anchor.** Each athlete × modality gets a Riegel-style distance→time curve fitted
-to their logged activities (`duration_model/preprocess.py: reference_curve`):
+**Personal pace anchor.** For each athlete and activity type, the model builds a
+Riegel-style distance-to-time curve from earlier valid activities:
 
-```
-base_minutes = exp(a + b·ln distance_km)
-```
-
-**Model.** `GradientBoostingRegressor` with quantile loss at α = 0.10 / 0.50 / 0.90,
-learning a *pace factor* against that base — it corrects the personal curve for
-elevation, mass, experience and sport:
-
-```
-duration = base · exp(f(features))
-features = distance_km, elevation_gain_m, elevation_per_km,
-           weight_kg, experience_level, is_run, is_ride, is_walk, is_hike
+```text
+base_minutes = exp(a + b * ln(distance_km))
 ```
 
-q10/q90 give an honest "estimated range" in the UI instead of one over-confident
-number; `duration.confidence` derives from the interval width.
+**Learned correction.** Three `GradientBoostingRegressor` models use quantile
+losses q10/q50/q90 to predict a pace factor relative to that anchor. Duration
+features are distance, elevation gain and gain per km, experience/history depth,
+and activity-type indicators. Body weight, calories, heart rate, route data and
+profile identifiers are not duration-model features.
 
-**Training.** `python -m duration_model.train` (from `ml/`):
+The median is the point estimate; q10–q90 form the uncertainty interval. A
+separate multiplicative calibration factor may widen the interval without
+moving the median. Interval coverage and point-prediction error are reported as
+different measures.
 
-- default: (re)generates the physics-informed synthetic bootstrap corpus
-  (`data/generate_dataset.py`, ~8k activities from synthetic athletes) and trains on it;
-- `--source supabase` trains on the real activity log (`DATABASE_URL`, optional dep `psycopg[binary]`) and calibrates interval width on the 20 % holdout split by default (`--no-calibrate` to skip);
-- `--source csv --csv file.csv` trains on a Postgres or external activity CSV (`--calibrate` fits interval width on the 20 % holdout split; `--calibrate-csv real.csv` fits on a separate file);
-- standalone recalibration (`python -m duration_model.calibrate --source csv|supabase --write`) fits only the interval width factor `k` onto an existing artifact once ≥ 30 real activities are available.
+The committed model card in `ml/duration_model/model_card.json` identifies its
+training source as **synthetic**. Its holdout metrics describe that synthetic
+corpus only and do not establish real-world accuracy. The independent GeoLife
+results below show important real-world limitations.
 
-Current committed artifact (`ml/duration_model/duration_model.joblib`):
+## Consented local CSV contract
 
-| Metric | Value |
+The safe starting point for real-data work is a **local, consented CSV**. Do
+not export from production or use production Supabase data without separate
+approval. Keep the source file outside the repository, restrict local file
+permissions, and do not upload it to a public issue, notebook, or service.
+
+Required columns:
+
+| Column | Contract |
 | --- | --- |
-| MAE | 9.56 min |
-| RMSE | 27.16 min |
-| R² | 0.952 |
-| MAPE | 7.18 % |
-| Interval coverage (q10–q90) | 76.8 % |
-| Corpus | 7 988 rows (synthetic bootstrap) — **retrain on real data before relying on absolute numbers** |
+| `user_id` | Stable pseudonymous athlete ID: identical on all rows for one athlete and consistent across training, calibration, and validation files. It must not be an email or phone number. |
+| `activity_type` | One of `run`, `ride`, `walk`, or `hike`. |
+| `distance_km` | Positive distance in kilometres. |
+| `duration_min` | Positive elapsed duration in minutes, using the same elapsed-time definition throughout the CSV. |
+| `started_at` | Valid ISO-8601 activity start timestamp. Prefer UTC (`Z`) or an explicit offset; naive times are interpreted as UTC. It is required to build chronological history safely; `start_time` is accepted as an alias. |
 
-Feature importance (q50): `elevation_per_km` 0.62, `distance_km` 0.19, `is_ride` 0.05.
-Elevation/km dominates — expected, since climbing is the strongest duration driver.
+Optional useful columns:
 
-`duration_model.json` is the same trees as plain JSON for the PWA's **on-device**
-evaluator (`frontend/src/lib/ml/duration.js`); keep `frontend/public/models/duration_model.json`
-in sync with `ml/duration_model/duration_model.json` when retraining.
+| Column | Contract |
+| --- | --- |
+| `elevation_gain_m` | Total ascent in metres only—no route, coordinate, or point-by-point track. Missing values default to zero; elevation slices are unavailable if all values are zero. |
+| `experience_level` | Integer level 1–5 **as known at that activity's time**. If omitted, the pipeline derives it from that athlete's earlier same-sport history. Do not backfill a current value into past activities. |
+| `id` | Do not include a source/database identifier. If present, its values are discarded and replaced with a local row-order tie-breaker. |
 
-**Guardrails.** Factor clamped to [0.7, 3.0]; q10/q50/q90 can never invert or go
-below 1 minute; graceful physics fallback when artifacts are missing; `python -m evaluation.sanity_check`
-asserts ±22 % against known-good reference points (exit 1 on failure).
+Create `user_id` as a stable pseudonym before making the CSV (for example, a
+random token or a keyed HMAC of an internal ID). Keep any mapping/key separate
+from the CSV, repository, and candidate artifacts. Reuse the same pseudonym for
+the same athlete across all files so the leakage checks can detect overlap.
 
-## Fueling engine
+Exclude direct identifiers (names, email addresses, phone numbers, account or
+profile IDs) and raw GPS/location fields (latitude/longitude, coordinates,
+route polylines, GPX, tracks, locations, or map paths) before export. The
+normalizer rejects common sensitive column names and email-/phone-like
+`user_id` values, and drops other unused columns; it cannot infer whether an
+arbitrary pseudonym or an unfamiliar column name is identifying, so the
+exporter must still apply this contract. The model artifacts and reports do not
+contain individual activity rows or a list of athlete IDs.
 
-Calories from METs × body mass × hours (modality- and speed-dependent, with a climb
-penalty); carbohydrate rate from duration band and intensity (0 g/h below 60 min →
-85+ g/h beyond 2.5 h, capped at 90 g/h); sodium and fluid from the athlete's sweat
-profile and heat (×1.025 per °C above 22 °C); a 3-phase timeline (pre / during /
-recovery); and intensity-graded notes. Every constant is documented inline in
-`ml/fueling_model/predict.py` and mirrored 1:1 in `frontend/src/lib/ml/fueling.js`
-(the PWA computes fueling offline, so the two must stay identical).
+## Readiness audit and minimums
 
-## Prediction flow
-
-```
-SPA ──POST /api/predictions──▶ Laravel ──POST /predict──▶ FastAPI (ml/api)
-      feature        validation, normalisation   engine
-```
-
-1. `StorePredictionRequest` validates (distance optional when a route is drawn).
-2. Laravel resolves the effective distance (drawn route wins, haversine-measured),
-   assembles history + profile + goal, and calls FastAPI.
-3. The ML response is normalised to camelCase (`DurationPredictionService` /
-   `FuelingPredictionService`) and persisted as `predictions` (see
-   [database.md](database.md)) with the full payload and `model_version`.
-4. `docs/api.md` documents the exact request/response contract.
-
-## External validation (GeoLife)
-
-The trained artifact is also validated against **real measured movement**, not
-just the synthetic holdout: the **GeoLife GPS Trajectories Dataset**
-(Microsoft Research; Zheng et al., WWW '08) via the processed per-trajectory
-feature table in the public `jbremz/Beijing-Trajectories-Project` mirror.
-
-- **Dataset:** `ml/data/external/geolife_activities.csv` — **4,362 labelled
-  walk/bike/run trajectories from 51 users** (provenance and reproducible
-  derivation: `ml/data/external/README.md`).
-- **Protocol:** for every trajectory the model receives **only that same
-  user's earlier trajectories of the same mode** as history — exactly the
-  information Trana has when predicting for a real account; empty history
-  exercises the production cold-start fallback. No future data, no other
-  users. Elevation 0 m (absent in GeoLife), weight 60 kg (assumed),
-  experience inferred from history length (production behaviour). Target
-  values are door-to-door elapsed times — what Trana predicts for a planned
-  session.
-- **Reproduce:** `python -m evaluation.geolife_validation` — run by CI after
-  every training run; report artifact: `ml/evaluation/reports/geolife_validation.json`.
-
-**Results — artifact `20261108.0445`, n = 4,362:**
-
-| Slice | n | MAE (min) | MdAPE | ±15 % hit | R² | q10–q90 coverage |
-| --- | --- | --- | --- | --- | --- | --- |
-| overall | 4,362 | **5.65** | 21.9 % | 36.4 % | 0.461 | 24.1 % |
-| walk | 2,988 | 5.99 | 25.0 % | 32.7 % | 0.441 | 25.7 % |
-| ride | 1,372 | 4.93 | 17.2 % | 44.5 % | 0.498 | 20.7 % |
-| cold start (no history) | 80 | 12.88 | 49.6 % | 15.0 % | 0.107 | 11.3 % |
-| personalized (≥ 2 prior) | 4,215 | 5.41 | 21.4 % | 37.0 % | 0.475 | 24.5 % |
-
-Baselines (overall MAE): population prior **7.10 min** → personal Riegel
-anchor alone **5.80 min** → full model **5.65 min**.
-
-**Reading:**
-
-1. The model beats the population prior by **20.4 % MAE** — the
-   distance→duration mapping transfers to real GPS movement.
-2. **Personalization is the main lever:** cold-start error is ~2.4× the
-   personalized error, empirically justifying Trana's own-log anchoring.
-3. The learned correction contributes ~2.5 % beyond the personal anchor on
-   this data — most of the win is the anchor itself; the synthetic-trained
-   factor helps but is not the star.
-4. **Interval coverage falls to 24 %** on real data (vs 76.8 % synthetic):
-   door-to-door GPS durations vary more than the synthetic noise model —
-   the q10/q90 range is optimistic for real sessions, and long in-domain
-   activities are the weakest slice (n = 543, MAE 17.0 min).
-
-**Dataset-specific limitations:** no elevation in GeoLife (features = 0;
-Beijing is flat); `bike`→`ride` mapping; `run` has n = 2; weight and
-experience assumed, not measured; elapsed times include stops.
-
-→ Findings motivate **ML phase 2**: retrain and recalibrate on accumulated
-real user activities (`python -m duration_model.train --source supabase`),
-implemented in *ML phase 2 (interval calibration & real-data retraining)* below.
-
-## External validation (FitRec sample — Endomondo)
-
-A second external dataset guards against over-fitting the GeoLife quirks:
-the **FitRec sample** — Endomondo Sports Tracker exports
-(`endomondoMeta.json.gz` + `endomondoHR.json.gz`, ~3.1 GB) delivered to the
-project owner. Dataset terms forbid redistribution, so the raw exports stay
-in personal storage (Google Drive) and are **never committed**; the repo
-holds the converter, the evaluator, and the aggregate report.
-
-- **Protocol:** identical to the GeoLife run — the same
-  `evaluation.geolife_validation.evaluate_activities` engine (chronological
-  per-account history, cold-start fallback, weight 60 kg, elevation 0,
-  0.5–50 km/h speed trim) — so the two datasets are directly comparable.
-- **Derivation:** `ml/data/endomondo_to_csv.py` streams the multi-GB
-  gzip exports with bounded memory, maps sports → Trana modes
-  (`running→run`, `cycling→ride`, `walking→walk`, `hiking→hike`), and
-  writes `ml/data/external/endomondo_activities.csv` (same columns as the
-  GeoLife table; git-ignored).
-- **User ids:** if the export carries no user ids, every workout becomes
-  its own account and all rows are evaluated **cold-start** — the report
-  states this explicitly rather than implying personalization.
-- **Reproduce:**
-  ```bash
-  python ml/data/endomondo_to_csv.py --meta /path/endomondoMeta.json.gz
-  cd ml && python -m evaluation.endomondo_validation
-  ```
-  Report artifact: `ml/evaluation/reports/endomondo_validation.json`
-  (metrics only — no raw data). CI keeps running the GeoLife validation;
-  the FitRec run is manual because the data is not in the repository.
-- **Provenance & terms:** `ml/data/external/README.md`.
-
-## ML phase 2 (interval calibration & real-data retraining)
-
-To close the 24.1 % real-world interval coverage gap and prepare the
-production training pipeline for real Trana logs, phase 2 adds conformal
-interval calibration and hardens the `--source supabase` training path.
-
-### Calibration method (`ml/duration_model/calibrate.py`)
-
-Given predicted quantile bands `(q10, q50, q90)` clamped identically to inference
-(`[0.7, 3.0]` pace-factor bounds around the athlete's Riegel anchor), each
-non-degenerate calibration activity yields a normalized residual score:
-
-```
-halfwidth = (q90 − q10) / 2
-score     = |actual − q50| / halfwidth
-k         = clip(quantile(scores, ⌈(n + 1)·target⌉ / n), 1.0, 6.0)
-```
-
-- `target` defaults to `0.80` (80 % coverage). `k` is floored at `1.0` (never
-  narrows trained bands) and capped at `6.0` (prevents extreme outliers from
-  producing absurd ranges).
-- Both the server (`ml/duration_model/model_store.py`) and the browser offline
-  evaluator (`frontend/src/lib/ml/duration.js`) apply `k` identically around the
-  median before clamping to `≥ 1.0 min` and computing `confidence`:
-  `q10' = max(1, q50 − k·(q50 − q10))`, `q90' = q50 + k·(q90 − q50)`.
-  Point predictions (`minutes`) do not change; wider bands lower `confidence`
-  proportionally.
-- The fitted block `calibration` (`factor`, `target_coverage`,
-  `achieved_coverage`, `n`, `skipped`, `calibrated_at`) is stored in
-  `duration_model.joblib`, `duration_model.json`, and `model_card.json`.
-
-### Two-stage production workflow (`--source supabase`)
-
-1. **Stage 1 — Recalibrate existing synthetic trees (≥ 30 real activities):**
-   fits only the single scalar `k` without overfitting 320 gradient-boosted
-   trees to a small corpus (`MIN_CALIBRATE_ROWS = 30`).
-2. **Stage 2 — Full retrain + holdout calibration (≥ 200 real activities):**
-   retrains `q10/q50/q90` on 80 % of real activities (`MIN_TRAIN_ROWS = 200`) and
-   automatically calibrates `k` on the held-out 20 % test split (`--no-calibrate`
-   to disable). Below either threshold, the CLI exits cleanly without overwriting
-   the existing artifacts.
-3. **Database compatibility:** `train.py` joins `activities` with
-   `fitness_profiles` (`duration_min IS NOT NULL AND distance_km > 0`, ordered
-   by `started_at, id`), defaults null `elevation_gain_m` / `weight_kg` /
-   `experience_level`, and coerces PostgreSQL `numeric` (`Decimal`) values to
-   float before feature extraction.
-
-### Dry-run benchmark on GeoLife
-
-Because production currently holds **1 trainable activity** (see status below),
-the phase-2 pipeline was verified against `geolife_activities.csv` (n = 4,362,
-51 users) in two modes: (a) recalibrating the shipped synthetic model `20261108.0445`
-only, and (b) full retraining + 20 % holdout calibration. Both full-dataset runs
-and strict unseen-user splits (fit on the first 25 users, n = 2,128; evaluate
-chronologically on the held-out 26 users, n = 2,234 via
-`evaluation.geolife_validation`) were measured:
-
-| Run | Mode / split | Factor `k` | MAE (min) | R² | Chronological coverage |
-| --- | --- | --- | --- | --- | --- |
-| Baseline (`20261108.0445`) | Full GeoLife (n = 4,362) | — | 5.65 | 0.461 | 24.1 % |
-| Baseline (`20261108.0445`) | Held-out 26 users (n = 2,234) | — | 5.72 | 0.420 | 23.8 % |
-| **Dry run A — Recalibrate only** | Fit on all 51 users → full GeoLife | 5.266 | 5.65 | 0.461 | **78.8 %** (pers. 79.6 %, cold 42.5 %) |
-| **Dry run A — Recalibrate only** | Fit on 25 users → **unseen 26 users** | 5.332 | 5.72 | 0.420 | **78.2 %** (pers. 78.9 %, cold 44.2 %) |
-| **Dry run B — Retrain + holdout cal.** | 80/20 split on 51 users → full GeoLife* | 1.075 | **5.48** | **0.479** | **72.7 %** (pers. 73.2 %, cold 53.8 %) |
-| **Dry run B — Retrain + holdout cal.** | Train+cal on 25 users → **unseen 26 users** | 1.113 | 5.95 | 0.394 | **67.9 %** (pers. 68.0 %, cold 53.5 %) |
-
-\*In the full-GeoLife retrain dry run, calibration/validation share the 51 GeoLife
-users; the 25→26-user row keeps evaluation strictly out-of-sample. Notice also
-why chronological coverage (67.9–72.7 %) trails the random leave-one-out holdout
-target (80.2–80.3 %): `training_frame` computes each row's anchor curve with
-leave-one-out across all sessions, whereas real inference only sees prior
-activities (cold start and 1-activity histories have wider errors).
-
-**Shipped artifact status:** the committed artifact stays the synthetic
-bootstrap (`20261108.0445`, `calibration: null`). Replacing it with GeoLife-fitted
-weights would leak the external validation benchmark and drop elevation/hike/weight
-signal; production Supabase currently contains **1 trainable activity** (5 users,
-5 fitness profiles), so real-data retraining is blocked until sufficient user
-logs accumulate.
-
-### Production runbook & privacy
-
-Once production accumulates ≥ 30 (calibration) or ≥ 200 (retrain) consented
-activities:
+From `ml/`, audit a CSV before fitting anything:
 
 ```bash
-cd ml
-pip install -r requirements.txt 'psycopg[binary]'
-
-# Pull the read-only/pooler connection string from Vercel trana-api or Supabase
-export DATABASE_URL="postgresql://postgres.<ref>:<password>@<pooler-host>:5432/postgres?sslmode=require"
-
-# Option A (30–199 real activities): recalibrate intervals on shipped synthetic trees
-python -m duration_model.calibrate --source supabase --write
-
-# Option B (≥ 200 real activities): full retrain + 20 % holdout calibration
-python -m duration_model.train --source supabase
-
-# Verify guards and copy browser JSON + card to the SPA
-python -m evaluation.sanity_check
-python -m evaluation.geolife_validation --no-write
-pytest -q
-cp duration_model/duration_model.json duration_model/model_card.json ../frontend/public/models/
-
-# Hot-reload the deployed FastAPI service (when ADMIN_TOKEN is configured)
-curl -X POST "$ML_API_URL/model/reload" -H "X-Admin-Token: $ADMIN_TOKEN"
+python -m duration_model.audit --csv /secure/path/activities.csv
 ```
 
-**Privacy:** never commit exported database CSVs, `DATABASE_URL` strings, or
-per-user rows to Git. Only the trained weights, aggregate `model_card.json`
-metrics, and `calibration` summary are committed/deployed.
+The audit prints aggregate row/user counts, quality-filter counts, activity
+mix, timestamp/elevation availability, and readiness warnings. It never prints
+activity rows or writes the source CSV.
+
+The enforced minimums are:
+
+- **30 valid activities** for interval calibration.
+- **200 valid activities and at least 5 distinct pseudonymous users** for full
+  retraining and a user-group holdout.
+
+These are **minimum data-volume gates, not accuracy guarantees**. Meeting them
+does not mean that the sample is representative, that every activity type has
+enough examples, or that point predictions/intervals will be reliable. Review
+counts for every reported slice and retain an independent validation cohort.
+
+## Local training and calibration workflow
+
+Install the ML requirements and run commands from `ml/`:
+
+```bash
+python -m venv .venv
+. .venv/bin/activate
+pip install -r requirements-dev.txt
+
+# 1. Audit the consented local training file.
+python -m duration_model.audit --csv /secure/path/train.csv
+
+# 2. Fit a candidate from at least 200 valid activities / 5 pseudonymous users.
+python -m duration_model.train --source csv --csv /secure/path/train.csv
+```
+
+All training runs default to
+`ml/artifacts/duration_model-candidate/` (ignored by Git). They do not replace
+the shipped model. The trainer makes an 80/20 `GroupShuffleSplit` by
+`user_id` **before** constructing chronological features, and explicitly checks
+that the training and holdout athlete sets do not overlap. Each row's anchor
+uses only earlier activities of the same athlete and sport.
+
+Training reports point-error metrics (including MAE/RMSE), q10–q90 interval
+coverage, and comparison with the simple **personal Riegel anchor without the
+learned correction**. The model card breaks these down by activity type,
+history depth (cold start, one prior activity, two or more), and—when positive
+elevation data exists—by ascent density:
+
+- low: `< 20 m ascent/km`
+- moderate: `20–<60 m ascent/km`
+- high: `≥60 m ascent/km`
+
+Ascent density is only an elevation proxy, **not** a measured terrain label.
+Missing/all-zero elevation makes these slices unavailable. Empty or tiny slices
+are omitted or have small `n`; do not over-interpret them.
+
+Calibration options:
+
+```bash
+# Fit interval width on the 20% user-group holdout (at least 30 valid holdout rows).
+python -m duration_model.train --source csv --csv /secure/path/train.csv --calibrate
+
+# Or use a separate, consented calibration cohort (at least 30 valid rows).
+# Training and calibration user_id sets must be disjoint; the trainer enforces this.
+python -m duration_model.train --source csv --csv /secure/path/train.csv \
+  --calibrate-csv /secure/path/calibration.csv
+```
+
+Holdout calibration fits and measures `achieved_coverage` on the same calibration
+partition, so that number is not an independent test result. A separate
+validation cohort is still needed. Standalone calibration is also candidate-only;
+for a real-trained model, provide the training file so athlete overlap can be
+checked:
+
+```bash
+python -m duration_model.calibrate --source csv \
+  --csv /secure/path/calibration.csv \
+  --training-csv /secure/path/train.csv \
+  --bundle artifacts/duration_model-candidate/duration_model.joblib \
+  --output-dir artifacts/duration-model-calibrated --write
+```
+
+Standalone calibration requires 30 valid rows. It writes into the candidate
+output directory and leaves the source bundle unchanged by default. For a
+non-synthetic source bundle, `--training-csv` is required so the calibration
+cohort can be checked for athlete-level separation. Calibration
+changes interval width only; it does not improve or change the median estimate.
+
+## Independent, leakage-checked validation
+
+Reserve a consented CSV of athletes not used in training. If a separate
+calibration CSV was used, keep validation athletes disjoint from that cohort too.
+Run the candidate evaluator as follows:
+
+```bash
+python -m evaluation.validate_csv \
+  --csv /secure/path/validation.csv \
+  --training-csv /secure/path/train.csv \
+  --artifacts-dir artifacts/duration_model-candidate \
+  --out artifacts/duration-model-validation.json
+```
+
+If the candidate card records calibration from a separate CSV, also pass
+`--calibration-csv /secure/path/calibration.csv`. The evaluator exits on any
+athlete overlap with training or calibration. For a candidate trained on the
+synthetic corpus, `--training-csv` may be omitted; if separate real-data
+calibration was applied, its CSV is still required. Validation predictions are
+chronological walk-forward: each prediction uses only that same user's earlier
+activities of the same sport, never future activities. The report contains
+aggregate metrics only, with error and q10–q90 coverage separately by activity
+type, ascent-density slice (where supported), and history depth. It compares
+against both the population pace prior and the athlete's personal Riegel anchor.
+
+The CSV validator checks disjoint athlete sets and temporal order; it does not
+make a small or nonrepresentative validation cohort reliable. Review each
+slice's `n`, MAE, interval coverage, and improvement (or regression) against the
+personal anchor. Reported coverage is empirical for that cohort, not a promise
+about future users.
+
+## Candidate artifact handling and review-before-deploy
+
+`ml/artifacts/` is Git-ignored. Treat candidate `.joblib` files, JSON exports,
+model cards, and validation reports as local artifacts; keep private source CSVs
+outside the repository and never commit them. The candidate directory is not
+loaded by the production API or browser automatically. The shipped model remains
+under `ml/duration_model/`; calibration code refuses to write directly into that
+shipped directory.
+
+Before promoting any candidate:
+
+1. Confirm consent, schema, pseudonymization, and absence of direct identifiers
+   or raw GPS data; save the aggregate audit output.
+2. Review the user-group split counts and zero overlap, valid row counts, and
+   error/coverage by sport, elevation proxy, and history depth.
+3. Compare MAE with the personal Riegel baseline. A lower error is useful
+   evidence for that cohort, not a guarantee; a worse result is a reason to
+   stop and investigate.
+4. Run the separate disjoint-user CSV evaluation, then smoke-test the same
+   candidate and run the tests from `ml/`:
+
+   ```bash
+   python -m evaluation.sanity_check --artifacts-dir artifacts/duration_model-candidate
+   python -m pytest -q
+   ```
+5. Have a human review the model card, slice sample sizes, interval coverage,
+   source/consent, and deployment impact. Only after explicit review should the
+   candidate be copied into shipped backend/browser locations and released.
+   There is no automatic promotion or production reload in this workflow.
+
+No production Supabase query, real-data training, or calibration was performed
+as part of implementing this CSV workflow. The repository retains a Supabase
+loader for compatibility, but do not use `--source supabase` or configure a
+production `DATABASE_URL` without separate approval.
+
+## External validation: GeoLife
+
+The saved report `ml/evaluation/reports/geolife_validation.json` evaluates the
+existing synthetic-trained artifact on the GeoLife GPS Trajectories Dataset.
+GeoLife is **external evaluation only, not training data**. The report covers
+4,362 labelled trajectories from 51 people (walk, bike→ride, and only 2 runs)
+with chronological same-user/same-mode history. There is no elevation in the
+feature table; the evaluator assumes zero elevation and infers experience from
+history. These results do not establish expected accuracy for TRANA users.
+
+| Slice | n | MAE (min) | MAPE | Within 15% | q10–q90 coverage | Personal-anchor MAE |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Overall | 4,362 | 5.84 | 35.87% | 33.43% | 16.96% | 5.83 |
+| Ride | 1,372 | 5.14 | 25.70% | 38.05% | 20.12% | 5.07 |
+| Walk | 2,988 | 6.16 | 40.54% | 31.29% | 15.53% | 6.18 |
+| Run | 2 | 2.78 | 28.21% | 50.00% | 0.00% | 3.07 |
+| Cold start | 80 | 11.80 | 51.26% | 16.25% | 13.75% | 11.43 |
+| ≥2 prior activities | 4,215 | 5.62 | 35.31% | 33.86% | 16.99% | 5.62 |
+
+Overall MAE is better than the fixed population-pace baseline (7.10 min), but
+the learned model is essentially tied with the personal Riegel anchor (5.83
+min; reported MAE improvement −0.1%). Real-world interval coverage is poor, so
+intervals must be evaluated and recalibrated using a separate, representative
+consented cohort before any deployment decision. GeoLife has no elevation, its
+run sample is too small for conclusions, and elapsed GPS durations include
+stops.
+
+## Fueling engine and prediction flow
+
+Fueling remains deterministic: calories use METs × body mass × hours; carbohydrate
+rate depends on duration and intensity; sodium/fluid depend on sweat profile and
+heat. Rules are documented in `ml/fueling_model/predict.py` and mirrored in
+`frontend/src/lib/ml/fueling.js`. Duration-model retraining does not change them.
+
+```text
+SPA ──POST /api/predictions──▶ Laravel ──POST /predict──▶ FastAPI (ml/api)
+```
+
+Laravel validates the request, resolves distance (including a drawn route),
+assembles history/profile context, calls FastAPI, normalizes the response, and
+persists the prediction and model version. See `docs/api.md` for the API contract.
 
 ## Known limitations
 
-- The committed artifact (`20261108.0445`) is trained on **synthetic** data —
-  correct shape, wrong absolute accuracy for individual athletes until per-user
-  personalization accrues.
-- Age is not yet a feature (birth_year is stored, unused by the model).
-- Wearable HR stream is stored (`avg_heart_rate`) but unused by the model.
-- Synthetic holdout coverage is 76.8 % vs 80 % target, dropping to **24.1 %**
-  on real GeoLife door-to-door durations (long in-domain activities are
-  weakest). **ML phase 2** adds conformal interval calibration and the
-  `--source supabase` retrain/recalibrate pipeline (verified in dry runs up to
-  78.2 % unseen-user coverage), awaiting ≥ 30 / ≥ 200 live Supabase activities
-  (1 trainable activity present today).
+- The shipped duration model is trained on synthetic activities; its synthetic
+  holdout metrics are not real-user accuracy guarantees.
+- GeoLife's real-world q10–q90 coverage is low, and its model MAE is essentially
+  tied with the simple personal-pace baseline.
+- Age and wearable heart-rate streams are not duration-model features.
+- A 30-activity calibration set or a 200-activity retraining set is only a
+  minimum-volume guard, not evidence of representative data or reliable
+  estimates.

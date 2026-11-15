@@ -194,12 +194,16 @@ prediction endpoints are not authenticated. `ADMIN_TOKEN` separately protects
 model reload, which is disabled when the token is blank. CORS is not a substitute
 for authentication. Verify `curl https://<ml>/health` reports `model_ready: true`.
 
-Retraining in production:
+### Model updates (manual)
 
-```bash
-DATABASE_URL="postgresql://…" python -m duration_model.train --source supabase
-curl -X POST https://<ml>/model/reload -H "X-Admin-Token: $ADMIN_TOKEN"
-```
+The ML API does not retrain itself, and its inference service does not need a
+`DATABASE_URL`. For real-data work, follow the consent-first local CSV workflow
+in [`ml/README.md`](../ml/README.md): audit the file, train a candidate, and
+validate it on disjoint users. Candidate artifacts are not deployed or promoted
+automatically. Review the reports and manually release an approved artifact;
+reload the service only after that artifact has been installed. Do not query
+production Supabase or use production data for training without separate
+approval. The optional `--source supabase` path is not the default workflow.
 
 ---
 
@@ -266,7 +270,7 @@ successful health check alone does not prove end-to-end integration.
 | `ML_API_TOKEN` (same secret) | | ✅ | ✅ |
 | `ML_ADMIN_TOKEN` | | ✅ (reload) | |
 | `ALLOWED_ORIGINS`, `ADMIN_TOKEN` | | | ✅ |
-| `DATABASE_URL` (training only) | | | ✅ |
+| `DATABASE_URL` (only for separately approved manual training; omit from inference deployment) | | | ✅ |
 
 ---
 

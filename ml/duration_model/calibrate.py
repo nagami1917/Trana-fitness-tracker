@@ -1,7 +1,7 @@
 """Interval calibration for the duration model (ML phase 2).
 
 The synthetic-trained q10/q90 bands undercover badly on real door-to-door
-durations — 24 % coverage on GeoLife against an 80 % target (see
+durations — 16.96 % coverage on GeoLife against an 80 % target (see
 docs/ml-methodology.md). This module fits a single multiplicative **width
 factor** on a calibration set of real activities so the deployed interval
 ``[med - k * lo_dev, med + k * hi_dev]`` covers ``target`` share of outcomes:
@@ -21,8 +21,8 @@ Both ``model_store.predict`` (server) and ``frontend/src/lib/ml/duration.js``
 
 Run
 ---
-    python -m duration_model.calibrate --csv path/to/real_activities.csv
-    python -m duration_model.calibrate --source supabase --write
+    python -m duration_model.calibrate --csv /secure/path/calibration.csv \
+        --training-csv /secure/path/train.csv --write
     (training-time fitting: `train --calibrate` or `train --calibrate-csv …`)
 """
 
@@ -44,8 +44,23 @@ MIN_FACTOR = 1.0
 MIN_CALIBRATE_ROWS = 30
 
 ROOT = Path(__file__).resolve().parents[1]
+SHIPPED_ARTIFACTS = ROOT / "duration_model"
+CANDIDATE_ARTIFACTS = ROOT / "artifacts" / "duration_model-candidate"
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+
+def _validate_candidate_dir(path: Path) -> Path:
+    destination = path.resolve()
+    repository = ROOT.parent.resolve()
+    safe_root = (ROOT / "artifacts").resolve()
+    if destination == SHIPPED_ARTIFACTS.resolve() or (
+        destination.is_relative_to(repository) and not destination.is_relative_to(safe_root)
+    ):
+        raise SystemExit(
+            "calibration writes are candidate-only; use ml/artifacts/ or a secure directory outside the repository"
+        )
+    return path
 
 
 def fit_factor(
@@ -56,6 +71,9 @@ def fit_factor(
     target: float = TARGET_COVERAGE,
 ) -> dict:
     """Fit the band-width factor so ``[med - k*lo_dev, med + k*hi_dev]`` covers ``target``."""
+    if not 0.0 < target <= 1.0:
+        raise ValueError("target coverage must be greater than 0 and at most 1")
+
     actual_a = np.asarray(actual, dtype=float)
     low_a = np.asarray(low, dtype=float)
     med_a = np.asarray(median, dtype=float)
@@ -137,7 +155,10 @@ def write_calibration(
     """Persist `calibration` onto the joblib, JSON export and model card."""
     import joblib
 
-    dest = artifacts_dir or (ROOT / "duration_model")
+    dest = _validate_candidate_dir(
+        Path(artifacts_dir) if artifacts_dir is not None else CANDIDATE_ARTIFACTS
+    )
+    dest.mkdir(parents=True, exist_ok=True)
     joblib.dump(bundle, dest / "duration_model.joblib")
 
     json_path = dest / "duration_model.json"
@@ -158,27 +179,67 @@ def main() -> None:
     parser.add_argument("--source", choices=["csv", "supabase"], default="csv")
     parser.add_argument("--csv", default=None, help="real activity table (required with --source csv)")
     parser.add_argument("--target", type=float, default=TARGET_COVERAGE)
-    parser.add_argument("--bundle", default=None, help="joblib bundle to calibrate (default: shipped artifact)")
-    parser.add_argument("--write", action="store_true", help="persist factor into joblib, json export and model card")
+    parser.add_argument("--bundle", default=None, help="joblib bundle to calibrate (default: shipped artifact, read-only)")
+    parser.add_argument("--training-csv", default=None, help="training CSV, required to verify disjoint users for a real-trained bundle")
+    parser.add_argument("--output-dir", default=None, help="candidate artifact directory for --write (never the shipped directory)")
+    parser.add_argument("--write", action="store_true", help="write a candidate; the shipped artifact is never changed")
     args = parser.parse_args()
 
     import joblib
+    import shutil
 
     from duration_model.preprocess import training_frame
     from duration_model.train import load_activities, normalize_activities
 
-    activities = load_activities(args.source, args.csv)
+    activities = normalize_activities(load_activities(args.source, args.csv))
     if len(activities) < MIN_CALIBRATE_ROWS:
         raise SystemExit(
-            f"need at least {MIN_CALIBRATE_ROWS} activities to calibrate, got {len(activities)}"
+            f"need at least {MIN_CALIBRATE_ROWS} valid activities to calibrate, got {len(activities)}"
         )
 
-    bundle_path = Path(args.bundle) if args.bundle else ROOT / "duration_model" / "duration_model.joblib"
+    bundle_path = Path(args.bundle) if args.bundle else SHIPPED_ARTIFACTS / "duration_model.joblib"
     bundle = joblib.load(bundle_path)
-    frame = training_frame(normalize_activities(activities))
+    card_path = bundle_path.parent / "model_card.json"
+    source_card = json.loads(card_path.read_text()) if card_path.is_file() else {}
+    source_kind = source_card.get("training_source", "unknown")
+
+    if args.training_csv:
+        training_path = Path(args.training_csv)
+        if not training_path.is_file():
+            raise SystemExit(f"training CSV not found: {training_path}")
+        training = normalize_activities(pd.read_csv(training_path, dtype={"user_id": "string"}))
+        overlap = set(training["user_id"].astype(str)) & set(activities["user_id"].astype(str))
+        if overlap:
+            raise SystemExit(
+                f"calibration CSV must use athletes disjoint from training; found {len(overlap)} overlapping pseudonymous users"
+            )
+    elif source_kind != "synthetic":
+        raise SystemExit(
+            "calibrating a non-synthetic candidate requires --training-csv to check athlete-level separation"
+        )
+
+    frame = training_frame(activities)
     calibration = calibrate_bundle(bundle, frame, target=args.target)
+    calibration["protocol"] = "separate_user_disjoint_csv"
+    calibration["calibration_users"] = int(activities["user_id"].nunique())
+    bundle["calibration"] = calibration
     if args.write:
-        write_calibration(bundle, calibration, artifacts_dir=bundle_path.parent)
+        output_dir = _validate_candidate_dir(
+            Path(args.output_dir) if args.output_dir else CANDIDATE_ARTIFACTS
+        )
+        if output_dir.resolve() != bundle_path.parent.resolve():
+            output_dir.mkdir(parents=True, exist_ok=True)
+            for filename in ("duration_model.json", "model_card.json"):
+                source = bundle_path.parent / filename
+                destination = output_dir / filename
+                if source.is_file():
+                    shutil.copy2(source, destination)
+                elif destination.exists():
+                    raise SystemExit(
+                        f"candidate output contains stale {filename}; use an empty output directory or a bundle with matching metadata"
+                    )
+        write_calibration(bundle, calibration, artifacts_dir=output_dir)
+        print(f"candidate artifacts: {output_dir}")
     print(json.dumps(calibration, indent=2))
 
 

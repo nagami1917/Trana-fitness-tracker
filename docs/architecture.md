@@ -89,19 +89,21 @@ Consequences:
 
 ## 5. Training corpus
 
-`data/generate_dataset.py` builds a physics-informed bootstrap corpus (220
-athletes, ≈8 000 sessions) from published relationships — modality base speeds,
-gradient penalties, Naismith-style ascent costs, fatigue deceleration and
-day-to-day noise. This exists because a new deployment has no data; once real
-rows are in Supabase:
+`data/generate_dataset.py` builds a physics-informed bootstrap corpus of
+simulated athletes and activities from published relationships — modality base
+speeds, gradient penalties, Naismith-style ascent costs, fatigue deceleration,
+and day-to-day noise. The checked-in model card identifies its training source
+as synthetic; it contains no TRANA user activity data.
 
-```bash
-DATABASE_URL=... python -m duration_model.train --source supabase
-```
+Real-data model work starts from a consented, pseudonymized local CSV and writes
+a candidate artifact. Do not query production Supabase or train on production
+data without separate approval. Candidate validation and manual promotion are
+separate steps; see [`ml/README.md`](../ml/README.md) and
+[`ml-methodology.md`](ml-methodology.md).
 
 `evaluation/sanity_check.py` asserts that classic reference points (5 km, 10 km, half
 marathon, 40 km ride, 400 m hike climb, 5 km walk) land within ±22 % of
-textbook expectations, so a bad retrain cannot reach production unnoticed.
+textbook expectations, so a bad candidate cannot pass that gate unnoticed.
 
 ## 6. Fueling engine
 
