@@ -207,6 +207,7 @@ export const api = {
   },
 
   auth: {
+    googleRedirectUrl: () => `${BASE}/api/auth/google/redirect`,
     // This is only an in-memory UI hint; the actual credential is HttpOnly.
     hasToken: () => sessionAvailable,
     hasSession: () => sessionAvailable,

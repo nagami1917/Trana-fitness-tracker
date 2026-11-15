@@ -8,10 +8,12 @@ claim that this deployment has been tested.
 currently suppresses unresolved Laravel security advisories. Upgrade and audit
 the framework and dependencies before accepting real users. Backups/restore
 testing, monitoring, privacy/consent, and a real-world validation of the
-prediction model also need work. The new Gmail/password/OTP flow is implemented,
+prediction model also need work. The Gmail/password/OTP flow is implemented,
 but live email delivery is not tested until a real provider is configured with
-private `MAIL_*` credentials in the deployment environment. Cookie/CORS settings
-must also match the deployed frontend and API origins.
+private `MAIL_*` credentials in the deployment environment. Google OAuth is
+implemented but stays inactive until its credentials and callback are configured;
+see the [Google sign-in setup](GOOGLE_SIGN_IN.md). Cookie/CORS settings must also
+match the deployed frontend and API origins.
 
 ```text
 Vercel (frontend) ──► Vercel (Laravel API) ──► Supabase Postgres
@@ -73,9 +75,11 @@ Set these environment variables in the Vercel dashboard (Production + Preview):
 | `APP_KEY` | output of `php artisan key:generate --show` |
 | `APP_DEBUG` | `false` |
 | `APP_URL` | `https://<api>.vercel.app` |
+| `FRONTEND_URL` | `https://<frontend>.vercel.app` — destination after OAuth and the frontend origin used by the API |
 | `DB_CONNECTION` / `DB_HOST` / `DB_PORT` / `DB_DATABASE` / `DB_USERNAME` / `DB_PASSWORD` / `DB_SSLMODE` | from Supabase (§1) |
 | `CACHE_STORE` / `SESSION_DRIVER` | `database` (run the cache/sessions migrations once) |
 | `CORS_ALLOWED_ORIGINS` | Exact comma-separated frontend origins (scheme and port included) |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` | Optional Google OAuth web client; set only after following [Google sign-in setup](GOOGLE_SIGN_IN.md). Store the secret directly in Vercel. |
 | `TRANA_COOKIE_SAME_SITE` | Optional override; defaults to `none` in production and `lax` in local/development. Use `lax` for same-site production deployments. |
 | `TRANA_AUTH_COOKIE_MINUTES` | Optional; default is 720 minutes |
 | `TRANA_COOKIE_DOMAIN` | Optional; leave blank for host-only API cookies unless a shared parent domain is required |
@@ -251,8 +255,10 @@ Open the frontend, create a dedicated Gmail/password account, verify the
 six-digit code, complete onboarding, log an activity, save a prediction, log out,
 and sign in again. Verify that the activity and plan persist, password recovery
 sends and accepts a one-time code, and a second account cannot access the data.
-Use disposable test data and remove it through the app when appropriate. A
-successful health check alone does not prove end-to-end integration.
+If Google OAuth has been configured, also test its redirect/callback and confirm
+that Google sign-in creates the TRANA session without sending a TRANA code. Use
+disposable test data and remove it through the app when appropriate. A successful
+health check alone does not prove end-to-end integration.
 
 ---
 
@@ -262,9 +268,10 @@ successful health check alone does not prove end-to-end integration.
 | --- | :---: | :---: | :---: |
 | `VITE_API_BASE_URL` | ✅ | | |
 | `VITE_ORS_API_KEY` (optional) | ✅ | | |
-| `APP_KEY`, `APP_ENV`, `APP_DEBUG`, `APP_URL` | | ✅ | |
+| `APP_KEY`, `APP_ENV`, `APP_DEBUG`, `APP_URL`, `FRONTEND_URL` | | ✅ | |
 | `DB_*`, `DB_SSLMODE` | | ✅ | |
 | `CORS_ALLOWED_ORIGINS`, `TRANA_COOKIE_*` | | ✅ | |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` (optional) | | ✅ | |
 | `MAIL_*` | | ✅ | |
 | `ML_API_URL`, `ML_TIMEOUT` | | ✅ | |
 | `ML_API_TOKEN` (same secret) | | ✅ | ✅ |

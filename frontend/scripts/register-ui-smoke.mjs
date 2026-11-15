@@ -30,7 +30,8 @@ try {
   window.flushRegisterTest();
   const { document } = window;
   assert.match(document.body.textContent, /Create your account/);
-  assert.match(document.body.textContent, /six-digit code to verify your Gmail/);
+  assert.match(document.body.textContent, /Use Google for verified sign-in/);
+  assert.match(document.body.textContent, /verify it by code/);
   assert.match(document.body.textContent, /No payment details required/);
   assert.ok(document.querySelector('#full-name'));
   assert.ok(document.querySelector('#username'));
