@@ -14,6 +14,7 @@
 
   onMount(bootstrap);
 
+  const isLandingRoute = $derived($route === '/');
   const isLoginRoute = $derived($route === '/login');
   const isRegisterRoute = $derived($route === '/register');
   // Sign-in pages: only meaningful while signed out.
@@ -21,11 +22,12 @@
   // Legal pages + calculator preview: viewable signed-in or signed-out, outside the shell.
   const GUEST_PAGES = ['/preview', '/privacy', '/terms'];
   const isGuestPage = $derived(GUEST_PAGES.includes($route));
-  const isPublicRoute = $derived(isAuthRoute || isGuestPage);
+  const isPublicRoute = $derived(isLandingRoute || isAuthRoute || isGuestPage);
   const isOnboardingRoute = $derived($route === '/onboarding');
   const needsOnboarding = $derived(Boolean($session && $profile && $profile.onboarded === false));
   const targetSpec = $derived.by(() => {
     if (!$session) {
+      if (isLandingRoute) return { kind: 'view', key: 'landing' };
       if (isRegisterRoute) return { kind: 'view', key: 'register' };
       if (isGuestPage) return { kind: 'route', key: $route };
       return { kind: 'view', key: 'login' };

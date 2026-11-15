@@ -23,6 +23,7 @@ const PAGE_LOADERS = {
 };
 
 const VIEW_LOADERS = {
+  landing: () => import('../pages/Landing/Landing.svelte'),
   login: () => import('../pages/Login/Login.svelte'),
   register: () => import('../pages/Register/Register.svelte'),
   onboarding: () => import('../pages/Onboarding/Onboarding.svelte'),
