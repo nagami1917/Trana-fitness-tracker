@@ -186,9 +186,12 @@
             <a href="/register" class="hero-primary" onclick={(event) => openAuthModal('signup', event)}>
               Start for free <ArrowRight size={17} aria-hidden="true" />
             </a>
-            <a href="#features" class="hero-secondary">
+            <a href="/preview" use:link class="hero-secondary">
               <span><ArrowRight size={14} aria-hidden="true" /></span>
-              See what you can do
+              <span class="hero-secondary-copy">
+                <strong>Try the interactive preview</strong>
+                <small>No account required</small>
+              </span>
             </a>
           </div>
 
@@ -440,8 +443,11 @@
   .hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 13px 20px; margin-top: 29px; }
   .hero-primary { min-height: 52px; padding: 0 23px; font-size: 13px; }
   .hero-secondary { display: inline-flex; align-items: center; gap: 10px; color: white; font-size: 12px; font-weight: 800; text-decoration: none; }
-  .hero-secondary > span { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid rgba(255,255,255,.42); border-radius: 50%; transition: background .18s ease; }
-  .hero-secondary:hover > span { background: rgba(255,255,255,.18); }
+  .hero-secondary > span:first-child { display: grid; width: 30px; height: 30px; flex: 0 0 30px; place-items: center; border: 1px solid rgba(255,255,255,.42); border-radius: 50%; transition: background .18s ease; }
+  .hero-secondary-copy { display: grid; gap: 2px; }
+  .hero-secondary-copy strong { font-size: 12px; font-weight: 800; }
+  .hero-secondary-copy small { color: rgba(255,255,255,.74); font-size: 10px; font-weight: 600; }
+  .hero-secondary:hover > span:first-child { background: rgba(255,255,255,.18); }
   .hero-points { display: flex; flex-wrap: wrap; gap: 14px 22px; margin-top: 27px; color: rgba(255,255,255,.8); font-size: 11px; font-weight: 800; }
   .hero-points span { display: inline-flex; align-items: center; gap: 7px; }
   .hero-points :global(svg) { color: #ffb3d4; }

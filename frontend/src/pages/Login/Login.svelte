@@ -253,7 +253,7 @@
     {#if mode === 'verify'}
       <div class="eyebrow">EMAIL VERIFICATION</div>
       <h1>Check your inbox</h1>
-      <p class="subtitle">Enter the six-digit code sent to <strong>{email}</strong>.</p>
+      <p class="subtitle">Enter the six-digit code sent to <strong>{email}</strong>. After verifying, sign in to set up your training profile.</p>
       <div class="code-meta"><span>Code expires in <strong>{formatTime(expiresIn)}</strong></span><span>5 attempts maximum</span></div>
       <form on:submit|preventDefault={submitCode}>
         <div class="otp-row" role="group" aria-label="Six-digit verification code">
@@ -326,7 +326,7 @@
     {:else}
       <div class="eyebrow">YOUR TRAINING, IN FOCUS</div>
       <h1>{mode === 'signup' ? 'Create your account' : 'Welcome back'}</h1>
-      <p class="subtitle">{mode === 'signup' ? 'Build a training plan that moves with you.' : 'Sign in to continue your training journey.'}</p>
+      <p class="subtitle">{mode === 'signup' ? 'Start free. We’ll email a six-digit code to verify your Gmail. No payment details required.' : 'Sign in to continue your training journey.'}</p>
       <div class="tabs" role="tablist" aria-label="Account access">
         <button type="button" role="tab" aria-selected={mode === 'login'} class:active={mode === 'login'} on:click={() => { mode = 'login'; error = ''; fieldErrors = {}; }}>Log in</button>
         <button type="button" role="tab" aria-selected={mode === 'signup'} class:active={mode === 'signup'} on:click={() => { mode = 'signup'; error = ''; fieldErrors = {}; }}>Create account</button>

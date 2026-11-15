@@ -196,6 +196,8 @@ try {
   assert.match(document.querySelector('#landing-title').textContent, /Train smarter/);
   assert.ok(document.querySelector('#features'), 'Landing page should showcase the product features');
   assert.ok(document.querySelector('a[href="/register"]'), 'Landing page should offer account creation');
+  assert.equal(document.querySelector('.hero-secondary')?.getAttribute('href'), '/preview', 'Hero preview CTA should open the no-account demo');
+  assert.match(document.querySelector('.hero-secondary')?.textContent ?? '', /No account required/);
   assert.ok(document.querySelector('a[href="/login"]'), 'Landing page should offer sign-in');
   assert.ok(document.querySelector('img[src="/images/trana-landing-hero.jpg"]'), 'Landing page hero image should render');
   assert.equal(document.querySelector('#login-password'), null, 'Signed-out home should not render the login form until requested');

@@ -15,8 +15,8 @@
       {#if $session}
         <a href="/" use:link class="rounded-xl bg-brand-gradient px-4 py-2.5 text-xs font-extrabold text-white shadow-soft transition hover:shadow-glow sm:text-sm">Go to TRANA</a>
       {:else}
-        <a href="/login" use:link class="rounded-xl px-3 py-2.5 text-xs font-extrabold text-ink-600 transition hover:bg-white hover:text-brand-700 sm:px-4 sm:text-sm">Sign In</a>
-        <a href="/register" use:link class="rounded-xl bg-brand-gradient px-4 py-2.5 text-xs font-extrabold text-white shadow-soft transition hover:shadow-glow sm:px-5 sm:text-sm">Create account</a>
+        <a href="/login" use:link class="rounded-xl px-3 py-2.5 text-xs font-extrabold text-ink-600 transition hover:bg-white hover:text-brand-700 sm:px-4 sm:text-sm">Sign in</a>
+        <a href="/register" use:link class="rounded-xl bg-brand-gradient px-4 py-2.5 text-xs font-extrabold text-white shadow-soft transition hover:shadow-glow sm:px-5 sm:text-sm">Create free account</a>
       {/if}
     </nav>
   </header>

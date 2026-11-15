@@ -6,7 +6,7 @@
   import { loadModel, predictDuration } from '../../lib/ml/duration.js';
   import { recommendFueling, INTENSITY_COPY, gelEquivalent } from '../../lib/ml/fueling.js';
   import { duration as fmtDuration, kcal, nf } from '../../lib/format.js';
-  import { navigate } from '../../lib/router.js';
+  import { link, navigate } from '../../lib/router.js';
 
   let model = $state(null);
   let activityType = $state('run');
@@ -59,9 +59,9 @@
 
 <div class="space-y-5">
   <div class="flex flex-wrap items-center justify-between gap-2">
-    <button type="button" class="btn-ghost text-xs" onclick={() => navigate('/login')}>
-      <ArrowLeft size={14} /> Back to sign in
-    </button>
+    <a href="/" use:link class="btn-ghost text-xs no-underline">
+      <ArrowLeft size={14} aria-hidden="true" /> Back to home
+    </a>
     <button type="button" class="btn-primary text-xs" onclick={() => navigate('/register')}>
       Create free account <ArrowRight size={14} />
     </button>
