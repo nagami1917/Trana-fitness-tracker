@@ -71,12 +71,12 @@ class GoogleOAuthTest extends TestCase
     private function fakeGoogleProfile(array $googleProfile): void
     {
         Http::fake([
-            'oauth2.googleapis.com/token' => Http::response([
+            'https://oauth2.googleapis.com/token' => Http::response([
                 'access_token' => 'test-google-access-token',
                 'token_type' => 'Bearer',
                 'expires_in' => 3600,
             ]),
-            'openidconnect.googleapis.com/v1/userinfo' => Http::response($googleProfile),
+            'https://openidconnect.googleapis.com/v1/userinfo' => Http::response($googleProfile),
         ]);
     }
 
