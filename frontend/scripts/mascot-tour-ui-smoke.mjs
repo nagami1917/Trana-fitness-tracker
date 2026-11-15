@@ -254,10 +254,10 @@ try {
   await waitFor(
     () => harness.getRoute() === '/track'
       && document.querySelector('#mascot-tour-title')?.textContent.includes('Record live GPS workouts')
-      && document.querySelector('[data-tour="track-controls-header"]'),
+      && document.querySelector('[data-tour="track-map"]'),
     'Track Activity step',
   );
-  assert.ok(document.querySelector('[data-tour="track-controls-header"]'), 'Track Activity header target should exist');
+  assert.ok(document.querySelector('[data-tour="track-map"]'), 'Track Activity map should be the spotlight target');
 
   findButton('Next').click();
   await waitFor(

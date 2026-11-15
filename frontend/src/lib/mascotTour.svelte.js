@@ -54,7 +54,7 @@ export const TOUR_STEPS = [
     body: 'Start Free GPS, draw a custom path, or follow a saved plan. Recording keeps running smoothly even if you switch pages.',
     tip: 'Tap End & save when done to record your map and automatically update Dashboard.',
     route: '/track',
-    selector: '[data-tour="track-controls-header"]',
+    selector: '[data-tour="track-map"]',
     centered: false,
     cta: 'Next',
   },
