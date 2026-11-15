@@ -7,6 +7,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Cookie;
 use Tests\TestCase;
 
@@ -113,8 +114,18 @@ class GoogleOAuthTest extends TestCase
             'name' => 'New Athlete',
         ]);
         $flow = $this->beginGoogleFlow();
+        $log = Log::spy();
 
-        $response = $this->finishGoogleFlow($flow)->assertRedirect('https://trana.test/');
+        $response = $this->finishGoogleFlow($flow);
+        Http::assertSentCount(2);
+        if ($response->headers->get('Location') !== 'https://trana.test/') {
+            $log->shouldHaveReceived('warning')->withArgs(function ($message, $context): bool {
+                fwrite(STDERR, 'Google OAuth debug context: '.json_encode($context).PHP_EOL);
+
+                return $message === 'Google sign-in callback failed';
+            });
+        }
+        $response->assertRedirect('https://trana.test/');
         $user = User::query()->where('google_sub', 'google-sub-112233')->firstOrFail();
 
         $this->assertSame('new.athlete@example.com', $user->email);

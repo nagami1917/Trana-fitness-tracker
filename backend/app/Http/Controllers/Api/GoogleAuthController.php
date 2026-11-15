@@ -88,6 +88,7 @@ class GoogleAuthController extends Controller
             return $this->frontendRedirect('failed')->withCookie($this->forgetStateCookie());
         }
 
+        $failureStage = 'token_exchange';
         try {
             $tokenResponse = Http::asForm()
                 ->acceptJson()
@@ -110,6 +111,7 @@ class GoogleAuthController extends Controller
                 throw new RuntimeException('Google did not return an access token.');
             }
 
+            $failureStage = 'userinfo_fetch';
             $profileResponse = Http::withToken($accessToken)
                 ->acceptJson()
                 ->timeout(10)
@@ -140,11 +142,13 @@ class GoogleAuthController extends Controller
             }
             $name = mb_substr($name, 0, 80);
 
+            $failureStage = 'account_resolution';
             $user = $this->resolveAccount($googleSub, $email, $name);
             if ($user->isSuspended()) {
                 return $this->frontendRedirect('account_unavailable')->withCookie($this->forgetStateCookie());
             }
 
+            $failureStage = 'session_issue';
             $token = $user->createToken(
                 'trana-web',
                 ['*'],
@@ -159,6 +163,7 @@ class GoogleAuthController extends Controller
                 ->header('Cache-Control', 'no-store');
         } catch (Throwable $exception) {
             Log::warning('Google sign-in callback failed', [
+                'stage' => $failureStage,
                 'exception' => get_class($exception),
             ]);
 
