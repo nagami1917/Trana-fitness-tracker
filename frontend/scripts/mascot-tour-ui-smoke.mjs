@@ -108,6 +108,7 @@ let activeAccount = {
 
 window.localStorage.setItem('trana.token', 'tour-test-token');
 const csrfToken = 'f'.repeat(64);
+let authenticated = true;
 const jsonResp = (body, status = 200) => ({
   ok: status >= 200 && status < 300,
   status,
@@ -127,7 +128,11 @@ window.fetch = async (url, init = {}) => {
   }
   if (path === '/api/auth/csrf') return jsonResp({ csrfToken });
   if (path === '/api/health') return jsonResp({ status: 'ok' });
-  if (path === '/api/auth/me') return jsonResp({ user: activeAccount.user });
+  if (path === '/api/auth/me') {
+    return authenticated
+      ? jsonResp({ user: activeAccount.user })
+      : jsonResp({ message: 'Unauthenticated.' }, 401);
+  }
   if (path === '/api/profile' && method === 'GET') return jsonResp({ data: activeAccount.profile });
   if (path === '/api/profile' && method === 'PUT') {
     assert.equal(init.headers['X-CSRF-TOKEN'], csrfToken);
@@ -184,6 +189,19 @@ const findButton = (label) =>
   Array.from(document.querySelectorAll('button')).find((b) => b.textContent?.includes(label));
 
 try {
+  // Signed-out visitors should get a feature showcase at /, not the login form.
+  authenticated = false;
+  await harness.mountApp();
+  await waitFor(() => document.querySelector('#landing-title'), 'signed-out landing page');
+  assert.match(document.querySelector('#landing-title').textContent, /Train smarter/);
+  assert.ok(document.querySelector('#features'), 'Landing page should showcase the product features');
+  assert.ok(document.querySelector('a[href="/register"]'), 'Landing page should offer account creation');
+  assert.ok(document.querySelector('a[href="/login"]'), 'Landing page should offer sign-in');
+  assert.ok(document.querySelector('img[src="/images/trana-landing-hero.jpg"]'), 'Landing page hero image should render');
+  assert.equal(document.querySelector('#login-password'), null, 'Signed-out home should not render the login form');
+
+  authenticated = true;
+
   // 1. Fresh user (0 activities, 0 plans, never seen tour) lands in AppShell -> tour auto-opens!
   await harness.mountApp();
   await waitFor(() => document.querySelector('[role="dialog"]'), 'welcome tour auto-start');
