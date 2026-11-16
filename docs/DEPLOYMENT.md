@@ -146,6 +146,25 @@ a Google App Password; do not use a regular Gmail account password. Keep all
 provider credentials only in the deployment secret manager—never in Git or a
 `VITE_*` variable.
 
+Signup verification is a hard gate: registration always sends an emailed code,
+and an unverified account cannot use the app. A deployment whose mailer is not
+ready yet therefore has two options, in this order of preference:
+
+1. **Create accounts server-side.** `php artisan account:confirm {email}
+   --name="Ana Runner" --username=ana_runner` creates a verified password
+   account (or clears the verification gate on an existing unverified one),
+   prompts for a password, and sends no email. Recovery codes for password
+   reset and account deletion still need a mailer, so treat this as a stopgap.
+   Run it from a shell with the production `DB_*`/`APP_KEY` environment; the
+   API container serves HTTP only.
+2. **Close the password form.** Set `TRANA_ALLOW_PASSWORD_SIGNUP=false` so
+   `POST /api/auth/register` answers `403 SIGNUP_DISABLED` instead of taking an
+   account it cannot verify. Google sign-in and password login are unaffected,
+   and the login page shows the operator guidance. Reopen it once mail works.
+
+Prefer fixing delivery with a Google App Password (SMTP works from the
+container; Vercel only blocks port 25) or an HTTP mail API.
+
 Keep `APP_KEY` stable: it is the HMAC key for stored OTP hashes. Apply the
 `email_otp_challenges` table and its RLS/revoke migration. Signup verification
 and password-reset codes expire in five minutes; deletion codes expire in ten.

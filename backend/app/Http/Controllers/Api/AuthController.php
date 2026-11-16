@@ -42,6 +42,17 @@ class AuthController extends Controller
             'email' => is_string($rawEmail) ? strtolower(trim($rawEmail)) : $rawEmail,
         ]);
 
+        // A deployment without a working mail transport cannot verify new
+        // accounts, and an unverified account cannot sign in. Operators may
+        // close this form and create accounts server-side with
+        // `php artisan account:confirm`. Google sign-in is unaffected.
+        if (! config('services.trana.allow_password_signup', true)) {
+            return response()->json([
+                'code' => 'SIGNUP_DISABLED',
+                'message' => 'Account creation by password is closed on this deployment. Continue with Google, or ask the TRANA operator to create the account.',
+            ], 403);
+        }
+
         $data = $request->validate([
             'name' => ['required', 'string', 'min:2', 'max:80'],
             'username' => ['required', 'string', 'min:3', 'max:20', 'regex:/^[a-zA-Z0-9_]+$/', 'unique:users,username'],

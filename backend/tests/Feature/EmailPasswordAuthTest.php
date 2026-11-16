@@ -320,4 +320,41 @@ class EmailPasswordAuthTest extends TestCase
             config(['services.trana.cookie_same_site' => $previousSameSite]);
         }
     }
+
+    public function test_operator_can_close_password_signup_without_affecting_google_or_login(): void
+    {
+        // A deployment with no working mailer cannot verify new accounts, so it
+        // may close the registration form and create accounts server-side with
+        // `php artisan account:confirm`. Existing sign-in must keep working.
+        Notification::fake();
+        config(['services.trana.allow_password_signup' => false]);
+
+        $this->postJson('/api/auth/register', [
+            'name' => 'Closed Signup',
+            'username' => 'closed_signup',
+            'email' => 'closed@gmail.com',
+            'password' => 'Runner-pass-123',
+            'password_confirmation' => 'Runner-pass-123',
+        ])->assertForbidden()
+            ->assertJsonPath('code', 'SIGNUP_DISABLED');
+
+        $this->assertDatabaseMissing('users', ['email' => 'closed@gmail.com']);
+        Notification::assertNothingSent();
+
+        // Password login is independent of the flag.
+        $this->createVerifiedAccount('Existing Athlete', 'existing@gmail.com');
+        $this->postJson('/api/auth/login', [
+            'identifier' => 'existing@gmail.com',
+            'password' => self::FIXTURE_PASSWORD,
+        ])->assertOk();
+
+        config(['services.trana.allow_password_signup' => true]);
+        $this->postJson('/api/auth/register', [
+            'name' => 'Reopened Signup',
+            'username' => 'reopened_signup',
+            'email' => 'reopened@gmail.com',
+            'password' => 'Runner-pass-123',
+            'password_confirmation' => 'Runner-pass-123',
+        ])->assertAccepted();
+    }
 }

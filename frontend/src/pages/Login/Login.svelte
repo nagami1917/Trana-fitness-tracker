@@ -127,6 +127,10 @@
         mode = 'verify';
         startCountdown(err.expires_in ?? 300, err.resend_after ?? 60);
         error = err.message;
+      } else if (err.signupDisabled) {
+        // The operator closed password signup (no working mailer yet).
+        // Point at the paths that still work instead of a raw 403.
+        error = err.message || 'Account creation is closed on this deployment. Continue with Google, or ask the TRANA operator.';
       } else {
         applyApiError(err);
       }

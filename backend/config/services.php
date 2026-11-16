@@ -13,6 +13,14 @@ return [
         'userinfo_url' => 'https://openidconnect.googleapis.com/v1/userinfo',
     ],
     'trana' => [
+        // Signing up from the marketing/login page always requires the emailed
+        // code. Google sign-in stays open, so this only closes the password
+        // registration form (useful while a deployment has no working mailer).
+        'allow_password_signup' => filter_var(
+            env('TRANA_ALLOW_PASSWORD_SIGNUP', true),
+            FILTER_VALIDATE_BOOL,
+            FILTER_NULL_ON_FAILURE,
+        ) ?? true,
         // Sanctum's opaque personal-access token lives only in this HttpOnly
         // cookie. It is never serialized into a browser-readable response.
         'auth_cookie' => env('TRANA_AUTH_COOKIE', 'trana_session'),

@@ -113,6 +113,7 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
     error.status = res.status;
     error.errors = data?.errors;
     error.code = data?.code;
+    error.signupDisabled = data?.code === 'SIGNUP_DISABLED';
     error.email = data?.email;
     error.expires_in = data?.expires_in;
     error.resend_after = data?.resend_after;
