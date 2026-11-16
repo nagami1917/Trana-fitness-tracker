@@ -26,8 +26,14 @@ return [
         'auth_cookie' => env('TRANA_AUTH_COOKIE', 'trana_session'),
         'csrf_cookie' => env('TRANA_CSRF_COOKIE', 'trana_csrf'),
         'auth_cookie_minutes' => (int) env('TRANA_AUTH_COOKIE_MINUTES', 720),
-        // AuthCookieService selects a production-safe default when this is unset.
+        // AuthCookieService selects a production-safe default when this is
+        // unset. Set TRANA_COOKIE_SAME_SITE=lax when the SPA and the API share
+        // an origin behind a rewrite (see frontend/vercel.json): the cookie is
+        // then first-party, `None` is unnecessary, and `Lax` keeps the session
+        // working in browsers that block third-party cookies outright.
         'cookie_same_site' => env('TRANA_COOKIE_SAME_SITE'),
+        // Leave blank (host-only cookie) unless the API is served from a
+        // sibling subdomain of a real domain the deployment owns.
         'cookie_domain' => env('TRANA_COOKIE_DOMAIN'),
     ],
 ];
