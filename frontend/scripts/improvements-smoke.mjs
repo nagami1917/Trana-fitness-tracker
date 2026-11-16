@@ -7,6 +7,7 @@
  *   5. Offline Activity Sync Queue (lib/offlineQueue.js)
  *   6. Dark Outdoor OLED Theme persistence (lib/theme.js)
  *   7. Public /preview calculator SSR render (pages/Preview/Preview.svelte)
+ *   8. Blocked-cookie session diagnostics (lib/sessionDiagnostics.js)
  *
  *   node scripts/improvements-smoke.mjs
  */
@@ -259,6 +260,58 @@ assert.equal(document.documentElement.classList.contains('theme-dark'), false);
 assert.equal(localStorage.getItem('trana:theme'), 'light');
 assert.equal(meta.getAttribute('content'), '#db2777');
 console.log('✔ Outdoor high-contrast dark theme toggle & persistence');
+
+// 8. Blocked-cookie session diagnostics
+{
+  const { detectBlockedCookieStorage, cookieBlockedGuidance } = await import(
+    resolve(root, 'src/lib/sessionDiagnostics.js')
+  );
+
+  // Happy DOM keeps cookies: a probe is written and read back, so storage is
+  // reported as working. This is the control case.
+  assert.equal(detectBlockedCookieStorage(), false, 'working cookie jar must not report blocked');
+
+  // The probe must not leak into the jar.
+  assert.ok(
+    !String(win.document.cookie).includes('trana_probe'),
+    'the diagnostic probe cookie must be cleaned up',
+  );
+
+  // A browser that silently drops the write must be reported as blocked.
+  // Happy DOM defines `cookie` on the document instance, so the stub goes
+  // there; `delete` restores the original accessor.
+  let writes = 0;
+  Object.defineProperty(win.document, 'cookie', {
+    configurable: true,
+    get: () => '',
+    set: () => {
+      writes += 1;
+    },
+  });
+  try {
+    assert.equal(detectBlockedCookieStorage(), true, 'a dropped cookie write is a blocked jar');
+    assert.ok(writes >= 1, 'the detector must actually attempt a write');
+  } finally {
+    delete win.document.cookie;
+  }
+
+  // Headless/SSR has no document: never claim the browser is at fault.
+  const savedDoc = globalThis.document;
+  delete globalThis.document;
+  try {
+    assert.equal(detectBlockedCookieStorage(), false, 'no document must report blocked=false');
+  } finally {
+    globalThis.document = savedDoc;
+  }
+
+  // Guidance must name the browser the user is actually holding.
+  assert.match(cookieBlockedGuidance('Mozilla/5.0 Chrome/157 Mobile Brave/157'), /lion icon/i);
+  assert.match(cookieBlockedGuidance('Mozilla/5.0 (iPhone) Version/17 Safari/604.1'), /Prevent Cross-Site Tracking/);
+  assert.match(cookieBlockedGuidance('Mozilla/5.0 Firefox/148.0'), /Enhanced Tracking Protection/);
+  assert.match(cookieBlockedGuidance(''), /Allow cookies for this site/);
+
+  console.log('✔ Blocked-cookie session diagnostics');
+}
 
 // 7. SSR Render check for Preview.svelte
 const { createServer } = await import('vite');

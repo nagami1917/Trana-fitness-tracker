@@ -1,10 +1,13 @@
 <script>
   import { onMount } from 'svelte';
+  import { TriangleAlert } from 'lucide-svelte';
   import { route, navigate } from './lib/router.js';
   import { bootstrap, session, booting, bootError, ready, profile } from './stores/index.js';
   import AppShell from './components/common/AppShell.svelte';
   import PublicLayout from './components/common/PublicLayout.svelte';
   import Toaster from './components/common/Toaster.svelte';
+  import { detectBlockedCookieStorage, cookieBlockedGuidance } from './lib/sessionDiagnostics.js';
+  import { reportClientError } from './lib/errorMonitor.js';
   import {
     getCachedRouteComponent,
     getCachedViewComponent,
@@ -12,7 +15,35 @@
     loadViewComponent,
   } from './routes/index.js';
 
-  onMount(bootstrap);
+  // Set when a Google sign-in just handed off to this origin. `?google=` is
+  // only ever written by our own API, so its presence (whatever the value) is
+  // proof the OAuth round trip completed and this page load is the hand-off.
+  let googleHandoff = $state(false);
+  let cookieBlocked = $state(false);
+
+  onMount(() => {
+    try {
+      googleHandoff = new URL(window.location.href).searchParams.has('google');
+    } catch {
+      googleHandoff = false;
+    }
+
+    bootstrap().then(() => {
+      if (!googleHandoff || $session) return;
+
+      // The callback sent the browser here with a session cookie, yet
+      // /auth/me saw no session. The cookie was set and then not sent back.
+      if (detectBlockedCookieStorage()) {
+        // The browser is provably refusing storage, so login can never
+        // complete here. Say so instead of showing a plain landing page.
+        cookieBlocked = true;
+        reportClientError({
+          message: 'Login cookie not persisted (browser blocked cross-site storage)',
+          stack: `location: ${window.location.origin}, ua: ${navigator.userAgent}`,
+        });
+      }
+    });
+  });
 
   const isLandingRoute = $derived($route === '/');
   const isLoginRoute = $derived($route === '/login');
@@ -123,6 +154,14 @@
     </div>
   </div>
 {:else if !$session}
+  {#if cookieBlocked}
+    <div class="border-b border-amber-200 bg-amber-50 px-4 py-3" role="alert">
+      <div class="mx-auto flex max-w-3xl items-start gap-2.5 text-sm font-semibold leading-relaxed text-amber-900">
+        <TriangleAlert size={18} class="mt-0.5 shrink-0" />
+        <p>{cookieBlockedGuidance(typeof navigator === 'undefined' ? '' : navigator.userAgent)}</p>
+      </div>
+    </div>
+  {/if}
   {#if isGuestPage}
     <PublicLayout>
       {#if ActiveComponent}
