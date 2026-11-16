@@ -276,4 +276,18 @@ class DailySessionTest extends TestCase
         $this->getJson("/api/daily-sessions/{$session->id}", ['Authorization' => 'Bearer '.$intruder['token']])
             ->assertNotFound();
     }
+
+    /**
+     * Regression: an earlier revision called load(['activities']) after the
+     * relation had been removed, which surfaced as a 500 "Call to undefined
+     * relationship [activities]". Assert the relation actually exists so a
+     * future refactor cannot silently repeat it.
+     */
+    public function test_daily_session_exposes_the_activities_relation(): void
+    {
+        $this->assertTrue(
+            method_exists(DailySession::class, 'activities'),
+            'DailySession::activities() is required by loadSessionActivities().'
+        );
+    }
 }

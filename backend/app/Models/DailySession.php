@@ -50,6 +50,16 @@ class DailySession extends Model
     }
 
     /**
+     * The user's activities. The relation itself is not date-bounded — it is
+     * the shape `loadSessionActivities()` eager-loads with the day constraint,
+     * so it must exist for that call (and for `with('activities')`) to work.
+     */
+    public function activities(): HasMany
+    {
+        return $this->hasMany(Activity::class, 'user_id', 'user_id');
+    }
+
+    /**
      * Eager-load the activities recorded on this session's calendar day.
      *
      * A daily session is just a date bucket, so its "accomplished" routes are
