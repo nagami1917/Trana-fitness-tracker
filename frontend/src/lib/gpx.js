@@ -5,7 +5,7 @@
  * Activities or Plan Activity, and export any planned/completed route as GPX 1.1.
  */
 
-import { haversineKm } from '../services/mapService.js';
+import { haversineKm } from './geo.js';
 import { decodeFit, isFitBuffer } from './fit.js';
 
 const escapeXml = (str = '') =>

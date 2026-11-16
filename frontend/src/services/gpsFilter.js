@@ -1,4 +1,4 @@
-import { haversineKm } from './mapService.js';
+import { haversineKm } from '../lib/geo.js';
 
 export const MAX_SPEED_KMH = {
   run: 50,

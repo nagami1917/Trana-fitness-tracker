@@ -61,6 +61,7 @@ const vite = await createServer({
     alias: [
       { find: /^maplibre-gl\/dist\/maplibre-gl\.css$/, replacement: resolve(here, 'stubs/empty.css') },
       { find: 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url', replacement: resolve(here, 'stubs/empty-url.js') },
+      { find: /^@maplibre\/maplibre-gl-leaflet$/, replacement: resolve(here, 'stubs/maplibre-gl-leaflet.js') },
       { find: /^maplibre-gl$/, replacement: resolve(here, 'stubs/maplibre-gl.js') },
     ],
   },
@@ -69,10 +70,25 @@ const vite = await createServer({
 });
 
 try {
-  const { MAP_STYLE, HAS_CUSTOM_STYLE, PLANNED_ROUTE_DASH } = await vite.ssrLoadModule('/src/config/mapConfig.js');
-  assert.equal(HAS_CUSTOM_STYLE, false);
-  assert.equal(typeof MAP_STYLE, 'object');
-  assert.ok(MAP_STYLE.sources?.osm?.tiles?.[0]?.includes('openstreetmap.org'));
+  const { MAP_STYLE, MAP_STYLE_URL, MAP_DARK_STYLE_URL, MAP_ATTRIBUTION, HAS_CUSTOM_STYLE, PLANNED_ROUTE_DASH } =
+    await vite.ssrLoadModule('/src/config/mapConfig.js');
+  assert.equal(HAS_CUSTOM_STYLE, false, 'no VITE_MAP_STYLE_URL is set in the test env');
+  assert.equal(typeof MAP_STYLE, 'string', 'the base style is a URL, not an inline style object');
+  assert.equal(MAP_STYLE, MAP_STYLE_URL);
+  // Regression guard: the app must never serve production traffic from
+  // OpenStreetMap's donated tile servers. Their usage policy forbids it and
+  // they will block the site. OpenFreeMap is keyless and unlimited.
+  assert.ok(
+    MAP_STYLE_URL.includes('openfreemap.org'),
+    `default style must be OpenFreeMap, got ${MAP_STYLE_URL}`,
+  );
+  assert.ok(!MAP_STYLE_URL.includes('tile.openstreetmap.org'));
+  assert.ok(MAP_DARK_STYLE_URL.includes('openfreemap.org'));
+  assert.notEqual(MAP_DARK_STYLE_URL, MAP_STYLE_URL, 'light and dark must differ');
+  // Attribution is a licence condition, not decoration.
+  assert.ok(/OpenStreetMap/.test(MAP_ATTRIBUTION));
+  assert.ok(/OpenMapTiles/.test(MAP_ATTRIBUTION));
+  assert.ok(/openfreemap\.org/.test(MAP_ATTRIBUTION));
   assert.ok(Array.isArray(PLANNED_ROUTE_DASH), 'PLANNED_ROUTE_DASH must be a MapLibre array');
 
   const { toLatLng, segmentsToGeoJSON, haversineKm, elevationGainM, panTo, isStyleInitialized } = await vite.ssrLoadModule('/src/services/mapService.js');

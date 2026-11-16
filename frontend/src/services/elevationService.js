@@ -7,7 +7,7 @@
  * whenever offline or rate-limited.
  */
 
-import { haversineKm } from './mapService.js';
+import { haversineKm } from '../lib/geo.js';
 import { computeSmoothedElevationGain, thinPoints } from '../lib/gpx.js';
 import { suggestElevation } from '../lib/ml/index.js';
 

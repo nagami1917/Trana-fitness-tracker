@@ -11,7 +11,7 @@
  */
 
 import { api } from './client.js';
-import { polylineLengthKm, elevationGainM } from './mapService.js';
+import { polylineLengthKm, elevationGainM } from '../lib/geo.js';
 
 /**
  * Build the ML-facing analysis of a tracked or planned route.

@@ -19,7 +19,7 @@
   import { downloadShareCard } from '../../lib/shareCard.js';
   import { detectNewPRs } from '../../lib/analytics/records.js';
   import { fetchRouteElevation } from '../../services/elevationService.js';
-  import { haversineKm } from '../../services/mapService.js';
+  import { haversineKm } from '../../lib/geo.js';
   import {
     distanceUnit,
     elevationUnit,

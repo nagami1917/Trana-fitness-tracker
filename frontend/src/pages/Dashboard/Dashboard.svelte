@@ -446,7 +446,6 @@
             <RouteMap
               points={previewRoute}
               height={214}
-              showAttribution={false}
               userLocation={livePosition.current ? [livePosition.current.latitude, livePosition.current.longitude] : null}
               class="!rounded-2xl"
             >

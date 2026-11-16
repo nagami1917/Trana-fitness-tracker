@@ -6,7 +6,7 @@
  * heart rate, total distance, duration, ascent, and sport without external dependencies.
  */
 
-import { haversineKm } from '../services/mapService.js';
+import { haversineKm } from './geo.js';
 
 const FIT_EPOCH_MS = Date.UTC(1989, 11, 31, 0, 0, 0);
 const SEMICIRCLE_TO_DEG = 180 / 2147483648; // 180 / 2^31

@@ -5,22 +5,12 @@
  * only deal with data and UI.
  */
 import * as maplibregl from 'maplibre-gl';
-import { MAP_STYLE, HAS_CUSTOM_STYLE, DARK_LAYER_OVERRIDES } from '../config/mapConfig.js';
+import { MAP_STYLE, MAP_STYLE_URL, MAP_DARK_STYLE_URL, HAS_CUSTOM_STYLE, DARK_LAYER_OVERRIDES } from '../config/mapConfig.js';
 
-/** Normalise [lat, lng] or { latitude, longitude } / { lat, lng } to [lat, lng]. */
-export function toLatLng(point) {
-  if (Array.isArray(point) && point.length >= 2) {
-    const lat = Number(point[0]);
-    const lng = Number(point[1]);
-    return Number.isFinite(lat) && Number.isFinite(lng) ? [lat, lng] : null;
-  }
-  if (point && typeof point === 'object') {
-    const lat = Number(point.latitude ?? point.lat);
-    const lng = Number(point.longitude ?? point.lng);
-    return Number.isFinite(lat) && Number.isFinite(lng) ? [lat, lng] : null;
-  }
-  return null;
-}
+// Pure geometry lives in lib/geo.js so non-map modules can import it without
+// dragging MapLibre into their bundle. Re-exported here for existing callers.
+import { toLatLng, haversineKm, polylineLengthKm, elevationGainM } from '../lib/geo.js';
+export { toLatLng, haversineKm, polylineLengthKm, elevationGainM };
 
 /** Create a MapLibre map inside a container element. */
 export function createMap(container, { center = [14.676, 121.0437], zoom = 13 } = {}) {
@@ -50,7 +40,7 @@ export function createMap(container, { center = [14.676, 121.0437], zoom = 13 } 
 
 /**
  * Apply the TRANA dark theme overlays when a custom vector style is active.
- * Keeps OpenStreetMap raster tiles crisp and readable by default.
+ * Keeps the default OpenFreeMap vector style readable by default.
  */
 export function applyTranaTheme(map) {
   if (map._tranaThemeApplied) return;
@@ -67,6 +57,28 @@ export function applyTranaTheme(map) {
     }
   }
   map._tranaThemeApplied = true;
+}
+
+/**
+ * Swap the base map style when the app theme changes.
+ *
+ * The default OpenFreeMap styles are light ("positron") and dark ("dark"), so
+ * the basemap is swapped instead of tinted: tinting a vector basemap would
+ * wash out roads and labels rather than produce a real dark map. Overlay
+ * layers (routes, markers) re-add themselves because they listen for
+ * `style.load`, so the caller does not need to rebuild them.
+ */
+export function applyMapTheme(map, isDark) {
+  if (!map || typeof map.setStyle !== 'function') return;
+  if (HAS_CUSTOM_STYLE) return; // the deployer pinned one style on purpose
+  const target = isDark ? MAP_DARK_STYLE_URL : MAP_STYLE_URL;
+  if (!target || map._tranaStyleUrl === target) return;
+  map._tranaStyleUrl = target;
+  try {
+    map.setStyle(target);
+  } catch {
+    // Older MapLibre builds or a torn-down map: leave the current style.
+  }
 }
 
 /**
@@ -215,41 +227,6 @@ export function segmentsToGeoJSON(points) {
     });
   }
   return { type: 'FeatureCollection', features };
-}
-
-/** Haversine distance between two [lat, lng] points, in kilometres. */
-export function haversineKm([lat1, lng1], [lat2, lng2]) {
-  const R = 6371.0088;
-  const p1 = (lat1 * Math.PI) / 180;
-  const p2 = (lat2 * Math.PI) / 180;
-  const dPhi = ((lat2 - lat1) * Math.PI) / 180;
-  const dLambda = ((lng2 - lng1) * Math.PI) / 180;
-  const h =
-    Math.sin(dPhi / 2) ** 2 +
-    Math.cos(p1) * Math.cos(p2) * Math.sin(dLambda / 2) ** 2;
-  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
-}
-
-/** Total length of a [lat, lng] polyline, in kilometres. */
-export function polylineLengthKm(points) {
-  let total = 0;
-  for (let i = 1; i < points.length; i += 1) {
-    total += haversineKm(points[i - 1], points[i]);
-  }
-  return total;
-}
-
-/** Positive elevation gain between consecutive points that have altitude. */
-export function elevationGainM(points) {
-  let gain = 0;
-  for (let i = 1; i < points.length; i += 1) {
-    const prev = points[i - 1].altitudeM ?? null;
-    const curr = points[i].altitudeM ?? null;
-    if (prev !== null && curr !== null && curr > prev) {
-      gain += curr - prev;
-    }
-  }
-  return gain;
 }
 
 /** Cleanup a map instance and its containers/markers. */

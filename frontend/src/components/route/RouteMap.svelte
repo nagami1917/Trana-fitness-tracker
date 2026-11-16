@@ -3,6 +3,24 @@
   import L from 'leaflet';
   import 'leaflet/dist/leaflet.css';
   import { LoaderCircle, LocateFixed, Maximize2 } from 'lucide-svelte';
+  import { MAP_STYLE_URL, MAP_TILE_URL, MAP_ATTRIBUTION } from '../../config/mapConfig.js';
+
+  /**
+   * Load the vector basemap stack on demand.
+   *
+   * Both MapLibre and the Leaflet bridge are far larger than this component,
+   * and the preview maps render on Dashboard and Activities. Loading them in a
+   * separate chunk keeps the ~300 KB gzip bill off those pages: the route
+   * polyline draws immediately on the Leaflet canvas, then the basemap fades in
+   * underneath when the chunk arrives.
+   */
+  async function loadVectorBasemap() {
+    const [{ maplibreGL }] = await Promise.all([
+      import('@maplibre/maplibre-gl-leaflet'),
+      import('maplibre-gl/dist/maplibre-gl.css'),
+    ]);
+    return (target) => maplibreGL({ style: MAP_STYLE_URL }).addTo(target);
+  }
 
   let {
     points = [],
@@ -36,6 +54,7 @@
   let ghostMarker;
   let markers = [];
   let hasCenteredOnUser = false;
+  let basemapLayer = null;
 
   const startIcon = () =>
     L.divIcon({
@@ -287,7 +306,7 @@
       center,
       zoom,
       zoomControl: false,
-      attributionControl: showAttribution,
+      attributionControl: showAttribution ? { prefix: false } : false,
       dragging: true,
       scrollWheelZoom: false,
       doubleClickZoom: !interactive,
@@ -297,13 +316,33 @@
       touchZoom: true,
     });
 
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap',
-      className: 'trana-tiles',
-    }).addTo(map);
-
     L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+    // Basemap. Default is OpenFreeMap vector tiles through MapLibre, which
+    // needs no key and no volume limit, so the preview maps cannot run into
+    // OpenStreetMap's tile-server usage policy.
+    //
+    // MapLibre is imported lazily on purpose: these previews are small and
+    // RouteMap is used on Dashboard and Activities, which must not pay ~300 KB
+    // of gzip for a 214 px thumbnail. Set VITE_MAP_TILE_URL to use a raster
+    // provider instead — its URL must carry its own {s}/{z}/{x}/{y}.
+    if (MAP_TILE_URL) {
+      L.tileLayer(MAP_TILE_URL, {
+        maxZoom: 19,
+        attribution: MAP_ATTRIBUTION,
+        className: 'trana-tiles',
+      }).addTo(map);
+    } else {
+      void loadVectorBasemap()
+        .then((mount) => {
+          if (!map) return; // torn down before the chunk arrived
+          basemapLayer = mount(map) ?? null;
+        })
+        .catch(() => {
+          // Offline or the chunk failed to load: the route line still draws on
+          // the plain container background, so the preview degrades quietly.
+        });
+    }
     map.on('click', (event) => {
       if (interactive) onPick?.('add', null, event.latlng);
     });
@@ -316,6 +355,14 @@
 
     return () => {
       observer.disconnect();
+      // Tear the GL layer down explicitly: it owns a separate canvas and a
+      // requestAnimationFrame loop that outlive the Leaflet map otherwise.
+      try {
+        basemapLayer?.remove?.();
+      } catch {
+        // Already removed with the parent map.
+      }
+      basemapLayer = null;
       map?.remove();
       map = null;
     };
@@ -454,5 +501,25 @@
   }
   :global(.leaflet-container) {
     border-radius: 1.5rem;
+  }
+  /* Keep the required basemap credit readable without covering the route:
+     small, translucent, and never wider than the map itself. */
+  :global(.leaflet-control-attribution) {
+    max-width: calc(100% - 1rem);
+    padding: 0 4px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.82);
+    color: #475569;
+    font-size: 9px;
+    line-height: 1.5;
+    white-space: normal;
+    text-align: right;
+  }
+  :global(.leaflet-control-attribution a) {
+    color: #db2777;
+  }
+  :global(.theme-dark .leaflet-control-attribution) {
+    background: rgba(15, 19, 29, 0.82);
+    color: #94a3b8;
   }
 </style>

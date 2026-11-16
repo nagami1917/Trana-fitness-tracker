@@ -24,6 +24,7 @@
     "vite-plugin-pwa": "^0.21.1"
   },
   "dependencies": {
+    "@maplibre/maplibre-gl-leaflet": "^0.1.4",
     "chart.js": "^4.4.7",
     "leaflet": "^1.9.4",
     "lucide-svelte": "^0.469.0",
