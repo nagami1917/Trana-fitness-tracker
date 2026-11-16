@@ -73,6 +73,9 @@ class SessionCookiePolicyTest extends TestCase
 
     public function test_https_requests_mark_the_session_cookie_secure(): void
     {
+        // AuthCookieService forces Secure in `production`; the test suite runs
+        // as `testing`, so pin the environment the assertion is about.
+        app()->detectEnvironment(fn () => 'production');
         config(['services.trana.cookie_same_site' => 'lax']);
 
         $cookie = $this->loginAndCaptureCookie(https: true)['cookie'];
