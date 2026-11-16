@@ -327,6 +327,79 @@ class GoogleOAuthTest extends TestCase
         $this->assertSame(0, User::query()->count());
     }
 
+    public function test_state_cookie_survives_the_cross_site_redirect_to_google_and_back(): void
+    {
+        // Deployed TRANA runs the SPA (trana-web) and API (trana-api) on
+        // separate sites. The browser therefore reaches the callback through a
+        // cross-site redirect chain, where Chrome drops SameSite=Lax cookies:
+        // the callback would find no state and bounce to ?google=failed. The
+        // state cookie must follow the session cookie policy instead.
+        $this->configureGoogle();
+        $previousEnvironment = app()->environment();
+        $previousSameSite = config('services.trana.cookie_same_site');
+        app()->instance('env', 'production');
+        config(['services.trana.cookie_same_site' => null]);
+
+        try {
+            $response = $this->get('/api/auth/google/redirect')->assertRedirect();
+            $cookie = $this->responseCookie($response, self::STATE_COOKIE);
+
+            $this->assertInstanceOf(Cookie::class, $cookie);
+            $this->assertTrue($cookie->isSecure());
+            $this->assertTrue($cookie->isHttpOnly());
+            $this->assertSame('none', $cookie->getSameSite());
+        } finally {
+            app()->instance('env', $previousEnvironment);
+            config(['services.trana.cookie_same_site' => $previousSameSite]);
+        }
+    }
+
+    public function test_state_cookie_stays_lax_where_https_is_unavailable(): void
+    {
+        // Local development is plain HTTP: a Secure SameSite=None cookie would
+        // be rejected outright, so the local policy must remain Lax.
+        $this->configureGoogle();
+        $previousSameSite = config('services.trana.cookie_same_site');
+        config(['services.trana.cookie_same_site' => null]);
+
+        try {
+            $response = $this->get('/api/auth/google/redirect')->assertRedirect();
+            $cookie = $this->responseCookie($response, self::STATE_COOKIE);
+
+            $this->assertInstanceOf(Cookie::class, $cookie);
+            $this->assertSame('lax', $cookie->getSameSite());
+        } finally {
+            config(['services.trana.cookie_same_site' => $previousSameSite]);
+        }
+    }
+
+    public function test_failed_callback_clears_the_state_cookie_with_the_same_attributes(): void
+    {
+        // A clearing cookie must repeat the attributes used when it was set,
+        // otherwise the browser keeps the stale state cookie around.
+        $this->configureGoogle();
+        $previousEnvironment = app()->environment();
+        $previousSameSite = config('services.trana.cookie_same_site');
+        app()->instance('env', 'production');
+        config(['services.trana.cookie_same_site' => null]);
+
+        try {
+            $flow = $this->beginGoogleFlow();
+            $response = $this->finishGoogleFlow($flow, 'attacker-controlled-state')
+                ->assertRedirect('https://trana.test/login?google=failed');
+
+            $cookie = $this->responseCookie($response, self::STATE_COOKIE);
+            $this->assertInstanceOf(Cookie::class, $cookie);
+            $this->assertSame('', $cookie->getValue());
+            $this->assertTrue($cookie->isSecure());
+            $this->assertSame('none', $cookie->getSameSite());
+            $this->assertSame('/api/auth/google/callback', $cookie->getPath());
+        } finally {
+            app()->instance('env', $previousEnvironment);
+            config(['services.trana.cookie_same_site' => $previousSameSite]);
+        }
+    }
+
     public function test_missing_google_credentials_leave_the_password_flow_available(): void
     {
         config([

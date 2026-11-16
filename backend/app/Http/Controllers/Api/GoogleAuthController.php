@@ -26,7 +26,7 @@ class GoogleAuthController extends Controller
 
     private const STATE_TTL_SECONDS = 600;
 
-    public function redirect(Request $request): RedirectResponse
+    public function redirect(Request $request, AuthCookieService $cookies): RedirectResponse
     {
         $intentValue = $request->query('intent', 'login');
         $intent = is_string($intentValue) && in_array($intentValue, ['login', 'signup'], true)
@@ -60,7 +60,7 @@ class GoogleAuthController extends Controller
             ], '', '&', PHP_QUERY_RFC3986);
 
             return redirect()->away(rtrim((string) config('services.google.authorization_url'), '?').'?'.$query)
-                ->withCookie($this->stateCookie($encryptedState))
+                ->withCookie($this->stateCookie($encryptedState, $cookies))
                 ->header('Cache-Control', 'no-store');
         } catch (Throwable $exception) {
             Log::warning('Google sign-in could not be started', [
@@ -75,23 +75,23 @@ class GoogleAuthController extends Controller
     {
         $state = $this->consumeState($request);
         if (! $state) {
-            return $this->frontendRedirect('failed')->withCookie($this->forgetStateCookie());
+            return $this->frontendRedirect('failed')->withCookie($this->forgetStateCookie($cookies));
         }
 
         $providerError = $request->query('error');
         if (is_string($providerError) && $providerError !== '') {
             $status = $providerError === 'access_denied' ? 'cancelled' : 'failed';
 
-            return $this->frontendRedirect($status)->withCookie($this->forgetStateCookie());
+            return $this->frontendRedirect($status)->withCookie($this->forgetStateCookie($cookies));
         }
 
         if (! $this->configured()) {
-            return $this->frontendRedirect('not_configured')->withCookie($this->forgetStateCookie());
+            return $this->frontendRedirect('not_configured')->withCookie($this->forgetStateCookie($cookies));
         }
 
         $code = $request->query('code');
         if (! is_string($code) || $code === '' || strlen($code) > 2048) {
-            return $this->frontendRedirect('failed')->withCookie($this->forgetStateCookie());
+            return $this->frontendRedirect('failed')->withCookie($this->forgetStateCookie($cookies));
         }
 
         $failureStage = 'token_exchange';
@@ -138,7 +138,7 @@ class GoogleAuthController extends Controller
             $emailVerified = ($profile['email_verified'] ?? false) === true;
             if (! is_string($googleSub) || $googleSub === '' || strlen($googleSub) > 255
                 || strlen($email) > 255 || ! filter_var($email, FILTER_VALIDATE_EMAIL) || ! $emailVerified) {
-                return $this->frontendRedirect('unverified_email')->withCookie($this->forgetStateCookie());
+                return $this->frontendRedirect('unverified_email')->withCookie($this->forgetStateCookie($cookies));
             }
 
             $nameValue = $profile['name'] ?? null;
@@ -151,10 +151,10 @@ class GoogleAuthController extends Controller
             $failureStage = 'account_resolution';
             $user = $this->resolveAccount($googleSub, $email, $name, $state['intent'] === 'signup');
             if (! $user) {
-                return $this->frontendRedirect('account_not_found')->withCookie($this->forgetStateCookie());
+                return $this->frontendRedirect('account_not_found')->withCookie($this->forgetStateCookie($cookies));
             }
             if ($user->isSuspended()) {
-                return $this->frontendRedirect('account_unavailable')->withCookie($this->forgetStateCookie());
+                return $this->frontendRedirect('account_unavailable')->withCookie($this->forgetStateCookie($cookies));
             }
 
             $failureStage = 'session_issue';
@@ -168,7 +168,7 @@ class GoogleAuthController extends Controller
             return redirect()->away(rtrim((string) config('frontend.url'), '/').'/')
                 ->withCookie($cookies->authCookie($token))
                 ->withCookie($cookies->csrfCookie($csrfToken))
-                ->withCookie($this->forgetStateCookie())
+                ->withCookie($this->forgetStateCookie($cookies))
                 ->header('Cache-Control', 'no-store');
         } catch (Throwable $exception) {
             Log::warning('Google sign-in callback failed', [
@@ -176,7 +176,7 @@ class GoogleAuthController extends Controller
                 'exception' => get_class($exception),
             ]);
 
-            return $this->frontendRedirect('failed')->withCookie($this->forgetStateCookie());
+            return $this->frontendRedirect('failed')->withCookie($this->forgetStateCookie($cookies));
         }
     }
 
@@ -329,7 +329,15 @@ class GoogleAuthController extends Controller
         return redirect()->away($url)->header('Cache-Control', 'no-store');
     }
 
-    private function stateCookie(string $value): Cookie
+    /**
+     * The state cookie travels through an identity-provider round trip: it is
+     * written on the API response, then read when the browser returns from
+     * Google. In production the SPA and the API are separate sites, so this is
+     * a cross-site redirect chain and Chrome drops a `SameSite=Lax` cookie.
+     * Reuse the session cookie policy (Secure SameSite=None in production,
+     * Lax where HTTPS is unavailable) so the callback can validate the state.
+     */
+    private function stateCookie(string $value, AuthCookieService $cookies): Cookie
     {
         return cookie(
             self::STATE_COOKIE,
@@ -337,25 +345,27 @@ class GoogleAuthController extends Controller
             (int) ceil(self::STATE_TTL_SECONDS / 60),
             self::CALLBACK_PATH,
             null,
-            app()->environment('production') || request()->isSecure(),
+            $cookies->secure(),
             true,
             false,
-            'lax',
+            $cookies->sameSite(),
         );
     }
 
-    private function forgetStateCookie(): Cookie
+    private function forgetStateCookie(AuthCookieService $cookies): Cookie
     {
+        // Same attributes as stateCookie(), so the browser matches and clears
+        // it even if the cookie policy changes between requests.
         return cookie(
             self::STATE_COOKIE,
             '',
             -262800,
             self::CALLBACK_PATH,
             null,
-            app()->environment('production') || request()->isSecure(),
+            $cookies->secure(),
             true,
             false,
-            'lax',
+            $cookies->sameSite(),
         );
     }
 
