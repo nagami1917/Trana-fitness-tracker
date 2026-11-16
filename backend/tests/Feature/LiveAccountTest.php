@@ -148,4 +148,53 @@ class LiveAccountTest extends TestCase
         $this->getJson('/api/activities?q=TRAINING', $headers)->assertOk()->assertJsonCount(3, 'data');
         $this->getJson('/api/activities?page=0', $headers)->assertUnprocessable();
     }
+
+    public function test_activity_export_streams_the_athletes_own_csv(): void
+    {
+        // Regression: exportCsv() once type-hinted a non-existent
+        // Illuminate\Support\StreamedResponse, so every export request died
+        // with a 500 in production while no test exercised the route.
+        $token = $this->registerAthlete('Exporter', 'exporter@gmail.com');
+        $headers = $this->bearer($token);
+        $athlete = User::where('email', 'exporter@gmail.com')->firstOrFail();
+
+        $this->postJson('/api/activities', [
+            'activity_type' => 'run', 'distance_km' => 5, 'duration_min' => 30,
+            'calories' => 320, 'notes' => 'Morning 5k', 'started_at' => now()->toIso8601String(),
+        ], $headers)->assertCreated();
+        $otherUser = User::create([
+            'name' => 'Other Athlete',
+            'username' => 'other_athlete',
+            'email' => 'other@gmail.com',
+            'password' => 'Fixture-password-123',
+        ]);
+        $otherUser->activities()->create([
+            'activity_type' => 'ride', 'distance_km' => 40, 'duration_min' => 90,
+            'notes' => 'Someone else ride', 'started_at' => now(),
+        ]);
+
+        $response = $this->get('/api/activities/export', $headers);
+        $response->assertOk();
+        $this->assertStringContainsString('text/csv', (string) $response->headers->get('Content-Type'));
+        // Symfony picks the header format (quoted vs token) from the filename
+        // and version, so assert the stable parts rather than exact quoting.
+        $disposition = (string) $response->headers->get('Content-Disposition');
+        $this->assertStringContainsString('attachment;', $disposition);
+        $this->assertStringContainsString('filename=', $disposition);
+        $this->assertStringContainsString('trana-activities-'.$athlete->id.'-', $disposition);
+        $this->assertStringContainsString('.csv', $disposition);
+
+        $csv = $response->streamedContent();
+        $rows = array_values(array_filter(array_map('str_getcsv', preg_split('/\r\n|\n/', trim($csv)))));
+        $this->assertSame('id', $rows[0][0]);
+        $this->assertContains('activity_type', $rows[0]);
+        $this->assertCount(2, $rows, 'Header plus the athlete\'s single activity.');
+        $this->assertSame('run', $rows[1][1]);
+        $this->assertStringContainsString('Morning 5k', $csv);
+        $this->assertStringNotContainsString('Someone else ride', $csv);
+
+        // The export must not open up to callers without a session.
+        app('auth')->forgetGuards();
+        $this->get('/api/activities/export')->assertUnauthorized();
+    }
 }
