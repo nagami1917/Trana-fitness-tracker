@@ -207,7 +207,7 @@ export const api = {
   },
 
   auth: {
-    googleRedirectUrl: () => `${BASE}/api/auth/google/redirect`,
+    googleRedirectUrl: (intent = 'login') => `${BASE}/api/auth/google/redirect?intent=${intent === 'signup' ? 'signup' : 'login'}`,
     // This is only an in-memory UI hint; the actual credential is HttpOnly.
     hasToken: () => sessionAvailable,
     hasSession: () => sessionAvailable,

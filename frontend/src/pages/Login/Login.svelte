@@ -37,6 +37,7 @@
         not_configured: 'Google sign-in is not configured yet. Please use your password for now.',
         unverified_email: 'Google did not confirm this email address. Choose a verified Google account or use your password.',
         account_unavailable: 'This account cannot sign in right now. Please contact TRANA support.',
+        account_not_found: 'No TRANA account is linked to that Google address. Use Create account to register, or sign in with your username or Gmail and password.',
       };
       if (status) {
         error = messages[status] || messages.failed;
@@ -348,7 +349,7 @@
         <button type="button" role="tab" aria-selected={mode === 'signup'} class:active={mode === 'signup'} on:click={() => { mode = 'signup'; error = ''; fieldErrors = {}; }}>Create account</button>
       </div>
       <div class="google-signin">
-        <a class="google-button" href={api.auth.googleRedirectUrl()}>
+        <a class="google-button" href={api.auth.googleRedirectUrl(mode)}>
           <svg aria-hidden="true" viewBox="0 0 48 48" focusable="false">
             <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.61 17.74 9.5 24 9.5Z" />
             <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.9c-.58 2.96-2.25 5.48-4.73 7.18l7.63 5.92c4.45-4.11 7.18-10.17 7.18-17.57Z" />

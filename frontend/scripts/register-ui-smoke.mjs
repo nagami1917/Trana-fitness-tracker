@@ -31,6 +31,7 @@ try {
   const { document } = window;
   assert.match(document.body.textContent, /Create your account/);
   assert.equal(document.querySelector('.google-button')?.textContent.trim(), 'Sign in with Google');
+  assert.equal(document.querySelector('.google-button')?.getAttribute('href'), '/api/auth/google/redirect?intent=signup');
   assert.match(document.body.textContent, /Use Google for verified sign-in/);
   assert.match(document.body.textContent, /verify it by code/);
   assert.match(document.body.textContent, /No payment details required/);

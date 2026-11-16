@@ -154,4 +154,38 @@ await assert.rejects(inFlight, { name: 'AbortError' });
   }
 }
 
+// The map cursor opts out of route-smoothing so even a small genuine movement
+// follows the device fix; the reported accuracy remains attached to the fix.
+{
+  let emitFix;
+  let requestedOptions = null;
+  let cleared = null;
+  const seen = [];
+  const rawWatch = {
+    watchPosition(success, _error, options) {
+      emitFix = success;
+      requestedOptions = options;
+      return 91;
+    },
+    clearWatch(id) { cleared = id; },
+  };
+  const stop = watchPosition({
+    geolocation: rawWatch,
+    smooth: false,
+    options: { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 },
+    onUpdate: (fix) => seen.push(fix),
+  });
+  assert.deepEqual(requestedOptions, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+  emitFix({ coords: { latitude: 12.34, longitude: 56.78, accuracy: 7, speed: 1, heading: 360 }, timestamp: 1000 });
+  emitFix({ coords: { latitude: 12.34002, longitude: 56.78, accuracy: 6, speed: 1, heading: 5 }, timestamp: 2000 });
+  assert.equal(seen.length, 2);
+  assert.equal(seen[1].latitude, 12.34002, 'Map position must use the latest unsmoothed device coordinate.');
+  assert.equal(seen[1].accuracy, 6);
+  assert.equal(seen[0].speed, 3.6, 'Raw speed is normalized to km/h consistently with the smoothed watcher.');
+  assert.equal(seen[0].heading, 0, 'A 360-degree heading is normalized to north.');
+  assert.ok(Number.isFinite(seen[1].receivedAt));
+  stop();
+  assert.equal(cleared, 91);
+}
+
 console.log('Location detection, privacy, cancellation and error checks passed');

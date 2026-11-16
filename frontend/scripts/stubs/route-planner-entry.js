@@ -11,6 +11,7 @@ window.__routePlannerTest = {
     component.setRouteState(next);
     flushSync();
   },
+  getFollowing: () => component.getFollowing(),
   getMap: () => getCreatedMaps()[0] ?? null,
   getWorkerUrl,
   destroy: async () => {

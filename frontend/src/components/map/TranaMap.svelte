@@ -109,9 +109,8 @@
 
   function toggleFollow() {
     following = !following;
-    if (following && map) {
-      const target = currentPosition ?? center;
-      if (target) panTo(map, target, { zoom: Math.max(map.getZoom(), 15) });
+    if (following && map && currentPosition) {
+      panTo(map, currentPosition, { zoom: Math.max(map.getZoom(), 15), duration: 300 });
     }
   }
 
@@ -201,7 +200,7 @@
   // ── auto-centre on live GPS ────────────────────────────────────────────
   $effect(() => {
     if (!map || !styleReady || !autoCenter || !following || !currentPosition || fitRoute) return;
-    panTo(map, currentPosition, { zoom: Math.max(map.getZoom(), 15) });
+    panTo(map, currentPosition, { zoom: Math.max(map.getZoom(), 15), duration: 250 });
   });
 
   // ── reactive dark/light basemap raster styling ──────────────────────────

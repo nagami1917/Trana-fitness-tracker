@@ -98,6 +98,8 @@ try {
   assert.equal('offset' in seenEaseOptions, true);
   assert.deepEqual(seenEaseOptions.offset, [0, 0]);
   assert.equal(seenEaseOptions.zoom, 15);
+  panTo(fakeMap, [14.6761, 121.0438], { zoom: 15, duration: 250 });
+  assert.equal(seenEaseOptions.duration, 250, 'Follow pans can use a shorter, more responsive animation.');
 
   const geo = segmentsToGeoJSON([
     { latitude: 14.676, longitude: 121.0437, speedKmh: 9.5 },
@@ -216,6 +218,69 @@ try {
       Object.defineProperty(globalThis, 'navigator', originalNavigatorDescriptor);
     } else {
       delete globalThis.navigator;
+    }
+  }
+
+  // Cached city coordinates are only a viewport fallback; the shared live dot
+  // appears only after an actual current GPS fix and reports watch failures.
+  {
+    const originalStateRune = globalThis.$state;
+    // The lightweight SSR smoke runner does not install the Svelte transform;
+    // model $state with ordinary mutable values for this store contract test.
+    globalThis.$state = (value) => value;
+    let liveLocationModule;
+    try {
+      liveLocationModule = await vite.ssrLoadModule('/src/lib/liveLocation.svelte.js');
+    } finally {
+      if (originalStateRune === undefined) delete globalThis.$state;
+      else globalThis.$state = originalStateRune;
+    }
+    const { acquireLivePosition, releaseLivePosition, seedLivePosition, livePosition } = liveLocationModule;
+    const originalNavigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+    let onLivePosition;
+    let onLiveError;
+    let clearedLiveWatch = null;
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: {
+        geolocation: {
+          watchPosition(success, error, options) {
+            onLivePosition = success;
+            onLiveError = error;
+            assert.deepEqual(options, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+            return 29;
+          },
+          clearWatch(id) { clearedLiveWatch = id; },
+        },
+      },
+    });
+    try {
+      seedLivePosition({ latitude: 14.7, longitude: 121.1, at: Date.now() });
+      assert.equal(livePosition.current.source, 'cached');
+      assert.equal(livePosition.status, 'idle');
+      acquireLivePosition();
+      assert.equal(livePosition.status, 'locating');
+      onLivePosition({
+        coords: { latitude: 14.70123, longitude: 121.10234, accuracy: 9, speed: 1, heading: 45 },
+        timestamp: 1762872400000,
+      });
+      assert.equal(livePosition.status, 'active');
+      assert.equal(livePosition.current.source, 'gps');
+      assert.equal(livePosition.current.latitude, 14.70123, 'The live marker uses the exact device fix, not a smoothed coordinate.');
+      assert.equal(livePosition.current.accuracy, 9);
+      assert.equal(livePosition.current.receivedAt > 0, true);
+      onLiveError({ code: 3 });
+      assert.equal(livePosition.status, 'error');
+      assert.equal(livePosition.error.code, 'timeout');
+      releaseLivePosition();
+      assert.equal(livePosition.status, 'idle');
+      assert.equal(clearedLiveWatch, 29);
+    } finally {
+      if (originalNavigatorDescriptor) {
+        Object.defineProperty(globalThis, 'navigator', originalNavigatorDescriptor);
+      } else {
+        delete globalThis.navigator;
+      }
     }
   }
 

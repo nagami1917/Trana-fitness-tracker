@@ -22,6 +22,7 @@ export class Map {
     this.layers = [];
     this.markers = [];
     this.listeners = new globalThis.Map();
+    this.easeToCalls = [];
     this.canvas = { style: {} };
     createdMaps.push(this);
   }
@@ -58,7 +59,7 @@ export class Map {
   getCanvas() { return this.canvas; }
   addControl() {}
   resize() {}
-  easeTo() {}
+  easeTo(options) { this.easeToCalls.push(options); }
   fitBounds() {}
   zoomIn() {}
   zoomOut() {}

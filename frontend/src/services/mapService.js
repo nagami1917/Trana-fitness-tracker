@@ -95,7 +95,7 @@ export function fitToPoints(map, points, { padding = 60, maxZoom = 15 } = {}) {
 }
 
 /** Smoothly pan to a [lat, lng] or { latitude, longitude } position. */
-export function panTo(map, position, { zoom, offset } = {}) {
+export function panTo(map, position, { zoom, offset, duration = 500, animate = true } = {}) {
   if (!map || typeof map.easeTo !== 'function') return;
   const coords = toLatLng(position);
   if (!coords) return;
@@ -104,8 +104,8 @@ export function panTo(map, position, { zoom, offset } = {}) {
   // and crashes inside Point.convert(options.offset).
   const easeOptions = {
     center: [coords[1], coords[0]],
-    animate: true,
-    duration: 500,
+    animate,
+    duration,
   };
   const resolvedZoom = zoom ?? (typeof map.getZoom === 'function' ? map.getZoom() : undefined);
   if (Number.isFinite(resolvedZoom)) easeOptions.zoom = resolvedZoom;

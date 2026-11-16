@@ -176,6 +176,7 @@ export function watchPosition({
   onError,
   options = {},
   geolocation = globalThis?.navigator?.geolocation,
+  smooth = true,
 } = {}) {
   if (!geolocation || typeof geolocation.watchPosition !== 'function') {
     onError?.(new LocationError('unavailable'));
@@ -186,30 +187,50 @@ export function watchPosition({
     timeout: options.timeout ?? 15000,
     maximumAge: options.maximumAge ?? 0,
   };
-  const smoother = createGpsSmoother({ activityType: 'default' });
+  const smoother = smooth ? createGpsSmoother({ activityType: 'default' }) : null;
   let id;
   try {
     id = geolocation.watchPosition(
       (pos) => {
         const { latitude, longitude, accuracy, speed, heading } = pos?.coords ?? {};
-        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
-        const filtered = smoother.push({
-          latitude,
-          longitude,
-          accuracy,
-          speed,
-          heading,
-          timestamp: pos?.timestamp,
-        });
-        if (!filtered) return;
-        onUpdate?.({
-          latitude: filtered.latitude,
-          longitude: filtered.longitude,
-          accuracy: filtered.accuracy,
-          speed: filtered.speedKmh,
-          heading: filtered.heading,
-          timestamp: filtered.timestampMs,
-        });
+        if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90
+          || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) return;
+
+        const timestamp = Number.isFinite(pos?.timestamp) ? pos.timestamp : Date.now();
+        let fix;
+        if (smoother) {
+          const filtered = smoother.push({
+            latitude,
+            longitude,
+            accuracy,
+            speed,
+            heading,
+            timestamp,
+          });
+          if (!filtered) return;
+          fix = {
+            latitude: filtered.latitude,
+            longitude: filtered.longitude,
+            accuracy: filtered.accuracy,
+            speed: filtered.speedKmh,
+            heading: filtered.heading,
+            timestamp: filtered.timestampMs,
+          };
+        } else {
+          // The map's live dot should represent each device fix, not the
+          // drift-suppressed/EMA coordinate used for recording a route.
+          fix = {
+            latitude,
+            longitude,
+            accuracy: Number.isFinite(accuracy) && accuracy >= 0 ? accuracy : null,
+            speed: Number.isFinite(speed) && speed >= 0 ? speed * 3.6 : null,
+            heading: Number.isFinite(heading) && heading >= 0 && heading <= 360
+              ? Math.round(heading) % 360
+              : null,
+            timestamp,
+          };
+        }
+        onUpdate?.({ ...fix, receivedAt: Date.now() });
       },
       (err) => onError?.(toLocationError(err)),
       opts,
