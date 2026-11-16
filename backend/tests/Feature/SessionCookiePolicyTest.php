@@ -22,7 +22,8 @@ class SessionCookiePolicyTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function loggedInCookie(): string
+    /** @return array{token: string, cookie: \Symfony\Component\HttpFoundation\Cookie} */
+    private function loginAndCaptureCookie(): array
     {
         // `email_verified_at` is deliberately not mass-assignable, so it is set
         // after creation. Leaving it null would make login answer 403
@@ -47,19 +48,17 @@ class SessionCookiePolicyTest extends TestCase
             ->filter(fn ($c) => $c->getName() === 'trana_session');
         $this->assertCount(1, $cookies, 'login must set the session cookie');
 
-        return (string) $cookies->first()->getValue();
+        $cookie = $cookies->first();
+
+        return ['token' => (string) $cookie->getValue(), 'cookie' => $cookie];
     }
 
     public function test_configured_same_site_lax_is_applied_to_the_session_cookie(): void
     {
         config(['services.trana.cookie_same_site' => 'lax']);
 
-        $this->loggedInCookie();
+        $cookie = $this->loginAndCaptureCookie()['cookie'];
 
-        $cookie = collect($this->response->headers->getCookies())
-            ->first(fn ($c) => $c->getName() === 'trana_session');
-
-        $this->assertNotNull($cookie);
         $this->assertSame('lax', $cookie->getSameSite());
         $this->assertTrue($cookie->isSecure(), 'production cookies must stay Secure');
         $this->assertTrue($cookie->isHttpOnly(), 'the token must never be JS-readable');
@@ -70,12 +69,8 @@ class SessionCookiePolicyTest extends TestCase
     {
         config(['services.trana.cookie_same_site' => null]);
 
-        $this->loggedInCookie();
+        $cookie = $this->loginAndCaptureCookie()['cookie'];
 
-        $cookie = collect($this->response->headers->getCookies())
-            ->first(fn ($c) => $c->getName() === 'trana_session');
-
-        $this->assertNotNull($cookie);
         // Non-production falls back to Lax: None requires HTTPS end to end.
         $this->assertSame('lax', $cookie->getSameSite());
     }
@@ -83,7 +78,7 @@ class SessionCookiePolicyTest extends TestCase
     public function test_first_party_cookie_authenticates_the_api(): void
     {
         config(['services.trana.cookie_same_site' => 'lax']);
-        $token = $this->loggedInCookie();
+        $token = $this->loginAndCaptureCookie()['token'];
 
         $this->withCredentials()
             ->withUnencryptedCookies(['trana_session' => $token])
