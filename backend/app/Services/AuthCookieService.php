@@ -84,12 +84,21 @@ class AuthCookieService
         return is_string($domain) && trim($domain) !== '' ? trim($domain) : null;
     }
 
-    private function secure(): bool
+    /**
+     * `Secure` for every production cookie. Public because short-lived flow
+     * cookies (for example the Google OAuth state) must match this policy.
+     */
+    public function secure(): bool
     {
         return app()->environment('production') || request()->isSecure();
     }
 
-    private function sameSite(): string
+    /**
+     * `SameSite=None` in production so the SPA, the API and an identity
+     * provider on other sites can all round-trip the cookie; `Lax` elsewhere
+     * because `None` requires HTTPS. Public for short-lived flow cookies.
+     */
+    public function sameSite(): string
     {
         $default = app()->environment('production') ? 'none' : 'lax';
         $configured = config('services.trana.cookie_same_site');

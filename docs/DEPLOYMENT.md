@@ -118,9 +118,14 @@ requires HTTPS. Keep `TRANA_COOKIE_DOMAIN` blank unless both hosts share a domai
 where a shared cookie is intentionally needed. The current Vercel aliases are
 `https://trana-web.vercel.app` (frontend) and `https://trana-api.vercel.app`
 (API), so the API must use `TRANA_COOKIE_SAME_SITE=none`; the code supplies that
-default even when the variable is omitted. `backend/.env.example` lists the
-matching frontend CORS origin. For cross-site deployments, browser third-party
-cookie policies can still interfere; a same-site custom domain is more reliable.
+default even when the variable is omitted. The short-lived Google sign-in state
+cookie (`trana_google_oauth_state`) uses the same policy for the same reason: on
+the separate Vercel sites the return from Google is a cross-site redirect chain,
+and a `SameSite=Lax` state cookie is dropped there, so the callback finds no
+state and the login page shows `?google=failed`. Keep the session and OAuth flow
+cookies on one policy. `backend/.env.example` lists the matching frontend CORS
+origin. For cross-site deployments, browser third-party cookie policies can
+still interfere; a same-site custom domain is more reliable.
 
 Set `CORS_ALLOWED_ORIGINS` to the exact deployed frontend origin(s), including
 the scheme and any port. Do not use a wildcard with credentialed browser
@@ -292,6 +297,7 @@ health check alone does not prove end-to-end integration.
 | PWA serves an old bundle | `registerType: 'autoUpdate'` handles it, but a hard reload clears the stale service worker. |
 | Browser login returns `419` | Refresh the page to bootstrap CSRF again; check that cookies are included and the `X-CSRF-TOKEN` matches the CSRF cookie. |
 | Cookie is missing on cross-site API calls | Use HTTPS, set `TRANA_COOKIE_SAME_SITE=none`, allow credentials for the exact CORS origin, and consider a same-site custom domain. |
+| Google sign-in returns `?google=failed` on mobile but password login works | The OAuth state cookie was dropped before the callback. It must use the session cookie policy (`SameSite=None; Secure` in production, `Lax` locally) — see the cookie section above. Password login works because it never depends on a state cookie. |
 | Signup/reset email is not delivered | Verify `MAIL_*` provider credentials, sender/domain verification, SMTP connectivity, and provider logs; live delivery requires deployment credentials. |
 | Browser request returns `403` | Check that `Origin` exactly matches an entry in `CORS_ALLOWED_ORIGINS`; unverified accounts must confirm the email OTP first. |
 | `429` on auth | Auth is limited to 10 requests/min/IP; OTP resends also have per-address cooldown/hourly caps. |

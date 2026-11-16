@@ -65,6 +65,9 @@ The existing API settings still apply:
 - `CORS_ALLOWED_ORIGINS` must contain the exact frontend origin(s).
 - Keep the current HTTPS cookie setup (`TRANA_COOKIE_SAME_SITE=none` for the
   separate Vercel frontend/API hosts; the production default is also `none`).
+  The OAuth state cookie shares that policy, because the return from Google is a
+  cross-site redirect: with `Lax` the browser drops it and every sign-in ends on
+  `?google=failed` — which happens on mobile far more visibly than on desktop.
 - `VITE_API_BASE_URL` stays on the frontend project and points to the API. Do
   not prefix Google credentials with `VITE_` or add them to the frontend.
 - Ensure the `google_sub` migration has been applied to the API database before
@@ -87,7 +90,10 @@ normal Vercel release process. No secrets need to be shared with TRANA support.
 5. Separately confirm that password registration still sends its usual TRANA
    verification code and unverified password login still requires that code.
 
-If Google returns `redirect_uri_mismatch`, compare the URI in the Google client
+A `?google=failed` result while password login works usually means the state
+cookie never came back: confirm the API is deployed with the cross-site cookie
+policy above, keep API and frontend on HTTPS, and retry in a fresh tab. If Google
+returns `redirect_uri_mismatch`, compare the URI in the Google client
 and Vercel character-for-character, then check that the API was redeployed. For
 `access_denied`, check the OAuth consent-screen audience and test-user list. If
 authentication succeeds at Google but TRANA shows a generic failure, inspect the
