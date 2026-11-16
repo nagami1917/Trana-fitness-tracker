@@ -30,6 +30,7 @@ try {
   window.flushRegisterTest();
   const { document } = window;
   assert.match(document.body.textContent, /Create your account/);
+  assert.equal(document.querySelector('.google-button')?.textContent.trim(), 'Sign in with Google');
   assert.match(document.body.textContent, /Use Google for verified sign-in/);
   assert.match(document.body.textContent, /verify it by code/);
   assert.match(document.body.textContent, /No payment details required/);

@@ -21,8 +21,15 @@ const bundle = await build({
 });
 const outputs = Array.isArray(bundle) ? bundle[0].output : bundle.output;
 const codeBundle = outputs.find((entry) => entry.type === 'chunk').code;
+const cssBundle = outputs
+  .filter((entry) => entry.type === 'asset' && entry.fileName.endsWith('.css'))
+  .map((entry) => String(entry.source))
+  .join('\n');
 const window = new Window({ url: 'http://localhost/login?google=cancelled' });
 const { document } = window;
+window.innerWidth = 360;
+window.innerHeight = 640;
+document.head.innerHTML = `<style>${cssBundle}</style>`;
 document.body.innerHTML = '<div id="app"></div>';
 window.alert = () => {};
 const requests = [];
@@ -92,15 +99,21 @@ const submit = (form) => {
 
 try {
   flush();
+  assert.equal(window.innerWidth, 360, 'Auth smoke test should run at a narrow mobile viewport width.');
+  assert.match(cssBundle, /min-height:100dvh/, 'Login page should use the dynamic mobile viewport height when supported.');
+  assert.match(cssBundle, /\.password-wrap[^}]*min-width:44px;min-height:44px/, 'Password visibility control should have a mobile-friendly tap target.');
+  assert.match(cssBundle, /@media\(max-width:520px\)[\s\S]*?\.forgot[^}]*min-height:44px/, 'Forgot-password action should have a mobile-friendly tap target.');
   assert.match(document.body.textContent, /Welcome back/i);
   assert.match(document.body.textContent, /Create account/i);
   assert.match(document.body.textContent, /Google sign-in was cancelled\./);
   assert.equal(window.location.search, '', 'Google callback status should be removed from the address bar.');
   assert.equal(document.querySelector('.google-button')?.getAttribute('href'), '/api/auth/google/redirect');
+  assert.equal(document.querySelector('.google-button')?.textContent.trim(), 'Log in with Google');
   assert.ok(document.querySelector('#identifier'));
   assert.equal(document.querySelector('#login-password')?.maxLength, 72);
 
   click(document.querySelector('button[role="tab"][aria-selected="false"]'));
+  assert.equal(document.querySelector('.google-button')?.textContent.trim(), 'Sign in with Google');
   assert.ok(document.querySelector('#full-name'));
   assert.ok(document.querySelector('#username'));
   assert.equal(document.querySelector('#username')?.hasAttribute('pattern'), false, 'Username should not be blocked by native pattern validation.');
@@ -117,6 +130,7 @@ try {
   const backToLogin = [...document.querySelectorAll('.resend-row button')]
     .find((button) => button.textContent.includes('Back to log in'));
   click(backToLogin);
+  assert.equal(document.querySelector('.google-button')?.textContent.trim(), 'Log in with Google');
   setInput('#identifier', 'athlete@gmail.com');
   setInput('#login-password', 'Strong-pass-123');
   submit(document.querySelector('form'));
@@ -163,7 +177,7 @@ try {
   }
   assert.equal(window.localStorage.getItem('trana.token'), null, 'Auth tokens must never be stored in localStorage.');
   assert.equal(requests.some((request) => JSON.stringify(request.body || {}).includes('google')), false);
-  console.log('Signup, OTP verification, unverified and invalid login, Gmail sign-in and cookie/CSRF UI checks passed');
+  console.log('Mobile auth sizing, mode-specific Google labels, signup, OTP verification, login and cookie/CSRF UI checks passed');
 } finally {
   await window.destroyLoginTest();
   await window.happyDOM.abort();

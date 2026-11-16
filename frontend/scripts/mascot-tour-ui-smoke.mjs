@@ -47,7 +47,12 @@ const bundle = await build({
 
 const outputs = Array.isArray(bundle) ? bundle[0].output : bundle.output;
 const chunk = outputs.find((entry) => entry.type === 'chunk');
+const cssBundle = outputs
+  .filter((entry) => entry.type === 'asset' && entry.fileName.endsWith('.css'))
+  .map((entry) => String(entry.source))
+  .join('\n');
 assert.ok(chunk?.code, 'Expected compiled MascotTour test chunk');
+assert.match(cssBundle, /\.auth-dialog[^}]*max-height:\s*calc\(100dvh - 32px\)/, 'Auth modal should respect the dynamic mobile viewport height.');
 
 const window = new Window({ url: 'https://trana-web.vercel.app/' });
 const { document } = window;
@@ -205,18 +210,21 @@ try {
   document.querySelector('.sign-in-link').click();
   await waitFor(() => document.querySelector('#landing-auth-dialog #identifier'), 'sign-in popup');
   assert.match(document.querySelector('#landing-auth-dialog').textContent, /Welcome back/);
+  assert.equal(document.querySelector('#landing-auth-dialog .google-button')?.textContent.trim(), 'Log in with Google');
   assert.equal(harness.getRoute(), '/', 'Opening sign-in should keep the visitor on the landing page');
   const createAccountTab = Array.from(document.querySelectorAll('#landing-auth-dialog [role="tab"]'))
     .find((tab) => tab.textContent.includes('Create account'));
   assert.ok(createAccountTab, 'The sign-in popup should allow switching to account creation');
   createAccountTab.click();
   await waitFor(() => document.querySelector('#landing-auth-dialog #full-name'), 'account-creation popup mode');
+  assert.equal(document.querySelector('#landing-auth-dialog .google-button')?.textContent.trim(), 'Sign in with Google');
   window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   await waitFor(() => !document.querySelector('#landing-auth-dialog'), 'Escape closes account popup');
 
   document.querySelector('.nav-cta').click();
   await waitFor(() => document.querySelector('#landing-auth-dialog #signup-email'), 'create-account popup');
   assert.match(document.querySelector('#landing-auth-dialog').textContent, /Create your account/);
+  assert.equal(document.querySelector('#landing-auth-dialog .google-button')?.textContent.trim(), 'Sign in with Google');
   assert.equal(harness.getRoute(), '/', 'Opening account creation should keep the visitor on the landing page');
   document.querySelector('#landing-auth-dialog button[aria-label="Close dialog"]').click();
   await waitFor(() => !document.querySelector('#landing-auth-dialog'), 'close button closes account popup');
