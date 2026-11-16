@@ -26,7 +26,6 @@ class ScratchDebugTest extends TestCase
             'identifier' => 'cookiep@gmail.com',
             'password' => 'CorrectHorse9!',
         ]);
-        fwrite(STDERR, "\nSTATUS: ".$response->status()."\nBODY: ".$response->getContent()."\n");
-        $this->assertTrue(true);
+        $this->assertSame(200, $response->status(), "DEBUG BODY: ".$response->getContent());
     }
 }
