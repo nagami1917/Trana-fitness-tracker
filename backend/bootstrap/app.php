@@ -70,6 +70,17 @@ return Application::configure(basePath: dirname(__DIR__))
             }
         });
 
+        // Everything under /api is a JSON API, whatever the caller's Accept
+        // header says. Without this, `auth:sanctum` answers an unauthenticated
+        // request that does not ask for JSON by redirecting to route('login'),
+        // which this API-only app never defines: a bare GET /api/auth/me threw
+        // "Route [login] not defined" and became a 500 instead of the 401 the
+        // frontend relies on to show the signed-out state. The render callback
+        // below runs after this check.
+        $exceptions->shouldRenderJsonWhen(
+            fn (Request $request) => $request->is('api/*') || $request->expectsJson()
+        );
+
         // Never leak stack traces or SQL to the client, even in debug mode.
         $exceptions->render(function (\Throwable $e, Request $request) {
             if (! $request->is('api/*')) {
