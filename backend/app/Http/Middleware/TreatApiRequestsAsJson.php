@@ -24,9 +24,16 @@ class TreatApiRequestsAsJson
 {
     public function handle(Request $request, Closure $next): Response
     {
-        // Never override a client that already negotiates JSON; only rescue the
-        // HTML-shaped requests that would otherwise be redirected.
-        if (! $request->accepts('application/json')) {
+        // Judge the *first* acceptable type: a browser Accept such as
+        // "text/html,...,*/*;q=0.8" still matches application/json through the
+        // wildcard, so accepts()/expectsJson() would wrongly report a JSON
+        // request. Explicit JSON clients and the CSV download keep their type.
+        $preferred = strtolower((string) ($request->getAcceptableContentTypes()[0] ?? ''));
+        $wantsOurFormats = str_contains($preferred, '/json')
+            || str_contains($preferred, '+json')
+            || str_starts_with($preferred, 'text/csv');
+
+        if (! $wantsOurFormats) {
             $request->headers->set('Accept', 'application/json');
         }
 
