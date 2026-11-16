@@ -19,7 +19,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // Authentication tokens are stored in HttpOnly cookies. Translate the
         // cookie into a server-side Sanctum bearer token and verify Origin/CSRF
         // headers before API writes; the token is never exposed to JavaScript.
+        // `TreatApiRequestsAsJson` runs first: it makes HTML-shaped requests to
+        // /api accept JSON, so an unauthenticated call answers 401 instead of
+        // trying to redirect to a `login` route this app does not define.
         $middleware->api(append: [
+            \App\Http\Middleware\TreatApiRequestsAsJson::class,
             \App\Http\Middleware\AuthenticateFromHttpOnlyCookie::class,
             \App\Http\Middleware\VerifyApiCsrf::class,
         ]);
@@ -69,17 +73,6 @@ return Application::configure(basePath: dirname(__DIR__))
                 \App\Services\ErrorMonitor::recordServer($e, $request);
             }
         });
-
-        // Everything under /api is a JSON API, whatever the caller's Accept
-        // header says. Without this, `auth:sanctum` answers an unauthenticated
-        // request that does not ask for JSON by redirecting to route('login'),
-        // which this API-only app never defines: a bare GET /api/auth/me threw
-        // "Route [login] not defined" and became a 500 instead of the 401 the
-        // frontend relies on to show the signed-out state. The render callback
-        // below runs after this check.
-        $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*') || $request->expectsJson()
-        );
 
         // Never leak stack traces or SQL to the client, even in debug mode.
         $exceptions->render(function (\Throwable $e, Request $request) {

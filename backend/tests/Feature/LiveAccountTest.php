@@ -176,10 +176,13 @@ class LiveAccountTest extends TestCase
         $response = $this->get('/api/activities/export', $headers);
         $response->assertOk();
         $this->assertStringContainsString('text/csv', (string) $response->headers->get('Content-Type'));
-        $this->assertStringContainsString(
-            'attachment; filename="trana-activities-'.$athlete->id.'-',
-            (string) $response->headers->get('Content-Disposition'),
-        );
+        // Symfony picks the header format (quoted vs token) from the filename
+        // and version, so assert the stable parts rather than exact quoting.
+        $disposition = (string) $response->headers->get('Content-Disposition');
+        $this->assertStringContainsString('attachment;', $disposition);
+        $this->assertStringContainsString('filename=', $disposition);
+        $this->assertStringContainsString('trana-activities-'.$athlete->id.'-', $disposition);
+        $this->assertStringContainsString('.csv', $disposition);
 
         $csv = $response->streamedContent();
         $rows = array_values(array_filter(array_map('str_getcsv', preg_split('/\r\n|\n/', trim($csv)))));
