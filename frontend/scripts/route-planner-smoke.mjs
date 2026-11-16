@@ -204,6 +204,38 @@ try {
   assert.equal(errorReports.length, 1);
   assert.match(errorReports[0].message, /MapLibre: Failed to load maplibre worker script/);
 
+  // 5. Live GPS fixes keep the camera centered while follow is enabled. A
+  // manual drag opts out, and the recenter control restores follow on the fix.
+  harness.setState({ currentPosition: [14.6762, 121.0441], following: true });
+  const firstFollow = map.easeToCalls.at(-1);
+  assert.deepEqual(Array.from(firstFollow.center), [121.0441, 14.6762]);
+  assert.equal(firstFollow.duration, 250, 'Live follow pans quickly enough not to trail the current fix.');
+  const gpsMarker = map.markers.find((marker) => marker.getLngLat().lat === 14.6762);
+  assert.ok(gpsMarker, 'A current GPS fix must render a marker at its device coordinate.');
+
+  map.emit('dragstart');
+  harness.flush();
+  assert.equal(harness.getFollowing(), false, 'A deliberate map drag temporarily disables follow.');
+  const easeCountAfterDrag = map.easeToCalls.length;
+  harness.setState({ currentPosition: [14.6764, 121.0443] });
+  assert.equal(map.easeToCalls.length, easeCountAfterDrag, 'New fixes do not override a deliberate map pan.');
+
+  const recenterButton = document.querySelector('[aria-label="Center on location"]');
+  assert.ok(recenterButton, 'The map exposes a recenter control after follow is paused.');
+  recenterButton.click();
+  harness.flush();
+  assert.equal(harness.getFollowing(), true);
+  assert.deepEqual(Array.from(map.easeToCalls.at(-1).center), [121.0443, 14.6764]);
+
+  harness.setState({ currentPosition: null, following: false });
+  const easeCountWithoutFix = map.easeToCalls.length;
+  document.querySelector('[aria-label="Center on location"]').click();
+  harness.flush();
+  assert.equal(harness.getFollowing(), true);
+  assert.equal(map.easeToCalls.length, easeCountWithoutFix, 'Recenter waits for a fresh fix instead of panning to a cached place.');
+  harness.setState({ currentPosition: [14.6766, 121.0445] });
+  assert.deepEqual(Array.from(map.easeToCalls.at(-1).center), [121.0445, 14.6766]);
+
   await harness.destroy();
   console.log('Route planner worker & PlannedRoute layer checks passed ✔');
 } finally {

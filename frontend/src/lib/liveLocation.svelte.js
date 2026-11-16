@@ -1,41 +1,68 @@
 /**
  * Shared follow-me position for every map (ref-counted).
- * The Dashboard, the activity planner and the route editor all show the
- * same blue dot from a single geolocation watch: the first consumer to
- * acquire starts it, the last release stops it, so the GPS radio is never
- * left running while no map is on screen.
+ * The Dashboard, the activity planner and the route editor all share one
+ * device watch. The first consumer starts it and the last release stops it,
+ * so the GPS radio is never left running when no map is on screen.
  */
 import { watchPosition } from './location.js';
 
-let position = $state(null); // { latitude, longitude, accuracy } | null
+let position = $state(null); // { latitude, longitude, accuracy, source, timestamp, receivedAt } | null
+let status = $state('idle'); // 'idle' | 'locating' | 'active' | 'denied' | 'error'
+let locationError = $state(null);
 
 let stopWatch = null;
 let refs = 0;
+let watchGeneration = 0;
 
-/** Reactive view of the current device position (null until the first fix). */
+/** Reactive view of the last known position and the current watch state. */
 export const livePosition = {
   get current() {
     return position;
   },
+  get status() {
+    return status;
+  },
+  get error() {
+    return locationError;
+  },
 };
 
-/** Show a position immediately (e.g. from the dashboard's 10-min cache). */
+/** Keep a cached place as a map-center fallback, never as a live GPS fix. */
 export function seedLivePosition(pos) {
   if (position) return;
   if (!Number.isFinite(pos?.latitude) || !Number.isFinite(pos?.longitude)) return;
-  position = { latitude: pos.latitude, longitude: pos.longitude, accuracy: null };
+  position = {
+    latitude: pos.latitude,
+    longitude: pos.longitude,
+    accuracy: null,
+    heading: null,
+    timestamp: Number.isFinite(pos.at) ? pos.at : null,
+    receivedAt: null,
+    source: 'cached',
+  };
 }
 
-/** Start (or join) the shared watch. Call from onMount of each map page. */
+/** Start (or join) the shared high-accuracy watch. */
 export function acquireLivePosition() {
   refs += 1;
   if (stopWatch) return;
+
+  const generation = ++watchGeneration;
+  status = 'locating';
+  locationError = null;
   stopWatch = watchPosition({
-    onUpdate: (p) => {
-      position = p;
+    smooth: false,
+    options: { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+    onUpdate: (fix) => {
+      if (generation !== watchGeneration || refs === 0) return;
+      position = { ...fix, source: 'gps' };
+      status = 'active';
+      locationError = null;
     },
-    onError: () => {
-      // Silent: consumers keep the saved city / last known dot.
+    onError: (error) => {
+      if (generation !== watchGeneration || refs === 0) return;
+      status = error?.code === 'denied' ? 'denied' : 'error';
+      locationError = error;
     },
   });
 }
@@ -44,7 +71,12 @@ export function acquireLivePosition() {
 export function releaseLivePosition() {
   refs = Math.max(0, refs - 1);
   if (refs > 0 || !stopWatch) return;
+
+  // Ignore any callback that was already queued when clearWatch ran.
+  watchGeneration += 1;
   const stop = stopWatch;
   stopWatch = null;
   stop();
+  status = 'idle';
+  locationError = null;
 }

@@ -211,6 +211,7 @@ try {
   await waitFor(() => document.querySelector('#landing-auth-dialog #identifier'), 'sign-in popup');
   assert.match(document.querySelector('#landing-auth-dialog').textContent, /Welcome back/);
   assert.equal(document.querySelector('#landing-auth-dialog .google-button')?.textContent.trim(), 'Log in with Google');
+  assert.equal(document.querySelector('#landing-auth-dialog .google-button')?.getAttribute('href'), '/api/auth/google/redirect?intent=login');
   assert.equal(harness.getRoute(), '/', 'Opening sign-in should keep the visitor on the landing page');
   const createAccountTab = Array.from(document.querySelectorAll('#landing-auth-dialog [role="tab"]'))
     .find((tab) => tab.textContent.includes('Create account'));
@@ -218,6 +219,7 @@ try {
   createAccountTab.click();
   await waitFor(() => document.querySelector('#landing-auth-dialog #full-name'), 'account-creation popup mode');
   assert.equal(document.querySelector('#landing-auth-dialog .google-button')?.textContent.trim(), 'Sign in with Google');
+  assert.equal(document.querySelector('#landing-auth-dialog .google-button')?.getAttribute('href'), '/api/auth/google/redirect?intent=signup');
   window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   await waitFor(() => !document.querySelector('#landing-auth-dialog'), 'Escape closes account popup');
 
@@ -225,6 +227,7 @@ try {
   await waitFor(() => document.querySelector('#landing-auth-dialog #signup-email'), 'create-account popup');
   assert.match(document.querySelector('#landing-auth-dialog').textContent, /Create your account/);
   assert.equal(document.querySelector('#landing-auth-dialog .google-button')?.textContent.trim(), 'Sign in with Google');
+  assert.equal(document.querySelector('#landing-auth-dialog .google-button')?.getAttribute('href'), '/api/auth/google/redirect?intent=signup');
   assert.equal(harness.getRoute(), '/', 'Opening account creation should keep the visitor on the landing page');
   document.querySelector('#landing-auth-dialog button[aria-label="Close dialog"]').click();
   await waitFor(() => !document.querySelector('#landing-auth-dialog'), 'close button closes account popup');

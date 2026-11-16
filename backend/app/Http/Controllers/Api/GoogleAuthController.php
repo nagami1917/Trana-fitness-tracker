@@ -26,8 +26,13 @@ class GoogleAuthController extends Controller
 
     private const STATE_TTL_SECONDS = 600;
 
-    public function redirect(): RedirectResponse
+    public function redirect(Request $request): RedirectResponse
     {
+        $intentValue = $request->query('intent', 'login');
+        $intent = is_string($intentValue) && in_array($intentValue, ['login', 'signup'], true)
+            ? $intentValue
+            : 'login';
+
         if (! $this->configured()) {
             return $this->frontendRedirect('not_configured');
         }
@@ -39,6 +44,7 @@ class GoogleAuthController extends Controller
             $encryptedState = Crypt::encryptString(json_encode([
                 'state' => $state,
                 'verifier' => $verifier,
+                'intent' => $intent,
                 'issued_at' => time(),
             ], JSON_THROW_ON_ERROR));
 
@@ -143,7 +149,10 @@ class GoogleAuthController extends Controller
             $name = mb_substr($name, 0, 80);
 
             $failureStage = 'account_resolution';
-            $user = $this->resolveAccount($googleSub, $email, $name);
+            $user = $this->resolveAccount($googleSub, $email, $name, $state['intent'] === 'signup');
+            if (! $user) {
+                return $this->frontendRedirect('account_not_found')->withCookie($this->forgetStateCookie());
+            }
             if ($user->isSuspended()) {
                 return $this->frontendRedirect('account_unavailable')->withCookie($this->forgetStateCookie());
             }
@@ -171,9 +180,9 @@ class GoogleAuthController extends Controller
         }
     }
 
-    private function resolveAccount(string $googleSub, string $email, string $name): User
+    private function resolveAccount(string $googleSub, string $email, string $name, bool $allowCreate): ?User
     {
-        return DB::transaction(function () use ($googleSub, $email, $name): User {
+        return DB::transaction(function () use ($googleSub, $email, $name, $allowCreate): ?User {
             $googleUser = User::query()
                 ->where('google_sub', $googleSub)
                 ->lockForUpdate()
@@ -197,6 +206,10 @@ class GoogleAuthController extends Controller
             }
 
             if (! $user) {
+                if (! $allowCreate) {
+                    return null;
+                }
+
                 $user = new User();
                 $user->forceFill([
                     'name' => $name,
@@ -256,7 +269,7 @@ class GoogleAuthController extends Controller
         return $candidate;
     }
 
-    /** @return array{state: string, verifier: string}|null */
+    /** @return array{state: string, verifier: string, intent: string}|null */
     private function consumeState(Request $request): ?array
     {
         $encrypted = $request->cookie(self::STATE_COOKIE);
@@ -271,7 +284,14 @@ class GoogleAuthController extends Controller
             return null;
         }
 
-        if (! is_array($payload)
+        if (! is_array($payload)) {
+            return null;
+        }
+
+        // Old in-flight OAuth cookies did not carry an intent; treat them as
+        // logins so they can never unexpectedly create an account.
+        $intent = $payload['intent'] ?? 'login';
+        if (! is_string($intent) || ! in_array($intent, ['login', 'signup'], true)
             || ! is_string($payload['state'] ?? null)
             || strlen($providedState) !== 64
             || preg_match('/^[a-f0-9]{64}$/D', $providedState) !== 1
@@ -285,7 +305,7 @@ class GoogleAuthController extends Controller
             return null;
         }
 
-        return ['state' => $payload['state'], 'verifier' => $payload['verifier']];
+        return ['state' => $payload['state'], 'verifier' => $payload['verifier'], 'intent' => $intent];
     }
 
     private function configured(): bool
@@ -302,7 +322,7 @@ class GoogleAuthController extends Controller
 
     private function frontendRedirect(string $status): RedirectResponse
     {
-        $allowed = ['failed', 'cancelled', 'not_configured', 'unverified_email', 'account_unavailable'];
+        $allowed = ['failed', 'cancelled', 'not_configured', 'unverified_email', 'account_unavailable', 'account_not_found'];
         $status = in_array($status, $allowed, true) ? $status : 'failed';
         $url = rtrim((string) config('frontend.url'), '/').'/login?google='.rawurlencode($status);
 

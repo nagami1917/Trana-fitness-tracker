@@ -144,17 +144,23 @@
   let searchAbort = null;
 
   let cachedPlace = readCachedPlace();
-  const liveCoords = $derived(
-    livePosition.current &&
-    Number.isFinite(livePosition.current.latitude) &&
-    Number.isFinite(livePosition.current.longitude)
-      ? [livePosition.current.latitude, livePosition.current.longitude]
+  const lastKnownPosition = $derived.by(() => {
+    const pos = livePosition.current;
+    return pos && Number.isFinite(pos.latitude) && Number.isFinite(pos.longitude) ? pos : null;
+  });
+  const livePositionFix = $derived(
+    livePosition.status === 'active' && lastKnownPosition?.source === 'gps'
+      ? lastKnownPosition
       : null,
   );
-  const liveAccuracy = $derived(livePosition.current?.accuracy ?? null);
-  const liveHeading = $derived(livePosition.current?.heading ?? null);
+  const liveCoords = $derived(
+    livePositionFix ? [livePositionFix.latitude, livePositionFix.longitude] : null,
+  );
+  const liveAccuracy = $derived(livePositionFix?.accuracy ?? null);
+  const liveHeading = $derived(livePositionFix?.heading ?? null);
   const mapCenter = $derived.by(() => {
     if (liveCoords) return liveCoords;
+    if (lastKnownPosition) return [lastKnownPosition.latitude, lastKnownPosition.longitude];
     if (cachedPlace && Number.isFinite(cachedPlace.latitude) && Number.isFinite(cachedPlace.longitude)) {
       return [cachedPlace.latitude, cachedPlace.longitude];
     }

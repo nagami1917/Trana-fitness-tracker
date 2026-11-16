@@ -80,19 +80,50 @@
   let following = $state(true);
 
   let cachedPlace = readCachedPlace();
-  const liveCoords = $derived(
-    livePosition.current &&
-    Number.isFinite(livePosition.current.latitude) &&
-    Number.isFinite(livePosition.current.longitude)
-      ? [livePosition.current.latitude, livePosition.current.longitude]
+  const lastKnownPosition = $derived.by(() => {
+    const pos = livePosition.current;
+    return pos && Number.isFinite(pos.latitude) && Number.isFinite(pos.longitude) ? pos : null;
+  });
+  const livePositionFix = $derived(
+    livePosition.status === 'active' && lastKnownPosition?.source === 'gps'
+      ? lastKnownPosition
       : null,
   );
-  const displayPosition = $derived(currentPosition ?? liveCoords);
-  const displayAccuracyM = $derived(currentAccuracyM ?? livePosition.current?.accuracy ?? null);
-  const displayHeading = $derived(currentHeading ?? livePosition.current?.heading ?? null);
+  const liveCoords = $derived(
+    livePositionFix ? [livePositionFix.latitude, livePositionFix.longitude] : null,
+  );
+  // Prefer the raw current fix for the map dot while keeping liveTracker's
+  // filtered position as a fallback; route recording remains noise-filtered.
+  const displayPosition = $derived(liveCoords ?? currentPosition);
+  const displayAccuracyM = $derived(livePositionFix?.accuracy ?? currentAccuracyM ?? null);
+  const displayHeading = $derived(livePositionFix?.heading ?? currentHeading ?? null);
+  const displayGpsStatus = $derived.by(() => {
+    if (tracking) return gpsStatus;
+    if (livePosition.status === 'active') return 'tracking';
+    if (livePosition.status === 'locating') return 'requesting';
+    if (livePosition.status === 'denied') return 'denied';
+    if (livePosition.status === 'error') {
+      return livePosition.error?.code === 'timeout' || livePosition.error?.code === 'unavailable'
+        ? 'no-signal'
+        : 'error';
+    }
+    return 'idle';
+  });
+  const displayGpsMessage = $derived.by(() => {
+    if (tracking) return gpsMessage;
+    if (livePositionFix) {
+      return Number.isFinite(livePositionFix.accuracy)
+        ? `±${Math.round(livePositionFix.accuracy)} m horizontal accuracy`
+        : 'Current GPS fix';
+    }
+    if (livePosition.status === 'locating') return 'Waiting for a fresh GPS fix';
+    if (livePosition.error?.message) return livePosition.error.message;
+    return livePosition.status === 'idle' ? 'Waiting for location access' : 'No current GPS fix';
+  });
   let mapCenter = $derived.by(() => {
     if (currentPosition) return currentPosition;
     if (liveCoords) return liveCoords;
+    if (lastKnownPosition) return [lastKnownPosition.latitude, lastKnownPosition.longitude];
     if (cachedPlace && Number.isFinite(cachedPlace.latitude) && Number.isFinite(cachedPlace.longitude)) {
       return [cachedPlace.latitude, cachedPlace.longitude];
     }
@@ -289,6 +320,7 @@
   function selectPathSource(mode) {
     if (tracking) return;
     pathSource = mode;
+    if (mode === 'none' || mode === 'create') following = true;
     if (mode !== 'none') routeToolsExpanded = true;
     if (mode === 'none') {
       resetPlanSnap();
@@ -461,7 +493,6 @@
 
   function onCustomRoutePick(mode, index, latlng) {
     if (!latlng) return;
-    following = false;
     const point = [Number(latlng.lat.toFixed(5)), Number(latlng.lng.toFixed(5))];
     if (mode === 'remove') {
       customWaypoints = customWaypoints.filter((_, i) => i !== index);
@@ -480,16 +511,15 @@
   function startCustomFromGps() {
     const anchor = currentPosition ?? liveCoords;
     if (!anchor) return;
+    following = true;
     const pt = [Number(anchor[0].toFixed(5)), Number(anchor[1].toFixed(5))];
     if (!customWaypoints.length) {
       customWaypoints = [pt];
-      following = false;
       tranaMap?.focusPoint?.(pt, 16);
       notify('Start set to your GPS location — tap End on the map.', 'info');
       return;
     }
     customWaypoints = [pt, ...customWaypoints];
-    following = false;
     scheduleCustomSnap({ immediate: true, fitAfter: true });
   }
 
@@ -721,7 +751,7 @@
       </div>
 
       <div class="flex flex-wrap items-center gap-3">
-        <GPSStatus status={gpsStatus} message={gpsMessage} />
+        <GPSStatus status={displayGpsStatus} message={displayGpsMessage} />
         <label class="inline-flex items-center gap-1.5 text-xs font-bold text-ink-700 cursor-pointer select-none">
           <input
             type="checkbox"

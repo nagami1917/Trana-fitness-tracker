@@ -25,7 +25,7 @@ const cssBundle = outputs
   .filter((entry) => entry.type === 'asset' && entry.fileName.endsWith('.css'))
   .map((entry) => String(entry.source))
   .join('\n');
-const window = new Window({ url: 'http://localhost/login?google=cancelled' });
+const window = new Window({ url: 'http://localhost/login?google=account_not_found' });
 const { document } = window;
 window.innerWidth = 360;
 window.innerHeight = 640;
@@ -105,15 +105,16 @@ try {
   assert.match(cssBundle, /@media\(max-width:520px\)[\s\S]*?\.forgot[^}]*min-height:44px/, 'Forgot-password action should have a mobile-friendly tap target.');
   assert.match(document.body.textContent, /Welcome back/i);
   assert.match(document.body.textContent, /Create account/i);
-  assert.match(document.body.textContent, /Google sign-in was cancelled\./);
+  assert.match(document.body.textContent, /No TRANA account is linked to that Google address/);
   assert.equal(window.location.search, '', 'Google callback status should be removed from the address bar.');
-  assert.equal(document.querySelector('.google-button')?.getAttribute('href'), '/api/auth/google/redirect');
+  assert.equal(document.querySelector('.google-button')?.getAttribute('href'), '/api/auth/google/redirect?intent=login');
   assert.equal(document.querySelector('.google-button')?.textContent.trim(), 'Log in with Google');
   assert.ok(document.querySelector('#identifier'));
   assert.equal(document.querySelector('#login-password')?.maxLength, 72);
 
   click(document.querySelector('button[role="tab"][aria-selected="false"]'));
   assert.equal(document.querySelector('.google-button')?.textContent.trim(), 'Sign in with Google');
+  assert.equal(document.querySelector('.google-button')?.getAttribute('href'), '/api/auth/google/redirect?intent=signup');
   assert.ok(document.querySelector('#full-name'));
   assert.ok(document.querySelector('#username'));
   assert.equal(document.querySelector('#username')?.hasAttribute('pattern'), false, 'Username should not be blocked by native pattern validation.');
@@ -131,6 +132,7 @@ try {
     .find((button) => button.textContent.includes('Back to log in'));
   click(backToLogin);
   assert.equal(document.querySelector('.google-button')?.textContent.trim(), 'Log in with Google');
+  assert.equal(document.querySelector('.google-button')?.getAttribute('href'), '/api/auth/google/redirect?intent=login');
   setInput('#identifier', 'athlete@gmail.com');
   setInput('#login-password', 'Strong-pass-123');
   submit(document.querySelector('form'));

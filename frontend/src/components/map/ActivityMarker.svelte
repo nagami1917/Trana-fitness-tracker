@@ -268,7 +268,9 @@
 
   // Live GPS marker: reused + smoothly animated with requestAnimationFrame + heading cone + accuracy ring
   $effect(() => {
-    activeAccuracyM = Number.isFinite(Number(accuracyM)) ? Number(accuracyM) : null;
+    activeAccuracyM = accuracyM != null && Number.isFinite(Number(accuracyM))
+      ? Number(accuracyM)
+      : null;
     if (!map) {
       cancelAnim();
       removeMarker(currentMarker);
@@ -307,7 +309,7 @@
       if (changed && typeof requestAnimationFrame === 'function' && typeof performance !== 'undefined') {
         cancelAnim();
         const startMs = performance.now();
-        const durationMs = 420;
+        const durationMs = 180;
         const step = (now) => {
           const t = Math.min(1, (now - startMs) / durationMs);
           const eased = 1 - (1 - t) ** 3;
@@ -331,8 +333,16 @@
       }
     }
 
+    const markerElement = currentMarker?.getElement?.();
+    if (markerElement) {
+      markerElement.title = activeAccuracyM != null && activeAccuracyM > 0
+        ? `Current GPS position · ±${Math.round(activeAccuracyM)} m accuracy`
+        : 'Current GPS position · accuracy unavailable';
+      markerElement.setAttribute?.('aria-label', markerElement.title);
+    }
+
     if (currentConeEl) {
-      if (Number.isFinite(Number(heading))) {
+      if (heading != null && Number.isFinite(Number(heading))) {
         currentConeEl.style.opacity = '1';
         currentConeEl.style.transform = `rotate(${Math.round(Number(heading))}deg)`;
       } else {
@@ -344,7 +354,9 @@
   // Sync accuracy circle whenever styleReady flips true or accuracyM changes without position change
   $effect(() => {
     void styleReady;
-    const acc = Number.isFinite(Number(accuracyM)) ? Number(accuracyM) : null;
+    const acc = accuracyM != null && Number.isFinite(Number(accuracyM))
+      ? Number(accuracyM)
+      : null;
     const pos = displayedPos ?? toLatLng(currentPosition);
     if (pos) updateAccuracyLayer(pos, acc);
   });

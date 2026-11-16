@@ -30,9 +30,13 @@ class GoogleOAuthTest extends TestCase
     }
 
     /** @return array{state: string, cookie: string} */
-    private function beginGoogleFlow(): array
+    private function beginGoogleFlow(?string $intent = null): array
     {
-        $response = $this->get('/api/auth/google/redirect')->assertRedirect();
+        $url = '/api/auth/google/redirect';
+        if ($intent !== null) {
+            $url .= '?'.http_build_query(['intent' => $intent]);
+        }
+        $response = $this->get($url)->assertRedirect();
         $location = (string) $response->headers->get('Location');
         $query = [];
         parse_str((string) parse_url($location, PHP_URL_QUERY), $query);
@@ -59,6 +63,7 @@ class GoogleOAuthTest extends TestCase
         $statePayload = json_decode(Crypt::decryptString($cookie->getValue()), true, flags: JSON_THROW_ON_ERROR);
         $this->assertIsArray($statePayload);
         $this->assertSame($query['state'], $statePayload['state'] ?? null);
+        $this->assertSame($intent ?? 'login', $statePayload['intent'] ?? null);
         $this->assertSame(
             $query['code_challenge'],
             rtrim(strtr(base64_encode(hash('sha256', $statePayload['verifier'], true)), '+/', '-_'), '='),
@@ -115,7 +120,7 @@ class GoogleOAuthTest extends TestCase
             'email_verified' => true,
             'name' => 'New Athlete',
         ]);
-        $flow = $this->beginGoogleFlow();
+        $flow = $this->beginGoogleFlow('signup');
 
         $response = $this->finishGoogleFlow($flow);
         Http::assertSentCount(2);
@@ -153,6 +158,48 @@ class GoogleOAuthTest extends TestCase
             return $request->url() === 'https://openidconnect.googleapis.com/v1/userinfo'
                 && $request->hasHeader('Authorization', 'Bearer test-google-access-token');
         });
+    }
+
+    public function test_google_login_does_not_create_a_trana_account_when_google_email_is_unknown(): void
+    {
+        $this->configureGoogle();
+        $this->fakeGoogleProfile([
+            'sub' => 'google-sub-login-only',
+            'email' => 'new.login@example.com',
+            'email_verified' => true,
+            'name' => 'New Login',
+        ]);
+        $flow = $this->beginGoogleFlow('login');
+
+        $response = $this->finishGoogleFlow($flow)
+            ->assertRedirect('https://trana.test/login?google=account_not_found');
+
+        $this->assertSame(0, User::query()->count());
+        $this->assertDatabaseCount('personal_access_tokens', 0);
+        $this->assertNull($this->responseCookie($response, 'trana_session'));
+        $this->assertNull($this->responseCookie($response, 'trana_csrf'));
+    }
+
+    public function test_google_login_reuses_the_account_created_by_google_signup(): void
+    {
+        $this->configureGoogle();
+        $this->fakeGoogleProfile([
+            'sub' => 'google-sub-reused',
+            'email' => 'repeat.athlete@example.com',
+            'email_verified' => true,
+            'name' => 'Repeat Athlete',
+        ]);
+
+        $signupFlow = $this->beginGoogleFlow('signup');
+        $this->finishGoogleFlow($signupFlow)->assertRedirect('https://trana.test/');
+        $created = User::query()->where('google_sub', 'google-sub-reused')->firstOrFail();
+
+        $loginFlow = $this->beginGoogleFlow('login');
+        $loginResponse = $this->finishGoogleFlow($loginFlow)->assertRedirect('https://trana.test/');
+
+        $this->assertSame(1, User::query()->count());
+        $this->assertSame($created->id, User::query()->where('google_sub', 'google-sub-reused')->value('id'));
+        $this->assertInstanceOf(Cookie::class, $this->responseCookie($loginResponse, 'trana_session'));
     }
 
     public function test_google_can_link_a_matching_password_account_without_replacing_its_password(): void
