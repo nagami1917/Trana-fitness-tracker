@@ -1,5 +1,13 @@
 let workerUrl = '';
+// Bundled into the test's IIFE, this file keeps its own `createdMaps`. Mirror
+// every map onto a global so the smoke script (which imports this module
+// separately, and therefore sees a different instance) can observe them.
 const createdMaps = [];
+const registry = () => {
+  if (typeof globalThis === 'undefined') return createdMaps;
+  if (!Array.isArray(globalThis.__tranaCreatedMaps)) globalThis.__tranaCreatedMaps = [];
+  return globalThis.__tranaCreatedMaps;
+};
 
 export function setWorkerUrl(value) {
   workerUrl = value || '';
@@ -10,7 +18,8 @@ export function getWorkerUrl() {
 }
 
 export function getCreatedMaps() {
-  return createdMaps;
+  // Return the shared registry when the bundle has populated it.
+  return registry();
 }
 
 export class Map {
@@ -25,6 +34,7 @@ export class Map {
     this.easeToCalls = [];
     this.canvas = { style: {} };
     createdMaps.push(this);
+    registry().push(this);
   }
 
   on(event, fn) {

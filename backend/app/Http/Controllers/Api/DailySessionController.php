@@ -96,13 +96,15 @@ class DailySessionController extends Controller
         return response()->json(['data' => new DailySessionResource($session)]);
     }
 
-    /** Show one daily session with all foods. */
+    /** Show one daily session with all foods and the routes finished that day. */
     public function show(Request $request, DailySession $dailySession): JsonResponse
     {
         abort_unless($dailySession->user_id === $request->user()->id, 404);
 
         return response()->json([
-            'data' => new DailySessionResource($dailySession->load('foods')),
+            'data' => new DailySessionResource(
+                $dailySession->load('foods')->loadSessionActivities()
+            ),
         ]);
     }
 

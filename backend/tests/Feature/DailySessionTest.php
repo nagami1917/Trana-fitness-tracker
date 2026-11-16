@@ -171,4 +171,123 @@ class DailySessionTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.route_geojson.type', 'FeatureCollection');
     }
+
+    public function test_session_detail_returns_only_that_day_s_routes_for_that_user(): void
+    {
+        $headers = $this->registerAthlete();
+        $user = \App\Models\User::query()->where('email', 'session@gmail.com')->firstOrFail();
+
+        // A session for 2026-11-13.
+        $session = DailySession::create([
+            'user_id' => $user->id,
+            'session_date' => '2026-11-13',
+            'calories_burned' => 310,
+            'calories_eaten' => 105,
+        ]);
+
+        // The real GPS tracker (liveTracker.svelte.js) stores a FeatureCollection
+        // whose coordinates are [lng, lat] — use that exact shape here.
+        $geojson = [
+            'type' => 'FeatureCollection',
+            'features' => [[
+                'type' => 'Feature',
+                'properties' => ['activity_type' => 'run'],
+                'geometry' => [
+                    'type' => 'LineString',
+                    'coordinates' => [[121.035, 14.676], [121.042, 14.674]],
+                ],
+            ]],
+        ];
+
+        // On the day: one GPS activity, one manual activity.
+        $onDay = $user->activities()->create([
+            'activity_type' => 'run',
+            'distance_km' => 1.56,
+            'duration_min' => 3.7,
+            'calories' => 92,
+            'started_at' => '2026-11-13 09:25:24',
+            'route_geojson' => $geojson,
+            'source' => 'gps',
+        ]);
+        $user->activities()->create([
+            'activity_type' => 'walk',
+            'distance_km' => 0.8,
+            'duration_min' => 9,
+            'started_at' => '2026-11-13 19:02:00',
+            'source' => 'manual',
+        ]);
+
+        // Same user, different day — must not appear.
+        $user->activities()->create([
+            'activity_type' => 'ride',
+            'distance_km' => 40,
+            'duration_min' => 90,
+            'started_at' => '2026-11-12 08:00:00',
+            'source' => 'gps',
+        ]);
+
+        // Another user on the same day — must not appear.
+        $other = \App\Models\User::create([
+            'name' => 'Other Athlete',
+            'username' => 'other_athlete',
+            'email' => 'other@gmail.com',
+            'password' => bcrypt('Runner-pass-123'),
+        ]);
+        $other->forceFill(['email_verified_at' => now()])->save();
+        $other->activities()->create([
+            'activity_type' => 'hike',
+            'distance_km' => 6,
+            'duration_min' => 70,
+            'started_at' => '2026-11-13 07:00:00',
+            'source' => 'gps',
+        ]);
+
+        $response = $this->getJson("/api/daily-sessions/{$session->id}", $headers)->assertOk();
+
+        // Exactly the two activities from that day, in chronological order.
+        $response->assertJsonCount(2, 'data.activities')
+            ->assertJsonPath('data.activities.0.id', $onDay->id)
+            ->assertJsonPath('data.activities.0.has_route', true)
+            ->assertJsonPath('data.activities.0.route_geojson.type', 'FeatureCollection')
+            ->assertJsonPath(
+                'data.activities.0.route_geojson.features.0.geometry.coordinates.0.0',
+                121.035
+            )
+            ->assertJsonPath('data.activities.1.has_route', false)
+            ->assertJsonPath('data.activities.1.source', 'manual');
+
+        // The route array is still exposed for the legacy fallback.
+        $this->assertArrayHasKey('route', $response->json('data.activities.0'));
+    }
+
+    public function test_session_detail_still_hides_another_user_s_session(): void
+    {
+        $this->registerAthlete('owner@gmail.com');
+        $owner = \App\Models\User::query()->where('email', 'owner@gmail.com')->firstOrFail();
+
+        $session = DailySession::create([
+            'user_id' => $owner->id,
+            'session_date' => '2026-11-13',
+        ]);
+
+        $intruder = $this->createVerifiedAccount('Intruder', 'intruder@gmail.com');
+        app('auth')->forgetGuards();
+
+        $this->getJson("/api/daily-sessions/{$session->id}", ['Authorization' => 'Bearer '.$intruder['token']])
+            ->assertNotFound();
+    }
+
+    /**
+     * Regression: an earlier revision called load(['activities']) after the
+     * relation had been removed, which surfaced as a 500 "Call to undefined
+     * relationship [activities]". Assert the relation actually exists so a
+     * future refactor cannot silently repeat it.
+     */
+    public function test_daily_session_exposes_the_activities_relation(): void
+    {
+        $this->assertTrue(
+            method_exists(DailySession::class, 'activities'),
+            'DailySession::activities() is required by loadSessionActivities().'
+        );
+    }
 }
