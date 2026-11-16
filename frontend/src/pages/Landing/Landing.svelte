@@ -405,7 +405,7 @@
 <style>
   .auth-overlay { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 16px; overflow-y: auto; background: rgba(18, 30, 24, .62); backdrop-filter: blur(6px); animation: auth-overlay-in .18s ease-out both; }
   .auth-backdrop { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: transparent; cursor: default; }
-  .auth-dialog { position: relative; z-index: 1; width: min(100%, 470px); max-height: calc(100vh - 32px); overflow-y: auto; border-radius: 22px; background: white; box-shadow: 0 30px 100px rgba(10, 25, 18, .34); }
+  .auth-dialog { position: relative; z-index: 1; width: min(100%, 470px); max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; border-radius: 22px; background: white; box-shadow: 0 30px 100px rgba(10, 25, 18, .34); }
   .auth-dialog-close { position: absolute; top: 9px; right: 9px; z-index: 2; display: grid; width: 36px; height: 36px; place-items: center; border: 1px solid #e7ede9; border-radius: 12px; background: rgba(255,255,255,.96); color: #576a5f; cursor: pointer; transition: background .15s ease, color .15s ease; }
   .auth-dialog-close:hover { background: #f0f7f3; color: #14754e; }
   .auth-load-message { display: grid; min-height: 270px; align-content: center; justify-items: center; gap: 9px; padding: 28px; color: #34483d; text-align: center; }
