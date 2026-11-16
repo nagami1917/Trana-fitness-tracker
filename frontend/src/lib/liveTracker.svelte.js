@@ -14,7 +14,7 @@ import { activityApi, validateTrackPoint } from '../services/activityService.js'
 import { dailySessionApi } from '../services/dailySessionService.js';
 import { watch, getCurrentPosition, trackPoint, GpsError } from '../services/gpsService.js';
 import { snapRoute } from '../services/roadSnappingService.js';
-import { haversineKm, elevationGainM } from '../services/mapService.js';
+import { haversineKm, elevationGainM } from './geo.js';
 import { estimateMet, recommendFueling } from './ml/fueling.js';
 import { computeGhostPacerState } from './route/ghostPacer.js';
 import { detectNewPRs } from './analytics/records.js';

@@ -2,7 +2,7 @@
  * Virtual Ghost Pacer & Off-Route Detector for live GPS tracking.
  */
 
-import { haversineKm } from '../../services/mapService.js';
+import { haversineKm } from '../../lib/geo.js';
 import { interpolateRoutePosition } from './splits.js';
 
 /** Equirectangular point-to-segment distance in meters (accurate at local scales). */

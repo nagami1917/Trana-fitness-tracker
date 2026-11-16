@@ -6,53 +6,59 @@
  * can be retouched without touching any map component.
  *
  * Map style:
- *   VITE_MAP_STYLE_URL   full style URL (default: MapLibre community demo style,
- *                         OpenStreetMap-based, no API key required)
- *   VITE_MAP_API_KEY     optional key appended to the style URL when using a
- *                         provider such as MapTiler / Stadia Maps. The key is
- *                         only needed for those providers — it must never be
- *                         hardcoded here.
+ *   VITE_MAP_STYLE_URL        full MapLibre style URL. Defaults to OpenFreeMap
+ *                             "positron": free, keyless, no signup, commercial
+ *                             use allowed. Override to point at MapTiler,
+ *                             Stadia Maps, a self-hosted style, or the
+ *                             OpenFreeMap "dark" style.
+ *   VITE_MAP_DARK_STYLE_URL   style used when the app theme is dark. Defaults to
+ *                             OpenFreeMap "dark".
+ *   VITE_MAP_TILE_URL         optional raster XYZ template for the Leaflet
+ *                             preview maps (RouteMap.svelte). Leave blank to
+ *                             keep them on the same vector style as MapLibre.
+ *   VITE_MAP_API_KEY          optional key for providers that require one. It
+ *                             must never be hardcoded here.
  *
- * The default demo style is fine for development and previews. For production,
- * swap VITE_MAP_STYLE_URL for your own style (self-hosted or a provider style
- * URL that already contains its key) and keep any provider key out of the repo.
+ * Why not tile.openstreetmap.org directly: OSM's tile servers are donated
+ * infrastructure. Their usage policy forbids app-style production traffic and
+ * will block a site that leans on them, and they carry no SLA. OpenFreeMap
+ * serves the same OpenStreetMap data as vector tiles with no key, no volume
+ * limit and no signup, so it carries no rate-limit cliff.
+ * https://operations.osmfoundation.org/policies/tiles/
  */
 
 /* ------------------------------------------------------------------ style */
 
 const rawStyleUrl = (import.meta.env?.VITE_MAP_STYLE_URL ?? '').trim();
+const rawDarkStyleUrl = (import.meta.env?.VITE_MAP_DARK_STYLE_URL ?? '').trim();
+const rawTileUrl = (import.meta.env?.VITE_MAP_TILE_URL ?? '').trim();
 
+const DEFAULT_STYLE_URL = 'https://tiles.openfreemap.org/styles/positron';
+const DEFAULT_DARK_STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
+
+/** True only when the deployer pinned their own style — theme overrides are
+ *  then skipped so a provider style is never painted over. */
 export const HAS_CUSTOM_STYLE = Boolean(rawStyleUrl);
-export const MAP_STYLE_URL = rawStyleUrl || 'https://demotiles.maplibre.org/style.json';
 
-export const DEFAULT_OSM_STYLE = {
-  version: 8,
-  sources: {
-    osm: {
-      type: 'raster',
-      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-      tileSize: 256,
-      maxzoom: 19,
-      attribution: '&copy; OpenStreetMap contributors',
-    },
-  },
-  layers: [
-    {
-      id: 'background',
-      type: 'background',
-      paint: { 'background-color': '#eaf3ee' },
-    },
-    {
-      id: 'osm-tiles',
-      type: 'raster',
-      source: 'osm',
-      minzoom: 0,
-      maxzoom: 22,
-    },
-  ],
-};
+export const MAP_STYLE_URL = rawStyleUrl || DEFAULT_STYLE_URL;
+export const MAP_DARK_STYLE_URL = rawDarkStyleUrl || (rawStyleUrl ? rawStyleUrl : DEFAULT_DARK_STYLE_URL);
+export const MAP_STYLE = MAP_STYLE_URL;
 
-export const MAP_STYLE = rawStyleUrl || DEFAULT_OSM_STYLE;
+/** Optional raster tile template for the Leaflet preview maps. */
+export const MAP_TILE_URL = rawTileUrl;
+
+/**
+ * Attribution required by the default tile provider. OpenFreeMap's terms ask
+ * for OpenFreeMap + OpenMapTiles + OpenStreetMap; the OpenMapTiles and OSM
+ * credits are also required by their respective data licences. If you switch
+ * providers, this string must change to theirs — an uncredited basemap is a
+ * licence violation for every provider, not just this one.
+ */
+export const MAP_ATTRIBUTION = [
+  '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>',
+  '&copy; <a href="https://www.openmaptiles.org" target="_blank" rel="noopener">OpenMapTiles</a>',
+  '&mdash; Data from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
+].join(' ');
 
 export const MAP_API_KEY = import.meta.env?.VITE_MAP_API_KEY ?? '';
 

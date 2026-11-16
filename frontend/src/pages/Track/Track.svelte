@@ -51,7 +51,7 @@
     isClosedLoop,
     searchPlaces,
   } from '../../services/roadRoutingService.js';
-  import { polylineLengthKm } from '../../services/mapService.js';
+  import { polylineLengthKm } from '../../lib/geo.js';
   import { clock, ml, nf, shortDate } from '../../lib/format.js';
 
   const SPORTS = [

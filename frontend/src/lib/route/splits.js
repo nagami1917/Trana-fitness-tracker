@@ -2,7 +2,7 @@
  * True GPS split analyzer + Minetti Grade-Adjusted Pace (GAP) & elevation scrub lookup.
  */
 
-import { haversineKm } from '../../services/mapService.js';
+import { haversineKm } from '../../lib/geo.js';
 import { KM_TO_MI } from '../units.js';
 
 /**

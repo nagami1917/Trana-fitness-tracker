@@ -9,7 +9,7 @@
     maplibregl.setWorkerUrl(maplibreWorkerUrl);
   }
 
-  import { createMap, applyTranaTheme, fitToPoints, panTo, toLatLng, isStyleInitialized } from '../../services/mapService.js';
+  import { createMap, applyTranaTheme, applyMapTheme, fitToPoints, panTo, toLatLng, isStyleInitialized } from '../../services/mapService.js';
   import { reportClientError } from '../../lib/errorMonitor.js';
   import { theme } from '../../lib/theme.js';
   import PlannedRoute from './PlannedRoute.svelte';
@@ -203,23 +203,13 @@
     panTo(map, currentPosition, { zoom: Math.max(map.getZoom(), 15), duration: 250 });
   });
 
-  // ── reactive dark/light basemap raster styling ──────────────────────────
+  // ── reactive dark/light basemap style swap ──────────────────────────────
+  // The base map is a vector style (OpenFreeMap by default), so dark mode
+  // swaps the style rather than tinting raster tiles. Overlay layers re-add
+  // themselves on `style.load`.
   $effect(() => {
     if (!map || !styleReady) return;
-    if (typeof map.getLayer !== 'function' || typeof map.setPaintProperty !== 'function') return;
-    const isDark = $theme === 'dark';
-    try {
-      if (map.getLayer('background')) {
-        map.setPaintProperty('background', 'background-color', isDark ? '#131826' : '#eaf3ee');
-      }
-      if (map.getLayer('osm-tiles')) {
-        map.setPaintProperty('osm-tiles', 'raster-brightness-max', isDark ? 0.52 : 1);
-        map.setPaintProperty('osm-tiles', 'raster-contrast', isDark ? 0.25 : 0);
-        map.setPaintProperty('osm-tiles', 'raster-saturation', isDark ? -0.45 : 0);
-      }
-    } catch {
-      // Ignore if custom vector style lacks those layers.
-    }
+    applyMapTheme(map, $theme === 'dark');
   });
 
   // ── fit the whole route into view ──────────────────────────────────────

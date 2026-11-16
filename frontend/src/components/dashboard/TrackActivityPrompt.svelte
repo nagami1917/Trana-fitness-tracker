@@ -365,7 +365,6 @@
           center={mapCenter}
           userLocation={liveUserPos}
           height={212}
-          showAttribution={false}
           class="!rounded-2xl"
         >
           <div class="pointer-events-none absolute left-3 top-3 z-10 rounded-xl bg-white/90 px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide text-brand-600 shadow-soft">
