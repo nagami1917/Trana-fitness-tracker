@@ -21,6 +21,8 @@ class DailySessionResource extends JsonResource
             'foods' => $this->whenLoaded('foods', fn () => DailySessionFoodResource::collection($this->foods)->toArray($request)),
             'foods_count' => $this->whenLoaded('foods', fn () => $this->foods->count(), (int) ($this->foods_count ?? 0)),
             'total_food_calories' => $this->whenLoaded('foods', fn () => (int) $this->foods->sum('calories')),
+            // The routes this user actually finished on this day.
+            'activities' => SessionActivityResource::collection($this->whenLoaded('activities')),
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];

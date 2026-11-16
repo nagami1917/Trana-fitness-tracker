@@ -113,6 +113,88 @@ export function panTo(map, position, { zoom, offset, duration = 500, animate = t
   map.easeTo(easeOptions);
 }
 
+/**
+ * Convert a stored route into the `{ latitude, longitude, speedKmh }` track
+ * points that `TranaMap` renders.
+ *
+ * Two shapes are stored on an activity, and older rows may carry either:
+ *   - `route`: a plain [[lat, lng], ...] array (always returned by the API)
+ *   - `route_geojson`: a GeoJSON Feature / FeatureCollection / bare geometry
+ *     whose LineString coordinates are [lng, lat] — the opposite order.
+ *
+ * The GeoJSON form wins when it has at least two points because it is the
+ * recorded track; `route` is the fallback. Returns [] when there is nothing
+ * drawable, so callers can show a "no GPS track" state.
+ */
+export function routeToTrackPoints(activity) {
+  const fromGeoJson = geoJsonToTrackPoints(activity?.route_geojson);
+  if (fromGeoJson.length >= 2) return fromGeoJson;
+
+  const fromRoute = trackPointsToArray(activity?.route);
+  return fromRoute.length >= 2 ? fromRoute : [];
+}
+
+/** GeoJSON (geometry, Feature or FeatureCollection) → track points in order. */
+export function geoJsonToTrackPoints(geojson) {
+  const out = [];
+  if (!geojson || typeof geojson !== 'object') return out;
+
+  const pushLine = (coordinates) => {
+    if (!Array.isArray(coordinates)) return;
+    // A LineString may arrive nested one level deeper (MultiLineString).
+    if (Array.isArray(coordinates[0]) && Array.isArray(coordinates[0][0])) {
+      for (const line of coordinates) pushLine(line);
+      return;
+    }
+    for (const coord of coordinates) {
+      if (!Array.isArray(coord) || coord.length < 2) continue;
+      // GeoJSON is [lng, lat]; the map wants [lat, lng]. Number(null) and
+      // Number('') are 0, so reject those explicitly before coercing.
+      if (coord[0] === null || coord[1] === null || coord[0] === '' || coord[1] === '') continue;
+      const lat = Number(coord[1]);
+      const lng = Number(coord[0]);
+      if (Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) {
+        out.push({ latitude: lat, longitude: lng, speedKmh: null });
+      }
+    }
+  };
+
+  const collect = (node, depth = 0) => {
+    if (!node || typeof node !== 'object' || depth > 3) return;
+    const type = node.type;
+    if (type === 'FeatureCollection') {
+      for (const feature of node.features ?? []) collect(feature, depth + 1);
+      return;
+    }
+    if (type === 'Feature') {
+      collect(node.geometry, depth + 1);
+      return;
+    }
+    if (type === 'LineString' || type === 'MultiLineString') {
+      pushLine(node.coordinates);
+      return;
+    }
+    if (type === 'Polygon' || type === 'MultiPolygon') {
+      // Accept polygon rings so a shared/exported loop still renders.
+      pushLine(node.coordinates);
+    }
+  };
+
+  collect(geojson);
+  return out;
+}
+
+/** [[lat, lng], ...] (or objects) → track points, dropping invalid entries. */
+export function trackPointsToArray(route) {
+  if (!Array.isArray(route)) return [];
+  const out = [];
+  for (const entry of route) {
+    const coords = toLatLng(entry);
+    if (coords) out.push({ latitude: coords[0], longitude: coords[1], speedKmh: null });
+  }
+  return out;
+}
+
 /** Convert track points ([lat, lng] or { latitude, longitude, speedKmh }) to GeoJSON LineString segments. */
 export function segmentsToGeoJSON(points) {
   if (!points || points.length < 2) return { type: 'FeatureCollection', features: [] };

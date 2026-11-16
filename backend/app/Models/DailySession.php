@@ -49,6 +49,44 @@ class DailySession extends Model
         return $this->hasMany(DailySessionFood::class)->orderBy('meal_type')->orderBy('created_at');
     }
 
+    /**
+     * Eager-load the activities recorded on this session's calendar day.
+     *
+     * A daily session is just a date bucket, so its "accomplished" routes are
+     * the activities whose `started_at` falls inside that day. `started_at` is
+     * a timezone-aware column and the app runs in APP_TIMEZONE, so the window
+     * is built the same way GoalEventRecorder does: [dayStart, dayEnd) at
+     * midnight, half-open, so a midnight activity lands on exactly one day.
+     *
+     * This is an instance method rather than a query scope on purpose: the
+     * boundaries depend on this row's date, and the relation must stay scoped
+     * to this user's activities.
+     */
+    public function loadSessionActivities(): self
+    {
+        $start = $this->session_date->copy()->startOfDay();
+        $end = $start->copy()->addDay();
+
+        return $this->load(['activities' => function ($relation) use ($start, $end) {
+            $relation
+                ->where('started_at', '>=', $start)
+                ->where('started_at', '<', $end)
+                ->orderBy('started_at')
+                ->select([
+                    'id',
+                    'user_id',
+                    'activity_type',
+                    'distance_km',
+                    'duration_min',
+                    'calories',
+                    'started_at',
+                    'route',
+                    'route_geojson',
+                    'source',
+                ]);
+        }]);
+    }
+
     public function scopeForUser(Builder $query, int $userId): Builder
     {
         return $query->where('user_id', $userId);
