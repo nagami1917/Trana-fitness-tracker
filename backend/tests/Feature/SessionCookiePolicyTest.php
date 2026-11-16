@@ -23,8 +23,12 @@ class SessionCookiePolicyTest extends TestCase
     use RefreshDatabase;
 
     /** @return array{token: string, cookie: \Symfony\Component\HttpFoundation\Cookie} */
-    private function loginAndCaptureCookie(): array
+    private function loginAndCaptureCookie(bool $https = false): array
     {
+        if ($https) {
+            $this->withServerVariables(['HTTPS' => 'on']);
+        }
+
         // `email_verified_at` is deliberately not mass-assignable, so it is set
         // after creation. Leaving it null would make login answer 403
         // EMAIL_NOT_VERIFIED and hide what this test is actually checking.
@@ -60,9 +64,21 @@ class SessionCookiePolicyTest extends TestCase
         $cookie = $this->loginAndCaptureCookie()['cookie'];
 
         $this->assertSame('lax', $cookie->getSameSite());
-        $this->assertTrue($cookie->isSecure(), 'production cookies must stay Secure');
         $this->assertTrue($cookie->isHttpOnly(), 'the token must never be JS-readable');
         $this->assertSame('/api', $cookie->getPath());
+        // Plain-HTTP test requests are not Secure. Asserting it here pins the
+        // behaviour deliberately rather than by accident.
+        $this->assertFalse($cookie->isSecure(), 'a plain-HTTP request must not claim Secure');
+    }
+
+    public function test_https_requests_mark_the_session_cookie_secure(): void
+    {
+        config(['services.trana.cookie_same_site' => 'lax']);
+
+        $cookie = $this->loginAndCaptureCookie(https: true)['cookie'];
+
+        $this->assertTrue($cookie->isSecure(), 'HTTPS must always produce a Secure cookie');
+        $this->assertSame('lax', $cookie->getSameSite());
     }
 
     public function test_unset_same_site_still_defaults_safely_outside_production(): void
