@@ -16,12 +16,12 @@ return Application::configure(basePath: dirname(__DIR__))
         // Vercel / any reverse proxy terminates TLS in front of the app.
         $middleware->trustProxies(at: '*');
 
-        // Authentication tokens are stored in HttpOnly cookies. Translate the
-        // cookie into a server-side Sanctum bearer token and verify Origin/CSRF
-        // headers before API writes; the token is never exposed to JavaScript.
-        // `TreatApiRequestsAsJson` runs first: it makes HTML-shaped requests to
-        // /api accept JSON, so an unauthenticated call answers 401 instead of
-        // trying to redirect to a `login` route this app does not define.
+        // `TreatApiRequestsAsJson` must run before auth: it makes HTML-shaped
+        // requests to /api accept JSON, so an unauthenticated call answers 401
+        // instead of trying to redirect to a `login` route this app does not
+        // define. auth:sanctum is itself in Laravel's middleware priority list,
+        // so appending to the api group is not enough — it has to be placed in
+        // the priority list ahead of the authenticator.
         $middleware->api(append: [
             \App\Http\Middleware\TreatApiRequestsAsJson::class,
             \App\Http\Middleware\AuthenticateFromHttpOnlyCookie::class,
@@ -31,6 +31,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // Laravel's route middleware priority can move auth:sanctum ahead of
         // ordinary API middleware. These adapters must run first so the auth
         // cookie is available to Sanctum, and CSRF checks precede route auth.
+        $middleware->prependToPriorityList(
+            \Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests::class,
+            \App\Http\Middleware\TreatApiRequestsAsJson::class,
+        );
         $middleware->prependToPriorityList(
             \Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests::class,
             \App\Http\Middleware\AuthenticateFromHttpOnlyCookie::class,
