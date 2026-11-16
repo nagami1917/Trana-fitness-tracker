@@ -24,14 +24,17 @@ class SessionCookiePolicyTest extends TestCase
 
     private function loggedInCookie(): string
     {
+        // `email_verified_at` is deliberately not mass-assignable, so it is set
+        // after creation. Leaving it null would make login answer 403
+        // EMAIL_NOT_VERIFIED and hide what this test is actually checking.
         $user = User::create([
             'name' => 'Cookie Policy',
             'username' => 'cookiep',
             'email' => 'cookiep@gmail.com',
             'password' => bcrypt('CorrectHorse9!'),
             'role' => User::ROLE_ATHLETE,
-            'email_verified_at' => now(),
         ]);
+        $user->forceFill(['email_verified_at' => now()])->save();
         $user->ensureProfile();
         $user->ensureGoals();
 
