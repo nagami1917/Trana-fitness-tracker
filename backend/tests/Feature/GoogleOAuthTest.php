@@ -327,6 +327,42 @@ class GoogleOAuthTest extends TestCase
         $this->assertSame(0, User::query()->count());
     }
 
+    public function test_a_rejected_state_is_persisted_so_the_failure_is_diagnosable(): void
+    {
+        // Vercel's request logs are ephemeral, so a bare Log::warning leaves no
+        // evidence: a broken OAuth round trip used to be completely silent.
+        $this->configureGoogle();
+        Http::fake();
+        $flow = $this->beginGoogleFlow();
+
+        $this->finishGoogleFlow($flow, 'attacker-controlled-state')
+            ->assertRedirect('https://trana.test/login?google=failed');
+
+        $log = \App\Models\ErrorLog::query()->where('route', 'oauth:state_invalid')->first();
+        $this->assertNotNull($log, 'a rejected OAuth state must be recorded');
+        $this->assertSame('api', $log->kind);
+        $this->assertSame('error', $log->level);
+
+        // Repeats group onto one row rather than flooding the table.
+        $this->finishGoogleFlow($flow, 'attacker-controlled-state')
+            ->assertRedirect('https://trana.test/login?google=failed');
+        $this->assertSame(1, \App\Models\ErrorLog::query()->where('route', 'oauth:state_invalid')->count());
+    }
+
+    public function test_a_missing_state_cookie_is_distinguished_from_an_invalid_one(): void
+    {
+        // "Something blocked me" and "the cookie was tampered with" produce the
+        // same user-visible message but need completely different fixes.
+        $this->configureGoogle();
+        Http::fake();
+
+        $this->get('/api/auth/google/callback?code=abc&state='.str_repeat('a', 64))
+            ->assertRedirect('https://trana.test/login?google=failed');
+
+        $this->assertDatabaseHas('error_logs', ['route' => 'oauth:state_cookie_missing']);
+        $this->assertDatabaseMissing('error_logs', ['route' => 'oauth:state_invalid']);
+    }
+
     public function test_state_cookie_survives_the_cross_site_redirect_to_google_and_back(): void
     {
         // Deployed TRANA runs the SPA (trana-web) and API (trana-api) on

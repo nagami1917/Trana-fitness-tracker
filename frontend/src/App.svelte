@@ -38,6 +38,7 @@
         // complete here. Say so instead of showing a plain landing page.
         cookieBlocked = true;
         reportClientError({
+          route: window.location.pathname + window.location.search,
           message: 'Login cookie not persisted (browser blocked cross-site storage)',
           stack: `location: ${window.location.origin}, ua: ${navigator.userAgent}`,
         });

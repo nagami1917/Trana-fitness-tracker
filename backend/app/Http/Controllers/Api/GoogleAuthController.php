@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\AuthCookieService;
+use App\Services\ErrorMonitor;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
@@ -24,7 +25,13 @@ class GoogleAuthController extends Controller
 
     private const CALLBACK_PATH = '/api/auth/google/callback';
 
-    private const STATE_TTL_SECONDS = 600;
+    /**
+     * How long a started sign-in stays valid. Widened from 10 minutes because
+     * a first-time Google sign-in has to survive the account chooser, an
+     * optional 2FA prompt and consent — and an expired state cookie is
+     * indistinguishable from "something blocked me" on the login screen.
+     */
+    private const STATE_TTL_SECONDS = 1800;
 
     public function redirect(Request $request, AuthCookieService $cookies): RedirectResponse
     {
@@ -66,6 +73,9 @@ class GoogleAuthController extends Controller
             Log::warning('Google sign-in could not be started', [
                 'exception' => get_class($exception),
             ]);
+            // Persisted as well as logged: Vercel's request logs are ephemeral,
+            // so a failure that only logs cannot be investigated afterwards.
+            ErrorMonitor::recordOAuthFailure('redirect', $exception);
 
             return $this->frontendRedirect('failed');
         }
@@ -75,12 +85,24 @@ class GoogleAuthController extends Controller
     {
         $state = $this->consumeState($request);
         if (! $state) {
+            // Two very different causes look identical to the user:
+            //  - the cookie never came back (wrong redirect host, blocked
+            //    cookie, or a second tab overwriting the state);
+            //  - it came back but was expired, tampered with, or mismatched.
+            ErrorMonitor::recordOAuthFailure(
+                $request->cookie(self::STATE_COOKIE) === null ? 'state_cookie_missing' : 'state_invalid'
+            );
+
             return $this->frontendRedirect('failed')->withCookie($this->forgetStateCookie($cookies));
         }
 
         $providerError = $request->query('error');
         if (is_string($providerError) && $providerError !== '') {
             $status = $providerError === 'access_denied' ? 'cancelled' : 'failed';
+            if ($status === 'failed') {
+                // A cancellation is user intent; anything else is a real fault.
+                ErrorMonitor::recordOAuthFailure('provider:'.substr($providerError, 0, 40));
+            }
 
             return $this->frontendRedirect($status)->withCookie($this->forgetStateCookie($cookies));
         }
@@ -175,6 +197,7 @@ class GoogleAuthController extends Controller
                 'stage' => $failureStage,
                 'exception' => get_class($exception),
             ]);
+            ErrorMonitor::recordOAuthFailure($failureStage, $exception);
 
             return $this->frontendRedirect('failed')->withCookie($this->forgetStateCookie($cookies));
         }
