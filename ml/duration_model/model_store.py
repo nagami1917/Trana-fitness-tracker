@@ -95,10 +95,12 @@ class DurationModel:
         experience: int | None = None,
     ) -> dict:
         del weight_kg
-        if experience is None:
-            experience = experience_level(len(history))
         stats = reference_stats(history, activity_type)
         history_count = int(stats["count"])
+        if experience is None:
+            # Count only this activity: two walk baselines must not make a
+            # first-ever hike look like an experienced athlete's.
+            experience = experience_level(history_count)
         max_history_km = float(stats["max_distance_km"])
 
         ref_a, ref_b = reference_curve(history, activity_type, experience=experience)
@@ -168,6 +170,10 @@ class DurationModel:
             "pace_min_per_km": round(q50 / distance_km, 2) if activity_type in ("run", "walk", "hike") else None,
             "speed_kmh": round(speed, 2),
             "confidence": round(confidence, 2),
+            # How many past sessions of *this* activity type the curve was
+            # fitted from. The client needs it to say "based on your 2 past
+            # runs" instead of claiming personalisation it does not have.
+            "history_count": history_count,
             "reference_speed_kmh": round(ref_speed, 2),
             "reference_curve": {"a": round(ref_a, 4), "b": round(ref_b, 3)},
             "basis": basis,

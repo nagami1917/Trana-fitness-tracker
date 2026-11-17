@@ -1206,6 +1206,19 @@
 
           <FuelingPlan plan={prediction} />
 
+          {#if Number(prediction?.duration?.historyCount ?? 0) === 0}
+            <!-- The estimate above is a population average for this sport.
+                 This is the one place the athlete can act on that. -->
+            <div class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+              <p class="text-[11px] font-semibold leading-relaxed text-amber-900">
+                This uses a generic {prediction?.activity_type ?? 'sport'} pace. Add two past sessions and TRANA estimates from your own data.
+              </p>
+              <button type="button" class="btn-chip !border-amber-300 !bg-white !text-amber-800" onclick={() => navigate('/onboarding')}>
+                Add past sessions
+              </button>
+            </div>
+          {/if}
+
           <div class="mt-4 flex flex-col gap-2 sm:flex-row">
             <button class="btn-primary flex-1" onclick={save} disabled={saving || Boolean(saved)}>
               {#if saving}

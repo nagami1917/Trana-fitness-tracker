@@ -51,20 +51,26 @@ class BaselineActivityTest extends TestCase
 
         $first->assertJsonPath('data.pace_min_per_km', 6)
             ->assertJsonPath('data.speed_kmh', 10)
-            ->assertJsonPath('meta.remaining', 1)
-            ->assertJsonPath('meta.complete', false);
+            ->assertJsonPath('meta.by_type.run.count', 1)
+            ->assertJsonPath('meta.by_type.run.remaining', 1)
+            ->assertJsonPath('meta.by_type.run.complete', false)
+            ->assertJsonPath('meta.by_type.ride.count', 0);
 
         $this->assertSame('baseline', Activity::find($first->json('data.id'))->source);
         $this->assertTrue(Activity::find($first->json('data.id'))->is_baseline);
 
+        // A second sport is independent: one run is still an incomplete run
+        // baseline, and the ride is tracked on its own.
         $this->postJson('/api/baseline-activities', $this->payload([
             'activity_type' => 'ride',
             'distance_km' => 20,
             'duration_min' => 50,
         ]), $this->bearer($token))
             ->assertCreated()
-            ->assertJsonPath('meta.remaining', 0)
-            ->assertJsonPath('meta.complete', true);
+            ->assertJsonPath('meta.by_type.run.count', 1)
+            ->assertJsonPath('meta.by_type.run.complete', false)
+            ->assertJsonPath('meta.by_type.ride.count', 1)
+            ->assertJsonPath('meta.by_type.ride.complete', false);
     }
 
     public function test_a_third_baseline_is_refused_so_this_cannot_become_a_bulk_import(): void
@@ -76,9 +82,133 @@ class BaselineActivityTest extends TestCase
 
         $this->postJson('/api/baseline-activities', $this->payload(), $this->bearer($token))
             ->assertStatus(409)
-            ->assertJsonPath('code', 'BASELINE_COMPLETE');
+            ->assertJsonPath('code', 'BASELINE_COMPLETE')
+            ->assertJsonPath('activity_type', 'run');
 
         $this->assertSame(2, Activity::where('is_baseline', true)->count());
+    }
+
+    public function test_the_cap_is_per_activity_type_so_walk_does_not_block_ride(): void
+    {
+        // The whole point: an athlete who only walks must still be able to
+        // teach the model their cycling pace, and vice versa.
+        $token = $this->registerAthlete();
+
+        $this->postJson('/api/baseline-activities', $this->payload([
+            'activity_type' => 'walk', 'distance_km' => 4, 'duration_min' => 45,
+        ]), $this->bearer($token))->assertCreated();
+        $this->postJson('/api/baseline-activities', $this->payload([
+            'activity_type' => 'walk', 'distance_km' => 6, 'duration_min' => 70,
+        ]), $this->bearer($token))->assertCreated();
+
+        // walk is full...
+        $this->postJson('/api/baseline-activities', $this->payload([
+            'activity_type' => 'walk', 'distance_km' => 5, 'duration_min' => 60,
+        ]), $this->bearer($token))->assertStatus(409);
+
+        // ...but ride, run and hike each still have two free slots.
+        foreach (['ride', 'run', 'hike'] as $type) {
+            $this->postJson('/api/baseline-activities', $this->payload([
+                'activity_type' => $type, 'distance_km' => 8, 'duration_min' => 60,
+            ]), $this->bearer($token))->assertCreated();
+        }
+
+        $this->getJson('/api/baseline-activities', $this->bearer($token))
+            ->assertOk()
+            ->assertJsonPath('meta.by_type.walk.complete', true)
+            ->assertJsonPath('meta.by_type.ride.count', 1)
+            ->assertJsonPath('meta.by_type.run.count', 1)
+            ->assertJsonPath('meta.by_type.hike.count', 1);
+    }
+
+    public function test_pace_is_an_accepted_alternative_to_a_duration(): void
+    {
+        // "5 km at 6:00/km" and "5 km in 30 min" are the same session and must
+        // store identically, so the model cannot be fed a different number
+        // depending on which field the athlete happened to fill in.
+        $token = $this->registerAthlete();
+
+        $this->postJson('/api/baseline-activities', [
+            'activity_type' => 'run',
+            'distance_km' => 5,
+            'pace_min_per_km' => 6,
+            'performed_on' => now()->subDays(7)->toDateString(),
+        ], $this->bearer($token))
+            ->assertCreated()
+            ->assertJsonPath('data.duration_min', 30)
+            ->assertJsonPath('data.pace_min_per_km', 6);
+    }
+
+    public function test_an_implausible_speed_is_refused_instead_of_saved_then_ignored(): void
+    {
+        // The model silently drops history rows outside SPEED_BOUNDS_KMH. If the
+        // API accepted them the athlete would be told "based on your 2 sessions"
+        // while the curve was fitted from none of them.
+        $token = $this->registerAthlete();
+
+        // 5 km in 15 min = 20 km/h: far too fast for a walk (max 14).
+        $this->postJson('/api/baseline-activities', $this->payload([
+            'activity_type' => 'walk',
+            'distance_km' => 5,
+            'duration_min' => 15,
+        ]), $this->bearer($token))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['distance_km']);
+
+        $this->assertSame(0, Activity::where('is_baseline', true)->count());
+
+        // The same numbers are plausible for a ride (max 65 km/h).
+        $this->postJson('/api/baseline-activities', $this->payload([
+            'activity_type' => 'ride',
+            'distance_km' => 5,
+            'duration_min' => 15,
+        ]), $this->bearer($token))->assertCreated();
+    }
+
+    public function test_a_partial_update_does_not_require_the_other_fields(): void
+    {
+        // Athletes mistype one number; PATCHing just that number must work even
+        // though neither a duration nor a pace is present in the request.
+        $token = $this->registerAthlete();
+        $created = $this->postJson('/api/baseline-activities', $this->payload(), $this->bearer($token))
+            ->assertCreated();
+        $id = $created->json('data.id');
+
+        $this->patchJson("/api/baseline-activities/{$id}", ['distance_km' => 6], $this->bearer($token))
+            ->assertOk()
+            ->assertJsonPath('data.distance_km', 6)
+            // 30 min over the corrected 6 km.
+            ->assertJsonPath('data.pace_min_per_km', 5);
+    }
+
+    public function test_a_partial_update_accepts_a_bare_pace(): void
+    {
+        $token = $this->registerAthlete();
+        $created = $this->postJson('/api/baseline-activities', $this->payload(), $this->bearer($token))
+            ->assertCreated();
+        $id = $created->json('data.id');
+
+        // 5 km at 5:00/km = 25 min, without restating the distance.
+        $this->patchJson("/api/baseline-activities/{$id}", ['pace_min_per_km' => 5], $this->bearer($token))
+            ->assertOk()
+            ->assertJsonPath('data.duration_min', 25)
+            ->assertJsonPath('data.pace_min_per_km', 5);
+    }
+
+    public function test_a_relative_period_resolves_to_a_past_date(): void
+    {
+        $token = $this->registerAthlete();
+
+        $response = $this->postJson('/api/baseline-activities', [
+            'activity_type' => 'run',
+            'distance_km' => 5,
+            'duration_min' => 30,
+            'performed_period' => 'last_week',
+        ], $this->bearer($token))->assertCreated();
+
+        $stored = Activity::findOrFail($response->json('data.id'));
+        $this->assertTrue($stored->started_at->isPast());
+        $this->assertTrue($stored->started_at->greaterThan(now()->subDays(14)));
     }
 
     public function test_baseline_rows_stay_out_of_dashboard_numbers_and_earned_experience(): void

@@ -71,6 +71,9 @@ class DurationPrediction(BaseModel):
     pace_min_per_km: float | None = None
     speed_kmh: float
     confidence: float
+    # Same-activity history depth behind this estimate; lets the client state
+    # its own provenance ("based on your 2 past runs") without guessing.
+    history_count: int = 0
     reference_speed_kmh: float
     basis: str
 

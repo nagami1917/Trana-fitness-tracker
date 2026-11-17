@@ -31,6 +31,8 @@ let positionSuccess;
 let positionError;
 let finishLookup;
 let lookupSignal;
+const baselinePosts = [];
+const baselineStored = [];
 let savedProfile = {
   id: 1, name: 'Test Athlete', email: 'athlete@example.test', city: 'Original City',
   weight_kg: 72, height_cm: null, birth_year: null, sex: 'other',
@@ -58,6 +60,16 @@ window.fetch = (url, options = {}) => {
         savedProfile = { ...savedProfile, ...patch };
       }
       return Promise.resolve(apiResponse({ data: savedProfile }));
+    }
+    if (path === '/api/baseline-activities') {
+      if (options.method === 'POST') {
+        const body = JSON.parse(options.body);
+        assert.ok(!('performed_on' in body), 'the UI sends a relative period, not a date');
+        assert.ok(['this_week', 'last_week', 'this_month', 'few_months', 'longer_ago'].includes(body.performed_period));
+        baselinePosts.push(body);
+        return Promise.resolve(apiResponse({ data: { id: baselinePosts.length }, meta: { by_type: {} } }));
+      }
+      return Promise.resolve(apiResponse({ data: baselineStored, meta: { by_type: {} } }));
     }
     if (path === '/api/activities' || path === '/api/predictions') {
       return Promise.resolve(apiResponse({ data: [], meta: { current_page: 1, last_page: 1 } }));
@@ -216,8 +228,54 @@ try {
   click(button('Continue'));
   click(button('Continue'));
   click(button('Continue'));
+
+  // Baseline step: one card per sport, two rows each, pace/time toggle.
+  await waitFor(() => document.body.textContent.includes('Two sessions per sport'));
+  assert.ok(document.body.textContent.includes('Two sessions per sport'), 'baseline step renders');
+  assert.ok(document.body.textContent.includes('How do you remember it?'), 'pace/time mode dropdown present');
+  assert.ok(document.body.textContent.includes('Pace (min/km)'), 'pace is the default entry mode');
+  assert.ok(!document.body.textContent.includes('Date'), 'no date picker');
+  assert.ok(document.body.textContent.includes('I don\'t remember'), 'skip is relabelled, not removed');
+
+  // NOTE: happy-dom cannot drive Svelte's bind:value on a <select> (any
+  // dispatch method leaves the bound value unchanged), so the pace/time
+  // toggle is covered by the presence assertions above rather than by a
+  // simulated interaction. Number inputs do work, so validation is covered.
+  assert.ok(
+    [...document.querySelectorAll('select')].some((sel) => [...sel.options].some((o) => o.value === 'time')),
+    'mode dropdown offers distance + time',
+  );
+
+  // An implausible session must be caught in the UI, not saved and ignored.
+  // No sports are selected in this fixture, so the first card is Running and
+  // the bounds in force are the run ones (2.5-30 km/h): 5 km at 1:00/km is
+  // 60 km/h, far outside them. Bounds are per sport, which is why the same
+  // numbers would be legal for a ride.
+  const distanceInput = [...document.querySelectorAll('input[type=number]')].find((i) => i.placeholder === '5.0');
+  const paceInput = [...document.querySelectorAll('input[type=number]')].find((i) => i.placeholder === '6.0');
+  distanceInput.value = '5';
+  distanceInput.dispatchEvent(new window.Event('input'));
+  paceInput.value = '1'; // 5 km at 1:00/km = 60 km/h
+  paceInput.dispatchEvent(new window.Event('input'));
+  await waitFor(() => document.body.textContent.includes('km/h'));
+  await waitFor(() => button('Start planning').disabled === true);
+  assert.equal(baselinePosts.length, 0, 'nothing is posted while the row is implausible');
+
+  // Correct it to a believable 6:00/km; the warning clears and saving works.
+  paceInput.value = '6';
+  paceInput.dispatchEvent(new window.Event('input'));
+  await waitFor(() => button('Start planning').disabled === false);
+
   click(button('Start planning'));
   await waitFor(() => patches.length === 3 && window.location.pathname === '/plan');
+
+  // The posted row carries the normalised duration, not the raw pace, so the
+  // server and the model see the same number either way round.
+  assert.equal(baselinePosts.length, 1, 'exactly one baseline row is posted');
+  assert.equal(baselinePosts[0].activity_type, 'run');
+  assert.equal(baselinePosts[0].distance_km, 5);
+  assert.equal(baselinePosts[0].duration_min, 30, '5 km at 6:00/km → 30 min');
+  assert.equal(baselinePosts[0].performed_period, 'last_week');
   assert.equal(savedProfile.city, 'Onboarding City, Test Region');
   assert.equal(savedProfile.onboarded, true);
   assertPreserved();
