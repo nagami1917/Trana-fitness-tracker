@@ -14,6 +14,13 @@
  *   1. vercel.json proxies /api BEFORE the SPA catch-all rewrite.
  *   2. Nothing asks the browser for an absolute API origin any more.
  *   3. api.js keeps the /api prefix exactly once (no /api/api doubles).
+ *   4. Google's redirect URI uses the *proxy* origin, never the API origin.
+ *
+ * Check 4 exists because that one bit the project for real: the OAuth state
+ * cookie was written on trana-web and read on trana-api, so Google sent every
+ * user back to `?google=failed` with nothing in the logs. Google validates the
+ * URI string before the request is made and never sees the rewrite, so a
+ * registered API origin is always wrong once this proxy is in place.
  *
  *   node scripts/same-origin-api-smoke.mjs
  */
@@ -92,6 +99,46 @@ assert.match(
   clientSource,
   /\$\{BASE\}\/api\$\{path\}/,
   'client.js must join BASE + /api + path exactly once',
+);
+
+/* ------------------------------------ 4. OAuth callback on the proxy origin */
+
+// The redirect URI is a Google-registered string, so it must name the host the
+// browser is actually on. Reading it from docs plus the config default covers
+// both documented values and the fallback in backend/config/services.php.
+const googleDocs = read('../docs/GOOGLE_SIGN_IN.md');
+const redirectUri = googleDocs.match(
+  /GOOGLE_REDIRECT_URI`?\s*\|\s*`(https:\/\/[^`]+)`/,
+)?.[1];
+
+assert.ok(
+  redirectUri,
+  'docs/GOOGLE_SIGN_IN.md must document the GOOGLE_REDIRECT_URI value',
+);
+assert.ok(
+  redirectUri.endsWith('/api/auth/google/callback'),
+  `GOOGLE_REDIRECT_URI must end with the callback path, got ${redirectUri}`,
+);
+
+const apiRewrites = JSON.parse(read('vercel.json')).rewrites ?? [];
+const proxyDestination = apiRewrites[0]?.destination ?? '';
+const apiOrigin = new URL(proxyDestination).origin;
+
+assert.notEqual(
+  new URL(redirectUri).origin,
+  apiOrigin,
+  'GOOGLE_REDIRECT_URI must NOT use the API origin: Google validates the '
+    + 'string before the rewrite happens, so the OAuth state cookie would be '
+    + 'written on one host and read on another and every sign-in would fail',
+);
+
+// The services.php fallback derives the callback from APP_URL, which is the
+// API origin. Pin that the documented value overrides it.
+const servicesSource = read('../backend/config/services.php');
+assert.match(
+  servicesSource,
+  /GOOGLE_REDIRECT_URI/,
+  'services.php must read GOOGLE_REDIRECT_URI so the documented value wins',
 );
 
 console.log('same-origin API deployment checks passed');

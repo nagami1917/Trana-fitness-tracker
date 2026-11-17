@@ -18,17 +18,25 @@ remain unchanged.
    test users. Move to production only after reviewing Google's verification
    requirements for the app and its domains.
 3. Create an OAuth client with application type **Web application**.
-4. Add the API's exact callback as an **Authorized redirect URI**:
+4. Add the callback as an **Authorized redirect URI**. It must use the
+   **frontend** origin, not the API origin:
 
    ```text
-   https://trana-api.vercel.app/api/auth/google/callback
+   https://trana-web.vercel.app/api/auth/google/callback
    ```
 
-   For a different or custom API hostname, replace the origin but keep the path
-   `/api/auth/google/callback`. For local development, the matching URI is
+   `frontend/vercel.json` proxies `/api/*` to the API, but Google validates the
+   URI string *before* the browser sends the request — it never sees the
+   rewrite. Registering the API origin instead means the OAuth state cookie is
+   written on one host and read on another, so every sign-in lands on
+   `?google=failed`. For local development the matching URI is
    `http://localhost:8001/api/auth/google/callback`. Redirect URIs must match
    exactly; do not add a wildcard. This is a server-side flow, so a JavaScript
    origin is not used by the app.
+
+   Keep the old `https://trana-api.vercel.app/api/auth/google/callback` entry
+   registered during a migration — it costs nothing and allows an instant
+   rollback.
 5. The requested OpenID Connect scopes are `openid`, `email`, and `profile`.
    Do not add broader scopes for this sign-in feature.
 6. Copy the generated **Client ID** and **Client secret** for entry into Vercel.
@@ -50,7 +58,7 @@ Production first; add Preview only if you deliberately configure preview OAuth):
 | --- | --- |
 | `GOOGLE_CLIENT_ID` | The Client ID from the Google web application client |
 | `GOOGLE_CLIENT_SECRET` | The matching Client secret; enter it directly in Vercel as a secret |
-| `GOOGLE_REDIRECT_URI` | `https://trana-api.vercel.app/api/auth/google/callback` |
+| `GOOGLE_REDIRECT_URI` | `https://trana-web.vercel.app/api/auth/google/callback` |
 | `FRONTEND_URL` | The browser-facing frontend origin, e.g. `https://trana-web.vercel.app` |
 
 Use the **same exact** `GOOGLE_REDIRECT_URI` in Google Cloud and Vercel. If you
@@ -63,11 +71,13 @@ The existing API settings still apply:
 
 - `APP_KEY` must be stable and set so the API can protect OAuth state.
 - `CORS_ALLOWED_ORIGINS` must contain the exact frontend origin(s).
-- Keep the current HTTPS cookie setup (`TRANA_COOKIE_SAME_SITE=none` for the
-  separate Vercel frontend/API hosts; the production default is also `none`).
-  The OAuth state cookie shares that policy, because the return from Google is a
-  cross-site redirect: with `Lax` the browser drops it and every sign-in ends on
-  `?google=failed` — which happens on mobile far more visibly than on desktop.
+- Keep the HTTPS cookie setup as `TRANA_COOKIE_SAME_SITE=lax`. The SPA and the
+  API share one origin through the `/api` proxy, so every TRANA cookie —
+  including the OAuth state cookie — is first-party. This is what lets Brave,
+  Safari and Firefox sign in at all: each blocks third-party cookies by
+  default, and `SameSite=None` only opts further into that blocking. `none` is
+  required only if the frontend and API are ever served from different sites
+  again, and it does not work in those browsers.
 - `VITE_API_BASE_URL` stays on the frontend project and points to the API. Do
   not prefix Google credentials with `VITE_` or add them to the frontend.
 - Ensure the `google_sub` migration has been applied to the API database before
