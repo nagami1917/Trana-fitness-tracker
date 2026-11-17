@@ -209,6 +209,69 @@ class GoogleOAuthTest extends TestCase
         $this->assertInstanceOf(Cookie::class, $this->responseCookie($loginResponse, 'trana_session'));
     }
 
+    public function test_signing_up_with_an_existing_google_account_says_it_already_exists(): void
+    {
+        // Signing up twice is a normal mistake, not a fault. It must not read
+        // as the generic "could not be completed", because that leaves the
+        // athlete guessing whether their account exists at all.
+        $this->configureGoogle();
+        $this->fakeGoogleProfile([
+            'sub' => 'google-sub-already-there',
+            'email' => 'already.there@example.com',
+            'email_verified' => true,
+            'name' => 'Already There',
+        ]);
+
+        // The case that actually confuses people: an account created with a
+        // password earlier, then "Create account" via Google with the same
+        // address. The account exists; the button was just the wrong one.
+        User::create([
+            'name' => 'Already There',
+            'username' => 'already_there',
+            'email' => 'already.there@example.com',
+            'password' => 'Old-password-123',
+        ]);
+
+        $this->finishGoogleFlow($this->beginGoogleFlow('signup'))
+            ->assertRedirect('https://trana.test/login?google=account_exists');
+
+        $this->assertSame(1, User::query()->count(), 'a duplicate signup must not create a second account');
+        $this->assertNull(
+            User::query()->where('email', 'already.there@example.com')->value('google_sub'),
+            'reporting the conflict must not link or create anything',
+        );
+    }
+
+    public function test_logging_in_with_an_unknown_google_account_still_says_not_found(): void
+    {
+        // The mirror image: login intent must never silently create anything.
+        $this->configureGoogle();
+        $this->fakeGoogleProfile([
+            'sub' => 'google-sub-stranger',
+            'email' => 'stranger@example.com',
+            'email_verified' => true,
+            'name' => 'Stranger',
+        ]);
+
+        $this->finishGoogleFlow($this->beginGoogleFlow('login'))
+            ->assertRedirect('https://trana.test/login?google=account_not_found');
+
+        $this->assertSame(0, User::query()->count());
+    }
+
+    public function test_a_rejected_state_reports_an_expired_session_not_a_generic_failure(): void
+    {
+        $this->configureGoogle();
+        Http::fake();
+
+        $this->get('/api/auth/google/callback?code=abc&state=v1.bogus.mac')
+            ->assertRedirect('https://trana.test/login?google=session_expired');
+
+        // The browser gets a short stable code; the reason stays in the log.
+        $logged = \App\Models\ErrorLog::query()->pluck('route')->implode(' ');
+        $this->assertStringContainsString('oauth:state_invalid(', $logged, 'the rejection reason must be recorded: '.$logged);
+    }
+
     public function test_google_can_link_a_matching_password_account_without_replacing_its_password(): void
     {
         $this->configureGoogle();
@@ -284,8 +347,10 @@ class GoogleOAuthTest extends TestCase
         $existing->forceFill(['google_sub' => 'google-sub-already-linked'])->save();
         $flow = $this->beginGoogleFlow();
 
+        // A conflict is not a state problem: the round trip was fine, the
+        // identities just disagree. Saying so is the whole point.
         $response = $this->finishGoogleFlow($flow)
-            ->assertRedirect('https://trana.test/login?google=failed');
+            ->assertRedirect('https://trana.test/login?google=identity_conflict');
 
         $this->assertSame('google-sub-already-linked', $existing->fresh()->google_sub);
         $this->assertSame(0, $existing->fresh()->tokens()->count());
@@ -328,7 +393,7 @@ class GoogleOAuthTest extends TestCase
         $flow = $this->beginGoogleFlow();
 
         $this->finishGoogleFlow($flow, 'attacker-controlled-state')
-            ->assertRedirect('https://trana.test/login?google=failed');
+            ->assertRedirect('https://trana.test/login?google=session_expired');
 
         Http::assertNothingSent();
         $this->assertSame(0, User::query()->count());
@@ -343,17 +408,17 @@ class GoogleOAuthTest extends TestCase
         $flow = $this->beginGoogleFlow();
 
         $this->finishGoogleFlow($flow, 'attacker-controlled-state')
-            ->assertRedirect('https://trana.test/login?google=failed');
+            ->assertRedirect('https://trana.test/login?google=session_expired');
 
-        $log = \App\Models\ErrorLog::query()->where('route', 'oauth:state_invalid')->first();
+        $log = \App\Models\ErrorLog::query()->where('route', 'like', 'oauth:state_invalid%')->first();
         $this->assertNotNull($log, 'a rejected OAuth state must be recorded');
         $this->assertSame('api', $log->kind);
         $this->assertSame('error', $log->level);
 
         // Repeats group onto one row rather than flooding the table.
         $this->finishGoogleFlow($flow, 'attacker-controlled-state')
-            ->assertRedirect('https://trana.test/login?google=failed');
-        $this->assertSame(1, \App\Models\ErrorLog::query()->where('route', 'oauth:state_invalid')->count());
+            ->assertRedirect('https://trana.test/login?google=session_expired');
+        $this->assertSame(1, \App\Models\ErrorLog::query()->where('route', 'like', 'oauth:state_invalid%')->count());
     }
 
     public function test_a_missing_state_is_distinguished_from_an_invalid_one(): void
@@ -364,10 +429,11 @@ class GoogleOAuthTest extends TestCase
         Http::fake();
 
         $this->get('/api/auth/google/callback?code=abc')
-            ->assertRedirect('https://trana.test/login?google=failed');
+            ->assertRedirect('https://trana.test/login?google=session_expired');
 
-        $this->assertDatabaseHas('error_logs', ['route' => 'oauth:state_missing']);
-        $this->assertDatabaseMissing('error_logs', ['route' => 'oauth:state_invalid']);
+        $routes = \App\Models\ErrorLog::query()->pluck('route')->implode(' ');
+        $this->assertStringContainsString('oauth:state_missing', $routes);
+        $this->assertStringNotContainsString('oauth:state_invalid', $routes);
     }
 
     public function test_state_is_self_contained_so_concurrent_sign_ins_all_work(): void
@@ -383,10 +449,14 @@ class GoogleOAuthTest extends TestCase
             'name' => 'Concurrent Athlete',
         ]);
 
-        // signup intent: this Google address has no TRANA account yet, and the
-        // point of the test is that both attempts survive, not which one wins.
-        $first = $this->beginGoogleFlow('signup');
-        $second = $this->beginGoogleFlow('signup');
+        // Seed the account so both attempts are plain logins. (With signup
+        // intent the second would now correctly answer "already exists", which
+        // is a different assertion.)
+        $this->finishGoogleFlow($this->beginGoogleFlow('signup'))
+            ->assertRedirect('https://trana.test/');
+
+        $first = $this->beginGoogleFlow('login');
+        $second = $this->beginGoogleFlow('login');
         $this->assertNotSame($first['state'], $second['state'], 'each attempt needs its own state');
 
         // Both complete, in either order, with no shared storage to conflict.
@@ -405,7 +475,7 @@ class GoogleOAuthTest extends TestCase
         $tampered = $parts[0].'.'.$parts[1].'x'.$parts[2];
 
         $this->finishGoogleFlow($flow, $tampered)
-            ->assertRedirect('https://trana.test/login?google=failed');
+            ->assertRedirect('https://trana.test/login?google=session_expired');
 
         Http::assertNothingSent();
         $this->assertSame(0, User::query()->count());
@@ -427,7 +497,7 @@ class GoogleOAuthTest extends TestCase
         $stale = 'v1.'.$encoded.'.'.hash_hmac('sha256', 'v1.'.$encoded, $key);
 
         $this->finishGoogleFlow($flow, $stale)
-            ->assertRedirect('https://trana.test/login?google=failed');
+            ->assertRedirect('https://trana.test/login?google=session_expired');
 
         Http::assertNothingSent();
     }

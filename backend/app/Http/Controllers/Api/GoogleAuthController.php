@@ -87,14 +87,13 @@ class GoogleAuthController extends Controller
         if (! $state) {
             // Distinguish "Google sent us nothing" from "what it sent does not
             // verify": the first means the round trip broke, the second means
-            // the signature or the clock did.
-            ErrorMonitor::recordOAuthFailure(
-                is_string($request->query('state')) && $request->query('state') !== ''
-                    ? 'state_invalid'
-                    : 'state_missing'
-            );
+            // the cookie, the signature or the clock did. The raw reason stays
+            // in error_logs; the browser only ever sees a short stable code.
+            $sent = $request->query('state');
+            $reason = is_string($sent) && $sent !== '' ? 'state_invalid' : 'state_missing';
+            ErrorMonitor::recordOAuthFailure($reason.'('.($this->lastStateProblem ?? 'unknown').')');
 
-            return $this->frontendRedirect('failed');
+            return $this->frontendRedirect('session_expired');
         }
 
         $providerError = $request->query('error');
@@ -132,6 +131,7 @@ class GoogleAuthController extends Controller
                 ]);
 
             if (! $tokenResponse->successful()) {
+                $this->providerFailed = true;
                 throw new RuntimeException('Google authorization code exchange failed.');
             }
 
@@ -147,6 +147,7 @@ class GoogleAuthController extends Controller
                 ->get((string) config('services.google.userinfo_url'));
 
             if (! $profileResponse->successful()) {
+                $this->providerFailed = true;
                 throw new RuntimeException('Google user information could not be retrieved.');
             }
 
@@ -172,10 +173,18 @@ class GoogleAuthController extends Controller
             $name = mb_substr($name, 0, 80);
 
             $failureStage = 'account_resolution';
-            $user = $this->resolveAccount($googleSub, $email, $name, $state['intent'] === 'signup');
-            if (! $user) {
+            $resolution = $this->resolveAccount($googleSub, $email, $name, $state['intent'] === 'signup');
+            if ($resolution === 'not_found') {
+                // Login intent, but this Google address has no TRANA account.
                 return $this->frontendRedirect('account_not_found');
             }
+            if ($resolution === 'already_exists') {
+                // Signup intent, but the account is already there. Not an
+                // error: tell the athlete plainly and offer the way in.
+                return $this->frontendRedirect('account_exists');
+            }
+            /** @var User $user */
+            $user = $resolution;
             if ($user->isSuspended()) {
                 return $this->frontendRedirect('account_unavailable');
             }
@@ -200,13 +209,27 @@ class GoogleAuthController extends Controller
             ]);
             ErrorMonitor::recordOAuthFailure($failureStage, $exception);
 
-            return $this->frontendRedirect('failed');
+            // A conflict is actionable ("use the other account"); a provider
+            // failure is transient ("try again"). Everything else stays generic.
+            $code = match (true) {
+                str_contains($exception->getMessage(), 'conflicts') => 'identity_conflict',
+                $failureStage === 'account_resolution' => 'identity_conflict',
+                $this->providerFailed || in_array($failureStage, ['token_exchange', 'userinfo_fetch'], true) => 'provider_error',
+                default => 'failed',
+            };
+
+            return $this->frontendRedirect($code);
         }
     }
 
-    private function resolveAccount(string $googleSub, string $email, string $name, bool $allowCreate): ?User
+    /**
+     * Link or create the TRANA account for a verified Google identity.
+     *
+     * @return User|'not_found'|'already_exists' The account, or why it declined.
+     */
+    private function resolveAccount(string $googleSub, string $email, string $name, bool $allowCreate): User|string
     {
-        return DB::transaction(function () use ($googleSub, $email, $name, $allowCreate): ?User {
+        return DB::transaction(function () use ($googleSub, $email, $name, $allowCreate): User|string {
             $googleUser = User::query()
                 ->where('google_sub', $googleSub)
                 ->lockForUpdate()
@@ -229,9 +252,17 @@ class GoogleAuthController extends Controller
                 throw new RuntimeException('Google identity conflicts with an existing account.');
             }
 
+            // "Create account" with an address that already has one — usually
+            // a password account registered earlier. Report it plainly instead
+            // of quietly linking: the athlete needs to know to use the Log in
+            // tab, and must not be left thinking a new account was created.
+            if ($user && $allowCreate) {
+                return 'already_exists';
+            }
+
             if (! $user) {
                 if (! $allowCreate) {
-                    return null;
+                    return 'not_found';
                 }
 
                 $user = new User();
@@ -305,53 +336,79 @@ class GoogleAuthController extends Controller
      */
     private function consumeState(Request $request): ?array
     {
+        $this->lastStateProblem = null;
+
         $state = $request->query('state');
         if (! is_string($state) || $state === '' || strlen($state) > 1024) {
-            return null;
+            return $this->stateProblem('missing');
         }
 
         $parts = explode('.', $state);
         if (count($parts) !== 3) {
-            return null;
+            // A legacy 64-hex state from a cookie-era deployment, or a
+            // truncated one from a proxy.
+            return $this->stateProblem('shape:'.strlen($state).':'.substr($state, 0, 3));
         }
         [$version, $encoded, $mac] = $parts;
         if ($version !== 'v1' || ! is_string($encoded) || ! is_string($mac)) {
-            return null;
+            return $this->stateProblem('version');
         }
 
         $expected = hash_hmac('sha256', $version.'.'.$encoded, $this->stateKey());
         if (! hash_equals($expected, $mac)) {
+            $this->lastStateProblem = 'mac';
+
             return null;
         }
 
         $json = $this->base64UrlDecode($encoded);
         if ($json === null) {
-            return null;
+            return $this->stateProblem('b64');
         }
 
         try {
             $payload = json_decode($json, true, flags: JSON_THROW_ON_ERROR);
         } catch (Throwable) {
-            return null;
+            return $this->stateProblem('json');
         }
         if (! is_array($payload)) {
-            return null;
+            return $this->stateProblem('payload');
         }
 
         $intent = $payload['i'] ?? null;
         $verifier = $payload['v'] ?? null;
         $issuedAt = $payload['t'] ?? null;
 
-        if (! is_string($intent) || ! in_array($intent, ['login', 'signup'], true)
-            || ! is_string($verifier)
-            || strlen($verifier) < 43 || strlen($verifier) > 128
-            || ! is_int($issuedAt)
-            || $issuedAt > time() + 60
-            || time() - $issuedAt > self::STATE_TTL_SECONDS) {
-            return null;
+        if (! is_string($intent) || ! in_array($intent, ['login', 'signup'], true)) {
+            return $this->stateProblem('intent');
+        }
+        if (! is_string($verifier) || strlen($verifier) < 43 || strlen($verifier) > 128) {
+            return $this->stateProblem('verifier');
+        }
+        if (! is_int($issuedAt)) {
+            return $this->stateProblem('issued_at');
+        }
+        if ($issuedAt > time() + 60) {
+            return $this->stateProblem('future:'.(int) ($issuedAt - time()));
+        }
+        if (time() - $issuedAt > self::STATE_TTL_SECONDS) {
+            return $this->stateProblem('expired:'.(int) (time() - $issuedAt));
         }
 
         return ['verifier' => $verifier, 'intent' => $intent];
+    }
+
+    /** Why the last consumeState() call rejected its input, for the error log only. */
+    private ?string $lastStateProblem = null;
+
+    /** Set when Google itself refused the exchange, so the UI can say so. */
+    private bool $providerFailed = false;
+
+    private function stateProblem(string $reason): null
+    {
+        $this->lastStateProblem = $reason;
+
+        return null;
     }
 
     /** @param array<string, mixed> $payload */
@@ -389,7 +446,13 @@ class GoogleAuthController extends Controller
 
     private function frontendRedirect(string $status): RedirectResponse
     {
-        $allowed = ['failed', 'cancelled', 'not_configured', 'unverified_email', 'account_unavailable', 'account_not_found'];
+        $allowed = [
+            'failed', 'cancelled', 'not_configured', 'unverified_email',
+            'account_unavailable', 'account_not_found',
+            // Named outcomes, so the login screen can say what actually
+            // happened instead of one catch-all sentence.
+            'account_exists', 'session_expired', 'provider_error', 'identity_conflict',
+        ];
         $status = in_array($status, $allowed, true) ? $status : 'failed';
         $url = rtrim((string) config('frontend.url'), '/').'/login?google='.rawurlencode($status);
 
