@@ -410,7 +410,7 @@ class GoogleOAuthTest extends TestCase
         $this->finishGoogleFlow($flow, 'attacker-controlled-state')
             ->assertRedirect('https://trana.test/login?google=session_expired');
 
-        $log = \App\Models\ErrorLog::query()->where('route', 'oauth:state_invalid')->first();
+        $log = \App\Models\ErrorLog::query()->where('route', 'like', 'oauth:state_invalid%')->first();
         $this->assertNotNull($log, 'a rejected OAuth state must be recorded');
         $this->assertSame('api', $log->kind);
         $this->assertSame('error', $log->level);
@@ -418,7 +418,7 @@ class GoogleOAuthTest extends TestCase
         // Repeats group onto one row rather than flooding the table.
         $this->finishGoogleFlow($flow, 'attacker-controlled-state')
             ->assertRedirect('https://trana.test/login?google=session_expired');
-        $this->assertSame(1, \App\Models\ErrorLog::query()->where('route', 'oauth:state_invalid')->count());
+        $this->assertSame(1, \App\Models\ErrorLog::query()->where('route', 'like', 'oauth:state_invalid%')->count());
     }
 
     public function test_a_missing_state_is_distinguished_from_an_invalid_one(): void

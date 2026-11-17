@@ -252,16 +252,15 @@ class GoogleAuthController extends Controller
                 throw new RuntimeException('Google identity conflicts with an existing account.');
             }
 
-            if (! $user) {
-                // Signup intent for an address that cannot be registered
-                // again — typically someone clicking "Create account" with an
-                // address they registered (by password) earlier. Reported
-                // plainly instead of colliding on the unique email index or
-                // being dressed up as a link attempt that needs a password.
-                if (User::query()->where('email', $email)->exists()) {
-                    return 'already_exists';
-                }
+            // "Create account" with an address that already has one — usually
+            // a password account registered earlier. Report it plainly instead
+            // of quietly linking: the athlete needs to know to use the Log in
+            // tab, and must not be left thinking a new account was created.
+            if ($user && $allowCreate) {
+                return 'already_exists';
+            }
 
+            if (! $user) {
                 if (! $allowCreate) {
                     return 'not_found';
                 }
