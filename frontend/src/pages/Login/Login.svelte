@@ -84,6 +84,30 @@
     }
   }
 
+  /**
+   * Unverified password login. Google sign-in is a complete substitute here:
+   * the callback links the Google identity onto the existing password account
+   * and marks the address verified, so the user keeps their password and data.
+   * When delivery already failed we lead with that instead of the code screen.
+   */
+  function offerVerificationRoute(apiError) {
+    // The login response is the only place that can say whether delivery
+    // worked: it carries expires_in = 0 when the code could not be sent.
+    // /auth/email/resend deliberately answers 202 either way so it cannot be
+    // used to probe for accounts, so it must not be asked to settle this.
+    if (Number(apiError?.expires_in ?? 0) === 0) {
+      // No mail is going to arrive. Stay on the login screen, where the Google
+      // button already is, rather than sending the user to a code screen that
+      // cannot work.
+      error = 'We could not email a verification code to that address. Use "Log in with Google" instead — it verifies the same email and keeps your account and password.';
+      return;
+    }
+
+    mode = 'verify';
+    startCountdown(apiError.expires_in ?? 300, apiError.resend_after ?? 0);
+    error = 'Please verify your Gmail address before logging in. No code arrived? Signing in with Google verifies the same address.';
+  }
+
   async function submitLogin() {
     error = '';
     fieldErrors = {};
@@ -94,9 +118,12 @@
     } catch (err) {
       if (err.code === 'EMAIL_NOT_VERIFIED') {
         email = err.email || identifier;
-        mode = 'verify';
-        startCountdown(err.expires_in ?? 300, err.resend_after ?? 0);
-        error = 'Please verify your Gmail address before logging in.';
+        // A verification code may be genuinely on its way, or this deployment
+        // may have no working mailer at all — in which case the code screen is
+        // a dead end and the only way in is Google, which proves the address
+        // without TRANA sending anything. Offer both instead of guessing.
+        // expires_in === 0 is the API's own signal that delivery failed.
+        offerVerificationRoute(err);
         return;
       }
       applyApiError(err);
@@ -299,6 +326,18 @@
         {:else}<button class="text-button" type="button" disabled={busy} on:click={resendCode}>Resend code</button>{/if}
         <button class="text-button" type="button" on:click={() => { mode = 'login'; error = ''; }}>Back to log in</button>
       </div>
+      <div class="google-signin verify-google">
+        <span class="verify-google-hint">No code arrived? Signing in with Google verifies <strong>{email}</strong> instead.</span>
+        <a class="google-button" href={api.auth.googleRedirectUrl('login')}>
+          <svg aria-hidden="true" viewBox="0 0 48 48" focusable="false">
+            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.61 17.74 9.5 24 9.5Z" />
+            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.9c-.58 2.96-2.25 5.48-4.73 7.18l7.63 5.92c4.45-4.11 7.18-10.17 7.18-17.57Z" />
+            <path fill="#FBBC05" d="M10.54 28.59a14.4 14.4 0 0 1-.76-4.59c0-1.59.27-3.13.76-4.59l-7.98-6.19A23.8 23.8 0 0 0 0 24c0 3.89.93 7.57 2.56 10.78l7.98-6.19Z" />
+            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.9-5.78l-7.63-5.92c-2.12 1.42-4.84 2.25-8.27 2.25-6.27 0-11.58-4.11-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48Z" />
+          </svg>
+          <span>Verify with Google instead</span>
+        </a>
+      </div>
     {:else if mode === 'forgot'}
       <div class="eyebrow">ACCOUNT RECOVERY</div>
       <h1>Forgot password?</h1>
@@ -411,7 +450,7 @@
   .brand{display:inline-block;margin-bottom:32px;color:#14251e;text-decoration:none;font-weight:900;font-size:24px;letter-spacing:.08em}.brand span{color:#23a26d}
   .eyebrow{color:#16845a;font-size:11px;font-weight:800;letter-spacing:.14em}h1{margin:8px 0;font-size:30px;letter-spacing:-.04em}.subtitle{margin:0 0 24px;color:#68766f;font-size:14px;line-height:1.55}.subtitle strong{color:#24382e;overflow-wrap:anywhere}
   .tabs{display:grid;grid-template-columns:1fr 1fr;padding:4px;margin:0 0 18px;background:#f0f4f1;border-radius:12px}.tabs button{min-height:44px;border:0;background:transparent;padding:11px;color:#65736b;font-weight:700;border-radius:9px;cursor:pointer}.tabs button.active{background:#fff;color:#14754e;box-shadow:0 2px 8px #193b2b12}
-  .google-signin{display:grid;gap:8px}.google-button{display:flex;align-items:center;justify-content:center;gap:12px;min-height:48px;box-sizing:border-box;padding:10px 16px;border:1px solid #d8dfdc;border-radius:10px;background:#fff;color:#26352d;text-decoration:none;font-size:14px;font-weight:750;box-shadow:0 1px 2px #13251b0d;transition:background .15s,border-color .15s,box-shadow .15s}.google-button:hover{background:#f9fbfa;border-color:#aebbb4;box-shadow:0 2px 7px #13251b12}.google-button:focus-visible{outline:3px solid #27a57255;outline-offset:2px}.google-button svg{width:20px;height:20px;flex:none}.google-signin p{margin:0;color:#7a8880;font-size:11px;text-align:center}.auth-divider{display:flex;align-items:center;gap:12px;margin:18px 0 10px;color:#89958d;font-size:10px}.auth-divider::before,.auth-divider::after{content:"";height:1px;flex:1;background:#e7ede9}
+  .google-signin{display:grid;gap:8px}.google-button{display:flex;align-items:center;justify-content:center;gap:12px;min-height:48px;box-sizing:border-box;padding:10px 16px;border:1px solid #d8dfdc;border-radius:10px;background:#fff;color:#26352d;text-decoration:none;font-size:14px;font-weight:750;box-shadow:0 1px 2px #13251b0d;transition:background .15s,border-color .15s,box-shadow .15s}.google-button:hover{background:#f9fbfa;border-color:#aebbb4;box-shadow:0 2px 7px #13251b12}.google-button:focus-visible{outline:3px solid #27a57255;outline-offset:2px}.google-button svg{width:20px;height:20px;flex:none}.google-signin p{margin:0;color:#7a8880;font-size:11px;text-align:center}.auth-divider{display:flex;align-items:center;gap:12px;margin:18px 0 10px;color:#89958d;font-size:10px}.auth-divider::before,.auth-divider::after{content:"";height:1px;flex:1;background:#e7ede9}.verify-google{margin-top:18px;padding-top:16px;border-top:1px solid #e7ede9}.verify-google-hint{max-width:34ch;justify-self:center;color:#7a8880;font-size:11px;line-height:1.5;text-align:center}
   form{display:flex;flex-direction:column;gap:9px}label{font-size:13px;font-weight:700;color:#34483d;margin-top:6px}input{width:100%;min-height:44px;box-sizing:border-box;padding:12px 13px;border:1px solid #dbe4de;border-radius:10px;background:#fff;color:#17251f;font:inherit;outline:none}input:focus{border-color:#27a572;box-shadow:0 0 0 3px #27a5721f}.hint{margin:-4px 0 3px;color:#7a8880;font-size:11px}.field-error{display:block;color:#bb3939;font-size:12px;margin-top:-4px}
   .password-wrap{position:relative}.password-wrap input{padding-right:62px}.password-wrap button{position:absolute;right:9px;top:50%;min-width:44px;min-height:44px;transform:translateY(-50%);border:0;background:transparent;color:#19805a;font-size:12px;font-weight:700;cursor:pointer}
   .primary-button{width:100%;min-height:44px;margin-top:14px;padding:13px 16px;border:0;border-radius:10px;background:#16845a;color:#fff;font-size:14px;font-weight:800;cursor:pointer;transition:background .15s,transform .15s}.primary-button:hover:not(:disabled){background:#106c49;transform:translateY(-1px)}.primary-button:disabled{opacity:.58;cursor:wait}
