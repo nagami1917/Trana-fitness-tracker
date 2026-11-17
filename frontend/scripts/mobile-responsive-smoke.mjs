@@ -40,12 +40,6 @@ const bundle = await build({
   plugins: [svelte()],
   resolve: {
     alias: [
-      { find: /^leaflet\/dist\/leaflet\.css$/, replacement: resolve(root, 'scripts/stubs/empty.css') },
-      { find: /^leaflet$/, replacement: resolve(root, 'scripts/stubs/leaflet-interactive.js') },
-      { find: /^@maplibre\/maplibre-gl-leaflet$/, replacement: resolve(root, 'scripts/stubs/maplibre-gl-leaflet.js') },
-      { find: /^maplibre-gl\/dist\/maplibre-gl\.css$/, replacement: resolve(root, 'scripts/stubs/empty.css') },
-      { find: 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url', replacement: resolve(root, 'scripts/stubs/empty-url.js') },
-      { find: /^maplibre-gl$/, replacement: resolve(root, 'scripts/stubs/maplibre-gl-interactive.js') },
       { find: /^chart\.js\/auto$/, replacement: resolve(root, 'scripts/stubs/chart.js') },
     ],
   },
@@ -236,17 +230,17 @@ try {
   const statValue = document.querySelector('.stat-value');
   assert.ok(statValue?.className.includes('!text-lg'), 'StatCard values should use compact mobile typography');
 
-  // C. PlanActivity mobile controls, "When" input, map prompt clearance, & Saved plans row wrap
+  // C. PlanActivity mobile controls, "When" input, distance form, & Saved plans row wrap
   harness.navigate('/plan');
   await waitFor(() => document.querySelector('input[aria-label="When"]'), 'PlanActivity mount');
   const whenInput = document.querySelector('input[aria-label="When"]');
   assert.ok(whenInput.value.length >= 16, 'When input remains prefilled on mobile');
   assert.ok(whenInput.parentElement.className.includes('min-w-0'), 'When grid item must allow shrinking on narrow screens');
 
-  const tranaPrompt = [...document.querySelectorAll('div')].find((el) =>
-    el.textContent?.includes('Tap Start, then tap End on the map') && el.className.includes('pointer-events-none'),
-  );
-  assert.ok(tranaPrompt?.className.includes('right-16'), 'Map prompt banner must leave clearance for right-hand MapControls on mobile');
+  const distanceInput = document.querySelector('input[aria-label="Distance"]');
+  assert.ok(distanceInput, 'Distance input should render on mobile');
+  assert.equal(distanceInput.disabled, false, 'Distance must be typeable — there is no map to measure it');
+  assert.equal(document.querySelector('.leaflet-container'), null, 'Plan Activity must not render a map');
 
   const deletePlanBtn = document.querySelector('button[aria-label^="Delete saved plan "]');
   assert.ok(deletePlanBtn, 'Saved plan delete trigger should exist');
@@ -260,8 +254,8 @@ try {
   // D. Track Activity mobile controls, path switcher, live status dot in mobile bottom nav, and Dashboard live sync
   harness.navigate('/track');
   await waitFor(() => document.querySelector('[data-tour="track-controls-header"]'), 'Track mount');
-  const pathGroup = document.querySelector('[aria-label="Route path source"]');
-  assert.ok(pathGroup?.className.includes('w-full'), 'Path switcher bar should expand cleanly across mobile width');
+  assert.equal(document.querySelector('[aria-label="Route path source"]'), null, 'Route path switcher must be gone');
+  assert.equal(document.querySelector('.leaflet-container'), null, 'Track Activity must not render a map');
 
   const startBtn = [...document.querySelectorAll('button')].find((b) => b.textContent?.includes('Start activity'));
   assert.ok(startBtn?.className.includes('w-full'), 'Start activity button should be full-width thumb-friendly on mobile');

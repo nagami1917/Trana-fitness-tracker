@@ -32,9 +32,9 @@ export default defineConfig(({ mode }) => {
           clientsClaim: true,
           // Keep index.html and registerSW.js out of the Cache-First precache so
           // normal page loads and refreshes always hit Vercel first for the latest bundle.
-          // Defer heavy route/map vendor bundles & ML model JSON to runtime caching.
+          // Defer heavy vendor bundles & ML model JSON to runtime caching.
           globPatterns: ['**/*.{js,css,woff2}'],
-          globIgnores: ['**/registerSW.js', '**/maplibre-gl-worker-*', '**/vendor-maplibre-*'],
+          globIgnores: ['**/registerSW.js'],
           maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
           navigateFallback: null,
           runtimeCaching: [
@@ -89,8 +89,6 @@ export default defineConfig(({ mode }) => {
         output: {
           manualChunks(id) {
             if (!id.includes('node_modules')) return undefined;
-            if (id.includes('maplibre-gl')) return 'vendor-maplibre';
-            if (id.includes('leaflet')) return 'vendor-leaflet';
             if (id.includes('chart.js')) return 'vendor-charts';
             if (id.includes('lucide-svelte')) return 'vendor-icons';
             return undefined;

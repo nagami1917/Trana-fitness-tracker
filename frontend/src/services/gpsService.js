@@ -7,7 +7,6 @@
  * without the athlete's explicit action — this service only observes.
  */
 
-import { snapToRoad } from './roadSnappingService.js';
 import { createGpsSmoother } from './gpsFilter.js';
 
 const DEFAULT_OPTIONS = {
@@ -77,11 +76,10 @@ export function trackPoint(coords, timestamp) {
  * @param {Function} [params.onPoint] - Called with each track point
  * @param {Function} [params.onError] - Called on GPS errors
  * @param {Object} [params.options] - Geolocation watchPosition options
- * @param {boolean} [params.snapToRoadEnabled=false] - Snap points to nearest road
  * @param {string} [params.activityType='run'] - Activity type for speed-spike rejection
  * @param {Object|null} [params.initialPoint=null] - Seed fix from the one-shot startup position
  */
-export function watch({ onPoint, onError, options = {}, snapToRoadEnabled = false, activityType = 'run', initialPoint = null } = {}) {
+export function watch({ onPoint, onError, options = {}, activityType = 'run', initialPoint = null } = {}) {
   const geolocation = typeof navigator !== 'undefined' ? navigator.geolocation : null;
   if (!geolocation || typeof geolocation.watchPosition !== 'function') {
     onError?.(new GpsError('unsupported'));
@@ -107,20 +105,6 @@ export function watch({ onPoint, onError, options = {}, snapToRoadEnabled = fals
           timestamp: rawPoint.timestamp,
           suppressedDrift: Boolean(filtered.suppressedDrift),
         };
-
-        // Optionally snap to nearest road (Overpass API) when actually moving
-        if (snapToRoadEnabled && !point.suppressedDrift) {
-          try {
-            const snapped = await snapToRoad(point.latitude, point.longitude);
-            if (snapped) {
-              point.latitude = snapped.lat;
-              point.longitude = snapped.lng;
-              point.snappedToRoad = snapped.snapped;
-            }
-          } catch {
-            // Silently keep smoothed point if snapping fails
-          }
-        }
 
         onPoint?.(point);
       } catch (error) {

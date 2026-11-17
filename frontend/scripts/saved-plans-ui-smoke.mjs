@@ -21,10 +21,6 @@ const bundle = await build({
   plugins: [svelte()],
   resolve: {
     alias: [
-      { find: /^@maplibre\/maplibre-gl-leaflet$/, replacement: resolve(root, 'scripts/stubs/maplibre-gl-leaflet.js') },
-      { find: /^maplibre-gl\/dist\/maplibre-gl\.css$/, replacement: resolve(root, 'scripts/stubs/empty.css') },
-      { find: 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url', replacement: resolve(root, 'scripts/stubs/empty-url.js') },
-      { find: /^maplibre-gl$/, replacement: resolve(root, 'scripts/stubs/maplibre-gl-interactive.js') },
     ],
   },
   build: {
@@ -189,7 +185,7 @@ try {
   await waitFor(() => deletedIds.includes(2) && harness.getPlans().length === 4);
   assert.deepEqual(deletedIds, [2]);
   assert.doesNotMatch(document.body.textContent, /Plan #2 saved/);
-  assert.match(document.body.textContent, /Add a route on the map to start predicting/);
+  assert.match(document.body.textContent, /Enter a distance to see your fueling plan/);
   assert.equal(harness.getToast()?.message, 'Saved plan deleted.');
   assert.equal(buttonsWithText('Show all').length, 0);
 

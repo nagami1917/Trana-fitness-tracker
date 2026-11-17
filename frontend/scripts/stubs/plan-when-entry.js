@@ -5,7 +5,6 @@ import { route } from '../../src/lib/router.js';
 import { toDatetimeLocal } from '../../src/lib/format.js';
 import Calendar from '../../src/pages/Calendar/Calendar.svelte';
 import PlanActivity from '../../src/pages/PlanActivity/PlanActivity.svelte';
-import { getCreatedMaps } from './maplibre-gl-interactive.js';
 
 const target = document.getElementById('app');
 let component = null;
@@ -44,7 +43,6 @@ window.__planWhenTest = {
   getRoute: () => get(route),
   getPlans: () => get(plans),
   getToast: () => get(toast),
-  getLatestMap: () => getCreatedMaps().at(-1) ?? null,
   flush: flushSync,
   async destroy() {
     if (component) await unmount(component);

@@ -22,7 +22,6 @@
   import Card from '../../components/common/Card.svelte';
   import Skeleton from '../../components/common/Skeleton.svelte';
   import ActivityIcon from '../../components/activities/ActivityIcon.svelte';
-  import RouteMap from '../../components/route/RouteMap.svelte';
   import DonutRing from '../../components/common/DonutRing.svelte';
   import ProgressBar from '../../components/common/ProgressBar.svelte';
   import Segmented from '../../components/common/Segmented.svelte';
@@ -155,21 +154,6 @@
     { id: 'distance', label: 'Distance', unit: distanceUnit($unitSystem) },
     { id: 'minutes', label: 'Time', unit: 'min' },
   ]);
-
-  const latestActivityWithRoute = $derived(
-    $activities.find((activity) => Array.isArray(activity.route) && activity.route.length >= 2) ?? null,
-  );
-  const firstSavedPlanWithRoute = $derived(
-    $plans.find((plan) => Array.isArray(plan.route) && plan.route.length >= 2) ?? null,
-  );
-  const previewRoute = $derived(latestActivityWithRoute?.route ?? firstSavedPlanWithRoute?.route ?? []);
-  const previewRouteLabel = $derived(
-    latestActivityWithRoute
-      ? 'Latest recorded route'
-      : firstSavedPlanWithRoute
-        ? 'Saved plan route'
-        : 'No route saved yet',
-  );
 
   const prediction = $derived.by(() => {
     if (!model || !$profile) return null;
@@ -322,7 +306,7 @@
     {/if}
 
     <!-- compact idle / live expandable track status -->
-    <TrackActivityPrompt fallbackCenter={livePlace ? [livePlace.latitude, livePlace.longitude] : [14.676, 121.0437]} />
+    <TrackActivityPrompt />
 
     <!-- Tier 1 flat stat cards -->
     <div class="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
@@ -442,20 +426,31 @@
             </button>
           </div>
 
-          <div class="relative">
-            <RouteMap
-              points={previewRoute}
-              height={214}
-              userLocation={livePosition.current ? [livePosition.current.latitude, livePosition.current.longitude] : null}
-              class="!rounded-2xl"
-            >
-              <div class="pointer-events-none absolute left-3 top-3 rounded-xl bg-white/90 px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide text-brand-600 shadow-soft">
-                {previewRouteLabel}
+          <div class="grid gap-2 rounded-2xl border border-brand-100 bg-brand-50/40 p-3.5">
+            <p class="text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink-400">What you get</p>
+            {#if loadingModel || !prediction}
+              <Skeleton variant="lines" count={3} />
+            {:else}
+              <div class="flex items-center justify-between gap-2 text-xs font-extrabold text-ink-700">
+                <span>Time</span>
+                <span class="num-tabular text-ink-900">{fmtDuration(prediction.d.minutes)}</span>
               </div>
-            </RouteMap>
-            <p class="mt-1 px-1 text-[10px] font-semibold leading-4 text-ink-400">
-              Route preview only; the estimate uses the distance and elevation you entered.
-            </p>
+              <div class="flex items-center justify-between gap-2 text-xs font-extrabold text-ink-700">
+                <span>Calories</span>
+                <span class="num-tabular text-ink-900">{kcal(prediction.f.calories.total)} kcal</span>
+              </div>
+              <div class="flex items-center justify-between gap-2 text-xs font-extrabold text-ink-700">
+                <span>Carbs / h</span>
+                <span class="num-tabular text-ink-900">{prediction.f?.carbs?.perHourG ?? 0} g</span>
+              </div>
+              <div class="flex items-center justify-between gap-2 text-xs font-extrabold text-ink-700">
+                <span>Fluid / h</span>
+                <span class="num-tabular text-ink-900">{ml(prediction.f?.fluid?.perHourMl ?? 0, $unitSystem)}</span>
+              </div>
+              <p class="mt-1 text-[10px] font-semibold leading-4 text-ink-400">
+                From the distance, climb, and conditions you entered.
+              </p>
+            {/if}
           </div>
         </div>
 

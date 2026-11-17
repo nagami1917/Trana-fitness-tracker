@@ -19,7 +19,6 @@ const bundle = await build({
         find: '../../lib/router.js',
         replacement: resolve(root, 'scripts/stubs/router-preview.js'),
       },
-      { find: /^@maplibre\/maplibre-gl-leaflet$/, replacement: resolve(root, 'scripts/stubs/maplibre-gl-leaflet.js') },
     ],
   },
   build: {

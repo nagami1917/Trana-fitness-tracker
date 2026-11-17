@@ -13,10 +13,8 @@ import { api } from '../services/client.js';
 import { activityApi, validateTrackPoint } from '../services/activityService.js';
 import { dailySessionApi } from '../services/dailySessionService.js';
 import { watch, getCurrentPosition, trackPoint, GpsError } from '../services/gpsService.js';
-import { snapRoute } from '../services/roadSnappingService.js';
 import { haversineKm, elevationGainM } from './geo.js';
 import { estimateMet, recommendFueling } from './ml/fueling.js';
-import { computeGhostPacerState } from './route/ghostPacer.js';
 import { detectNewPRs } from './analytics/records.js';
 import { queueActivitySave } from './offlineQueue.js';
 import { KM_TO_MI, isImperial } from './units.js';
@@ -55,10 +53,7 @@ let gpsStatus = $state('idle');
 let gpsMessage = $state('');
 let statusNote = $state('');
 
-let roadSnapping = $state(true);
-let showRoads = $state(true);
-
-let pathSource = $state('none'); // 'none' | 'create' | 'plan'
+let pathSource = $state('none'); // legacy field, kept so saved sessions still rehydrate
 let plannedPath = $state([]);
 let plannedLabel = $state('Free GPS');
 let plannedPlanKey = $state(null);
@@ -74,7 +69,6 @@ let lastFuelSec = $state(0);
 let voiceCues = $state(false);
 let announcedSplits = $state(0);
 let wakeLockActive = $state(false);
-let lastOffRouteVoiceAt = 0;
 
 let lastOutcome = $state(null);
 let lastDailySession = $state(null);
@@ -185,8 +179,6 @@ function persist() {
       startedAtIso,
       activeSegmentStartMs,
       elapsedBeforePauseMs,
-      roadSnapping,
-      showRoads,
       pathSource,
       plannedPath: downsampleCoords(plannedPath, 600),
       plannedLabel,
@@ -268,7 +260,6 @@ function resetLiveFields() {
   lastHydrateSec = 0;
   lastFuelSec = 0;
   announcedSplits = 0;
-  lastOffRouteVoiceAt = 0;
   statusNote = '';
   void releaseWakeLock();
 }
@@ -308,12 +299,6 @@ function appendGpsFix(fix) {
         const secs = Math.round((paceMin - mins) * 60);
         speakCue(`${completedSplits} ${unitWord}${completedSplits > 1 ? 's' : ''} complete. Average pace ${mins} minutes ${secs} seconds per ${unitWord}.`);
       }
-    }
-
-    // Off-route audio alert (45s cooldown)
-    if (voiceCues && ghostState?.offRoute && Date.now() - lastOffRouteVoiceAt > 45000) {
-      lastOffRouteVoiceAt = Date.now();
-      speakCue(`Off route by ${ghostState.offRouteMeters} meters.`);
     }
   }
   persist();
@@ -457,16 +442,6 @@ const recordedCoords = $derived(
   points.map((p) => [p.latitude, p.longitude]),
 );
 
-const ghostState = $derived.by(() =>
-  computeGhostPacerState({
-    plannedPath,
-    targetDurationMin: plannedDurationMin,
-    elapsedSec: durationSec,
-    coveredDistanceKm: distanceKm,
-    currentPosition,
-  }),
-);
-
 const status = $derived.by(() => {
   if (saving) return 'saving';
   if (tracking && paused) return 'paused';
@@ -482,8 +457,6 @@ function clearRuntimeOnly() {
   stopGps();
   resetLiveFields();
   activityType = 'run';
-  roadSnapping = true;
-  showRoads = true;
   pathSource = 'none';
   plannedPath = [];
   plannedLabel = 'Free GPS';
@@ -505,8 +478,6 @@ function hydrateForUser(userId) {
     if (!saved || typeof saved !== 'object') return;
 
     if (saved.activityType) activityType = saved.activityType;
-    if (typeof saved.roadSnapping === 'boolean') roadSnapping = saved.roadSnapping;
-    if (typeof saved.showRoads === 'boolean') showRoads = saved.showRoads;
     if (saved.pathSource) pathSource = saved.pathSource;
     if (Array.isArray(saved.plannedPath)) plannedPath = saved.plannedPath;
     if (typeof saved.plannedLabel === 'string') plannedLabel = saved.plannedLabel;
@@ -584,16 +555,6 @@ session.subscribe((user) => {
 function setActivityType(type) {
   if (tracking || !type) return;
   activityType = type;
-}
-
-function setRoadSnapping(value) {
-  roadSnapping = Boolean(value);
-  if (tracking) persist();
-}
-
-function setShowRoads(value) {
-  showRoads = Boolean(value);
-  if (tracking) persist();
 }
 
 function setGearId(id) {
@@ -783,14 +744,6 @@ async function stopActivity({ currentTodaySession = null, allowStationary = fals
 
   try {
     let routeCoords = points.map((p) => [p.latitude, p.longitude]);
-    if (roadSnapping && routeCoords.length >= 2) {
-      try {
-        snappedPoints = await snapRoute(routeCoords);
-        if (snappedPoints.length >= 2) routeCoords = snappedPoints;
-      } catch {
-        snappedPoints = [];
-      }
-    }
 
     routeCoords = downsampleCoords(routeCoords, MAX_STORED_POINTS);
     if (routeCoords.length > 0) {
@@ -951,8 +904,6 @@ export const liveTracker = {
   get paused() { return paused; },
   get saving() { return saving; },
   get status() { return status; },
-  get roadSnapping() { return roadSnapping; },
-  get showRoads() { return showRoads; },
   get points() { return points; },
   get recordedCoords() { return recordedCoords; },
   get snappedPoints() { return snappedPoints; },
@@ -972,7 +923,7 @@ export const liveTracker = {
   get plannedFueling() { return plannedFueling; },
   get plannedDurationMin() { return plannedDurationMin; },
   get gearId() { return gearId; },
-  get ghostState() { return ghostState; },
+
   get activeFuelTargets() { return activeFuelTargets; },
   get fluidLoggedMl() { return fluidLoggedMl; },
   get carbsLoggedG() { return carbsLoggedG; },
@@ -994,8 +945,6 @@ export const liveTracker = {
   get lastDailySession() { return lastDailySession; },
 
   setActivityType,
-  setRoadSnapping,
-  setShowRoads,
   setGearId,
   setPathContext,
   logHydration,

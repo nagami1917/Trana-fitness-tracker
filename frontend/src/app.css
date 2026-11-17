@@ -1,5 +1,3 @@
-@import 'leaflet/dist/leaflet.css';
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -246,63 +244,7 @@
   }
 }
 
-/* Leaflet theme ------------------------------------------------------------ */
-.leaflet-container {
-  font-family: inherit;
-  background: #eaf3ee;
-}
-
-.leaflet-bar {
-  border: none !important;
-  border-radius: 14px !important;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.92) !important;
-  box-shadow: 0 4px 14px rgba(219, 39, 119, 0.2) !important;
-  backdrop-filter: blur(6px);
-}
-
-.leaflet-bar a,
-.leaflet-bar a:hover,
-.leaflet-bar a:focus {
-  border: none !important;
-  border-bottom: 1px solid #ffe0ec !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  color: #db2777 !important;
-  width: 36px !important;
-  height: 36px !important;
-  line-height: 36px !important;
-  font-weight: 700;
-}
-
-.leaflet-bar a:hover,
-.leaflet-bar a:focus {
-  background: #fdf2f8 !important;
-}
-
-.leaflet-bar a:last-child {
-  border-bottom: none !important;
-}
-
-.leaflet-bar a.leaflet-disabled {
-  color: #f9a8d4 !important;
-}
-
-.leaflet-control-attribution {
-  font-size: 9px !important;
-  background: rgba(255, 255, 255, 0.75) !important;
-  border-radius: 999px;
-  padding: 1px 8px;
-  box-shadow: 0 1px 4px rgba(219, 39, 119, 0.12);
-}
-
-.route-marker {
-  border-radius: 9999px;
-  border: 3px solid #fff;
-  box-shadow: 0 4px 12px rgba(219, 39, 119, 0.45);
-}
-
-/* Dark theme adjustments mapped onto semantic tokens + night basemap filter */
+/* Dark theme adjustments mapped onto semantic tokens */
 html.theme-dark .bg-white,
 html.theme-dark .bg-white\/95,
 html.theme-dark .bg-white\/92,
@@ -531,25 +473,6 @@ html.theme-dark .hover\:bg-red-50:hover {
 html.theme-dark .pill {
   background-color: rgba(236, 72, 153, 0.18);
   color: var(--brand-text-strong);
-}
-
-/* Dim & invert ONLY Leaflet daylight map tiles (leave polylines & markers vibrant) */
-html.theme-dark .leaflet-container {
-  background: #131826;
-}
-
-html.theme-dark .leaflet-tile-pane {
-  filter: invert(92%) hue-rotate(180deg) brightness(95%) contrast(92%);
-}
-
-html.theme-dark .leaflet-bar {
-  background: rgba(21, 26, 40, 0.92) !important;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45) !important;
-}
-
-html.theme-dark .leaflet-bar a {
-  color: #f9a8d4 !important;
-  border-bottom-color: #2b3550 !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

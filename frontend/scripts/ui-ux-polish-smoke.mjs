@@ -45,7 +45,7 @@ const ratio = contrastRatio(ink400Match[1], '#ffffff');
 assert.ok(ratio >= 4.5, `Expected ink[400] (${ink400Match[1]}) WCAG AA >= 4.5:1 on white, got ${ratio.toFixed(2)}`);
 
 const appCss = readFileSync(resolve(root, 'src/app.css'), 'utf8');
-for (const token of ['--bg-surface', '--bg-subtle', '--text-primary', '--text-muted', '--border-hairline', '--track-ring', '--track-bar', '--chart-tick', '--brand-text', '.bg-sky-50', '.bg-ink-100', '.bg-brand-50\\/75', '.bg-violet-50\\/70', '.card-flat', 'tabular-nums', '.leaflet-tile-pane']) {
+for (const token of ['--bg-surface', '--bg-subtle', '--text-primary', '--text-muted', '--border-hairline', '--track-ring', '--track-bar', '--chart-tick', '--brand-text', '.bg-sky-50', '.bg-ink-100', '.bg-brand-50\\/75', '.bg-violet-50\\/70', '.card-flat', 'tabular-nums', '.theme-dark .bg-white']) {
   assert.ok(appCss.includes(token), `app.css missing expected token/rule: ${token}`);
 }
 
@@ -78,10 +78,6 @@ const bundle = await build({
   plugins: [svelte()],
   resolve: {
     alias: [
-      { find: /^@maplibre\/maplibre-gl-leaflet$/, replacement: resolve(root, 'scripts/stubs/maplibre-gl-leaflet.js') },
-      { find: /^maplibre-gl\/dist\/maplibre-gl\.css$/, replacement: resolve(root, 'scripts/stubs/empty.css') },
-      { find: 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url', replacement: resolve(root, 'scripts/stubs/empty-url.js') },
-      { find: /^maplibre-gl$/, replacement: resolve(root, 'scripts/stubs/maplibre-gl-interactive.js') },
     ],
   },
   build: {
@@ -177,13 +173,11 @@ harness.setActivities([
   },
 ]);
 await harness.mountView('TrackActivityPrompt');
-assert.match(document.body.textContent, /Last GPS Track/);
-assert.ok(!document.querySelector('.leaflet-container'), 'Past GPS activity should collapse to compact banner without map until expanded');
-const expandBtn = [...document.querySelectorAll('button')].find((b) => b.textContent.includes('Map preview'));
-assert.ok(expandBtn, 'Compact past-history banner should provide Map preview toggle');
-expandBtn.click();
-harness.flush();
-assert.ok(document.querySelector('.leaflet-container'), 'Clicking Map preview should expand map');
+assert.match(document.body.textContent, /Track Activity · Run/);
+assert.match(document.body.textContent, /Completed & saved/);
+assert.ok(!document.querySelector('.leaflet-container'), 'No map should be rendered anywhere');
+const mapPreviewBtn = [...document.querySelectorAll('button')].find((b) => b.textContent.includes('Map preview'));
+assert.equal(mapPreviewBtn, undefined, 'The map preview affordance must be gone');
 
 // 5. Modal accessibility (role="dialog", aria-modal, aria-labelledby, focus & restore)
 await harness.mountView('ModalHarness');

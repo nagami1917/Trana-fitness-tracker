@@ -31,12 +31,10 @@ if (existsSync(distAssetsDir)) {
   assert.ok(files.some((f) => /^Track-.*\.js$/.test(f)), 'Track must be a lazy route chunk');
   assert.ok(files.some((f) => /^Dashboard-.*\.js$/.test(f)), 'Dashboard must be a lazy route chunk');
   assert.ok(files.some((f) => /^Login-.*\.js$/.test(f)), 'Login must be a lazy route chunk');
-  assert.ok(files.some((f) => /^vendor-maplibre-.*\.js$/.test(f)), 'MapLibre must be isolated in vendor-maplibre chunk');
-  assert.ok(files.some((f) => /^vendor-leaflet-.*\.js$/.test(f)), 'Leaflet must be isolated in vendor-leaflet chunk');
+  assert.ok(!files.some((f) => /maplibre|leaflet/i.test(f)), 'Mapping bundles must not be emitted at all');
   assert.ok(files.some((f) => /^vendor-charts-.*\.js$/.test(f)), 'Chart.js must be isolated in vendor-charts chunk');
 
   const sw = readFileSync(resolve(root, 'dist/sw.js'), 'utf8');
-  assert.doesNotMatch(sw, /vendor-maplibre/, 'SW install precache must defer heavy vendor-maplibre chunk');
   assert.doesNotMatch(sw, /duration_model\.json/, 'SW install precache must defer duration_model.json to runtime caching');
 }
 

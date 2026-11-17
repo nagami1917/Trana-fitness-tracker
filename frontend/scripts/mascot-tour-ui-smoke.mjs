@@ -23,12 +23,6 @@ const bundle = await build({
   plugins: [svelte()],
   resolve: {
     alias: [
-      { find: /^leaflet\/dist\/leaflet\.css$/, replacement: resolve(root, 'scripts/stubs/empty.css') },
-      { find: /^leaflet$/, replacement: resolve(root, 'scripts/stubs/leaflet-interactive.js') },
-      { find: /^@maplibre\/maplibre-gl-leaflet$/, replacement: resolve(root, 'scripts/stubs/maplibre-gl-leaflet.js') },
-      { find: /^maplibre-gl\/dist\/maplibre-gl\.css$/, replacement: resolve(root, 'scripts/stubs/empty.css') },
-      { find: 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url', replacement: resolve(root, 'scripts/stubs/empty-url.js') },
-      { find: /^maplibre-gl$/, replacement: resolve(root, 'scripts/stubs/maplibre-gl-interactive.js') },
       { find: /^chart\.js\/auto$/, replacement: resolve(root, 'scripts/stubs/chart.js') },
     ],
   },
@@ -256,7 +250,7 @@ try {
   findButton('Next').click();
   await waitFor(
     () => harness.getRoute() === '/plan'
-      && document.querySelector('#mascot-tour-title')?.textContent.includes('Build routes & predict fueling')
+      && document.querySelector('#mascot-tour-title')?.textContent.includes('Plan it, then fuel it')
       && document.querySelector('[data-tour="plan-activity-card"]'),
     'Plan Activity step',
   );
@@ -266,10 +260,10 @@ try {
   await waitFor(
     () => harness.getRoute() === '/track'
       && document.querySelector('#mascot-tour-title')?.textContent.includes('Record live GPS workouts')
-      && document.querySelector('[data-tour="track-map"]'),
+      && document.querySelector('[data-tour="track-controls-header"]'),
     'Track Activity step',
   );
-  assert.ok(document.querySelector('[data-tour="track-map"]'), 'Track Activity map should be the spotlight target');
+  assert.ok(document.querySelector('[data-tour="track-controls-header"]'), 'Track Activity controls should be the spotlight target');
 
   findButton('Next').click();
   await waitFor(

@@ -4,7 +4,7 @@
  *   node scripts/render-smoke.mjs
  *
  * Renders every screen through Svelte's SSR compiler with a populated store.
- * onMount effects (charts, maps) are skipped, but all template logic, derived
+ * onMount effects (charts) are skipped, but all template logic, derived
  * values and store reads run for real — this catches the class of bug that a
  * build cannot: undefined values, bad guards, broken `$derived` chains.
  */
@@ -98,14 +98,8 @@ const vite = await createServer({
   plugins: [svelte({ compilerOptions: { generate: 'server', dev: false } })],
   resolve: {
     alias: [
-      // Leaflet, MapLibre GL, and Chart.js touch `window` at import time; neither is needed for
-      // template rendering, so swap them for inert stand-ins.
-      { find: /^leaflet\/dist\/leaflet\.css$/, replacement: resolve(here, 'stubs/empty.css') },
-      { find: /^leaflet$/, replacement: resolve(here, 'stubs/leaflet.js') },
-      { find: /^maplibre-gl\/dist\/maplibre-gl\.css$/, replacement: resolve(here, 'stubs/empty.css') },
-      { find: 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url', replacement: resolve(here, 'stubs/empty-url.js') },
-      { find: /^@maplibre\/maplibre-gl-leaflet$/, replacement: resolve(here, 'stubs/maplibre-gl-leaflet.js') },
-      { find: /^maplibre-gl$/, replacement: resolve(here, 'stubs/maplibre-gl.js') },
+      // Chart.js touches `window` at import time; it is not needed for template
+      // rendering, so swap it for an inert stand-in.
       { find: /^chart\.js\/auto$/, replacement: resolve(here, 'stubs/chart.js') },
     ],
   },
@@ -162,21 +156,18 @@ try {
         assert.match(html, /Quick Plan/);
       }
       if (name === 'PlanActivity') {
-        assert.match(html, /Route planner/);
-        assert.match(html, /Follow roads/);
-        assert.match(html, /Straight lines/);
-        assert.match(html, /Search street, park, or stop/);
-        assert.match(html, /Add a route on the map to start predicting/);
+        assert.match(html, /How far are you going\?/);
+        assert.match(html, /Climb \(optional\)/);
+        assert.match(html, /Leave 0 if it's flat/);
+        assert.match(html, /Enter a distance to see your fueling plan/);
+        assert.doesNotMatch(html, /Route planner|Follow roads|Search street/);
         assert.doesNotMatch(html, /PREDICTED DURATION/);
       }
       if (name === 'Track') {
         assert.match(html, /Track Activity/);
-        assert.match(html, /Free GPS/);
-        assert.match(html, /Create path/);
-        assert.match(html, /From Plan Activity/);
-        assert.doesNotMatch(html, /From Activities/);
         assert.match(html, /Start activity/);
         assert.match(html, /View History/);
+        assert.doesNotMatch(html, /Free GPS|Create path|Road snap|Show roads/);
       }
       const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
       if (!text.length) throw new Error('rendered no text');

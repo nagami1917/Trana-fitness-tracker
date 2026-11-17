@@ -5,8 +5,6 @@ import { route } from '../../src/lib/router.js';
 import { liveTracker } from '../../src/lib/liveTracker.svelte.js';
 import Track from '../../src/pages/Track/Track.svelte';
 import Dashboard from '../../src/pages/Dashboard/Dashboard.svelte';
-import { getCreatedMaps } from './maplibre-gl-interactive.js';
-import { getLeafletMaps } from './leaflet-interactive.js';
 
 const target = document.getElementById('app');
 let component = null;
@@ -54,8 +52,6 @@ window.__dashboardTrackTest = {
   getRoute: () => get(route),
   getActivities: () => get(activities),
   getToast: () => get(toast),
-  getMapLibreMaps: () => getCreatedMaps(),
-  getLeafletMaps,
   flush: flushSync,
   async destroy() {
     if (component) await unmount(component);

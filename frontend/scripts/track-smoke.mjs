@@ -4,8 +4,6 @@
  *   node scripts/track-smoke.mjs
  *
  * Covers regressions caught on /track:
- * - mapConfig street-tile fallback & array line-dasharray
- * - mapService geometry normalization for both {latitude, longitude} objects and [lat, lng] pairs
  * - gpsService numeric Unix-ms timestamp normalization + validateTrackPoint acceptance
  * - dailySessionService URL wiring, query params, envelope preservation, and timezone-safe date formatting
  */
@@ -60,9 +58,6 @@ const vite = await createServer({
   resolve: {
     alias: [
       { find: /^maplibre-gl\/dist\/maplibre-gl\.css$/, replacement: resolve(here, 'stubs/empty.css') },
-      { find: 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url', replacement: resolve(here, 'stubs/empty-url.js') },
-      { find: /^@maplibre\/maplibre-gl-leaflet$/, replacement: resolve(here, 'stubs/maplibre-gl-leaflet.js') },
-      { find: /^maplibre-gl$/, replacement: resolve(here, 'stubs/maplibre-gl.js') },
     ],
   },
   ssr: { noExternal: true },
@@ -70,65 +65,6 @@ const vite = await createServer({
 });
 
 try {
-  const { MAP_STYLE, MAP_STYLE_URL, MAP_DARK_STYLE_URL, MAP_ATTRIBUTION, HAS_CUSTOM_STYLE, PLANNED_ROUTE_DASH } =
-    await vite.ssrLoadModule('/src/config/mapConfig.js');
-  assert.equal(HAS_CUSTOM_STYLE, false, 'no VITE_MAP_STYLE_URL is set in the test env');
-  assert.equal(typeof MAP_STYLE, 'string', 'the base style is a URL, not an inline style object');
-  assert.equal(MAP_STYLE, MAP_STYLE_URL);
-  // Regression guard: the app must never serve production traffic from
-  // OpenStreetMap's donated tile servers. Their usage policy forbids it and
-  // they will block the site. OpenFreeMap is keyless and unlimited.
-  assert.ok(
-    MAP_STYLE_URL.includes('openfreemap.org'),
-    `default style must be OpenFreeMap, got ${MAP_STYLE_URL}`,
-  );
-  assert.ok(!MAP_STYLE_URL.includes('tile.openstreetmap.org'));
-  assert.ok(MAP_DARK_STYLE_URL.includes('openfreemap.org'));
-  assert.notEqual(MAP_DARK_STYLE_URL, MAP_STYLE_URL, 'light and dark must differ');
-  // Attribution is a licence condition, not decoration.
-  assert.ok(/OpenStreetMap/.test(MAP_ATTRIBUTION));
-  assert.ok(/OpenMapTiles/.test(MAP_ATTRIBUTION));
-  assert.ok(/openfreemap\.org/.test(MAP_ATTRIBUTION));
-  assert.ok(Array.isArray(PLANNED_ROUTE_DASH), 'PLANNED_ROUTE_DASH must be a MapLibre array');
-
-  const { toLatLng, segmentsToGeoJSON, haversineKm, elevationGainM, panTo, isStyleInitialized } = await vite.ssrLoadModule('/src/services/mapService.js');
-  assert.deepEqual(toLatLng({ latitude: 14.676, longitude: 121.0437 }), [14.676, 121.0437]);
-  assert.deepEqual(toLatLng([14.68, 121.05]), [14.68, 121.05]);
-
-  // Regression guard: MapLibre easeTo runs Object.assign({ offset: [0, 0] }, options)
-  // and calls Point.convert(options.offset), which throws if `offset: undefined` is present.
-  let seenEaseOptions = null;
-  const fakeMap = {
-    style: { _loaded: true },
-    getZoom: () => 14,
-    isStyleLoaded: () => false, // e.g., background OSM tile streaming while style is already loaded
-    easeTo(opts) {
-      const merged = Object.assign({ offset: [0, 0], duration: 500 }, opts);
-      assert.ok(Array.isArray(merged.offset) || (merged.offset && merged.offset.x !== undefined), 'offset must never be overwritten with undefined');
-      seenEaseOptions = merged;
-    },
-  };
-  assert.equal(isStyleInitialized(fakeMap), true, 'style._loaded takes precedence over tile-loading state');
-  assert.equal(isStyleInitialized({ style: { _loaded: false }, isStyleLoaded: () => true }), false, 'unfinished style is never considered initialized');
-  panTo(fakeMap, [14.676, 121.0437], { zoom: 15 });
-  assert.equal('offset' in seenEaseOptions, true);
-  assert.deepEqual(seenEaseOptions.offset, [0, 0]);
-  assert.equal(seenEaseOptions.zoom, 15);
-  panTo(fakeMap, [14.6761, 121.0438], { zoom: 15, duration: 250 });
-  assert.equal(seenEaseOptions.duration, 250, 'Follow pans can use a shorter, more responsive animation.');
-
-  const geo = segmentsToGeoJSON([
-    { latitude: 14.676, longitude: 121.0437, speedKmh: 9.5 },
-    { latitude: 14.68, longitude: 121.05, speedKmh: 10.2 },
-  ]);
-  assert.equal(geo.features.length, 1);
-  assert.deepEqual(geo.features[0].geometry.coordinates, [
-    [121.0437, 14.676],
-    [121.05, 14.68],
-  ]);
-  assert.ok(haversineKm([14.676, 121.0437], [14.686, 121.0537]) > 1);
-  assert.equal(elevationGainM([{ altitudeM: 10 }, { altitudeM: 24 }, { altitudeM: 19 }, { altitudeM: 29 }]), 24);
-
   const { trackPoint, watch } = await vite.ssrLoadModule('/src/services/gpsService.js');
   const { createGpsSmoother, computeBearingDeg } = await vite.ssrLoadModule('/src/services/gpsFilter.js');
   const { validateTrackPoint, activityApi } = await vite.ssrLoadModule('/src/services/activityService.js');

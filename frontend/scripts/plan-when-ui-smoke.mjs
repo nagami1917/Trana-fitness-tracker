@@ -23,10 +23,6 @@ const bundle = await build({
   plugins: [svelte()],
   resolve: {
     alias: [
-      { find: /^@maplibre\/maplibre-gl-leaflet$/, replacement: resolve(root, 'scripts/stubs/maplibre-gl-leaflet.js') },
-      { find: /^maplibre-gl\/dist\/maplibre-gl\.css$/, replacement: resolve(root, 'scripts/stubs/empty.css') },
-      { find: 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url', replacement: resolve(root, 'scripts/stubs/empty-url.js') },
-      { find: /^maplibre-gl$/, replacement: resolve(root, 'scripts/stubs/maplibre-gl-interactive.js') },
     ],
   },
   build: {
@@ -181,13 +177,11 @@ try {
   await harness.mountPlan();
   assertMatchesCurrentMinute(whenInput().value);
 
-  // 4. Switch to Straight-line mode, plot 2 points, wait for prediction, save without touching When -> sends valid current ISO timestamp.
-  buttonsWithText('Straight line')[0].click();
-  harness.flush();
-  const map = harness.getLatestMap();
-  assert.ok(map, 'Expected PlanActivity map instance');
-  map.emit('click', { lngLat: { lat: 14.676, lng: 121.035 } });
-  map.emit('click', { lngLat: { lat: 14.682, lng: 121.045 } });
+  // 4. Type a distance, wait for the prediction, save without touching When -> sends valid current ISO timestamp.
+  const distanceInput = document.querySelector('input[aria-label="Distance"]');
+  assert.ok(distanceInput, 'Expected a typeable Distance field');
+  distanceInput.value = '1.27';
+  distanceInput.dispatchEvent(new window.Event('input', { bubbles: true }));
   await waitFor(() => buttonsWithText('Save this plan').length === 1, 'initial Save this plan button');
 
   buttonsWithText('Save this plan')[0].click();
@@ -196,6 +190,8 @@ try {
     'first save completion',
   );
   assert.ok(postedPayloads[0].planned_for, 'Expected planned_for to be sent automatically when saving');
+  assert.equal(postedPayloads[0].distance_km, 1.27, 'Typed distance must be the one saved');
+  assert.equal(postedPayloads[0].route, undefined, 'No route may be sent any more');
   const sentDiff = Math.abs(Date.now() - new Date(postedPayloads[0].planned_for).getTime());
   assert.ok(sentDiff < 120_000, `Expected sent planned_for "${postedPayloads[0].planned_for}" to match now`);
 
@@ -210,8 +206,8 @@ try {
   whenInput().dispatchEvent(new window.Event('input', { bubbles: true }));
   harness.flush();
 
-  map.emit('click', { lngLat: { lat: 14.676, lng: 121.035 } });
-  map.emit('click', { lngLat: { lat: 14.682, lng: 121.045 } });
+  distanceInput.value = '2.5';
+  distanceInput.dispatchEvent(new window.Event('input', { bubbles: true }));
   await waitFor(() => buttonsWithText('Save this plan').length === 1, 'second Save this plan button');
 
   buttonsWithText('Save this plan')[0].click();

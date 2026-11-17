@@ -1,10 +1,8 @@
 <script>
-  import { onMount, tick } from 'svelte';
-  import { Plus, Search, LoaderCircle, Trash2, MapPin, Flame, Timer, Gauge, Route as RouteIcon, Sparkles, TrendingUp, X, Undo2, Download, Upload, ArrowLeftRight, Repeat, Pencil, Share2 } from 'lucide-svelte';
+  import { onMount } from 'svelte';
+  import { Plus, Search, LoaderCircle, Trash2, MapPin, Flame, Timer, Gauge, Route as RouteIcon, Sparkles, TrendingUp, X, Download, Share2 } from 'lucide-svelte';
   import Card from '../../components/common/Card.svelte';
   import ActivityIcon from '../../components/activities/ActivityIcon.svelte';
-  import RouteMap from '../../components/route/RouteMap.svelte';
-  import ElevationProfile from '../../components/route/ElevationProfile.svelte';
   import Modal from '../../components/common/Modal.svelte';
   import BusyOverlay from '../../components/common/BusyOverlay.svelte';
   import EmptyState from '../../components/common/EmptyState.svelte';
@@ -12,14 +10,11 @@
   import { api } from '../../services/client.js';
   import { activityApi } from '../../services/activityService.js';
   import { query } from '../../lib/router.js';
-  import { loadModel, predictDuration, routeLengthKm } from '../../lib/ml/index.js';
+  import { loadModel, predictDuration } from '../../lib/ml/index.js';
   import { estimateMet } from '../../lib/ml/fueling.js';
-  import { downloadGpx, parseActivityFile } from '../../lib/gpx.js';
-  import { computeGpsSplits, interpolateRoutePosition } from '../../lib/route/splits.js';
   import { downloadShareCard } from '../../lib/shareCard.js';
+  import { computeGpsSplits } from '../../lib/route/splits.js';
   import { detectNewPRs } from '../../lib/analytics/records.js';
-  import { fetchRouteElevation } from '../../services/elevationService.js';
-  import { haversineKm } from '../../lib/geo.js';
   import {
     distanceUnit,
     elevationUnit,
@@ -31,15 +26,8 @@
     toDisplayDistance,
     toDisplayElevation,
   } from '../../lib/units.js';
-  import {
-    routeThroughRoads,
-    waypointsFromPath,
-    outAndBackWaypoints,
-    closeLoopWaypoints,
-    isClosedLoop,
-  } from '../../services/roadRoutingService.js';
   import { acquireLivePosition, releaseLivePosition, livePosition } from '../../lib/liveLocation.svelte.js';
-  import { duration as fmtDuration, pace, speed, kcal, km, nf, fullDate, timeLabel, dayLabel, activityLabel, shortDate, toDatetimeLocal } from '../../lib/format.js';
+  import { duration as fmtDuration, pace, speed, kcal, km, nf, fullDate, timeLabel, dayLabel, activityLabel, toDatetimeLocal } from '../../lib/format.js';
 
   const TYPES = [
     { id: 'all', label: 'All' },
@@ -53,14 +41,9 @@
   let term = $state('');
   let addOpen = $state(false);
   let detail = $state(null);
-  let detailElevation = $state(null);
-  let hoverDistKm = $state(null);
   let editingDetail = $state(false);
   let editDraft = $state(null);
   let updatingDetail = $state(false);
-  let gpxInput = $state(null);
-  let importedSource = $state(null);
-  let importedGeojson = $state(null);
   let saving = $state(false);
   let exporting = $state(false);
 
@@ -77,41 +60,7 @@
   }
   let model = $state(null);
   let draft = $state(blankDraft());
-  let draftRouteOpen = $state(false);
-  let routeSource = $state('none'); // 'none' | 'create' | 'plan'
-  let selectedPlanId = $state(null);
-  let draftPlan = $state(null);
-  let routeMap = $state(null);
-  let routeMode = $state('roads');
   let confirmingDelete = $state(null);
-  // Road-snapped geometry for the draft's waypoints (null/[] → straight lines).
-  let routePath = $state([]);
-  let routing = $state(false);
-  let snapTimer;
-  let snapSeq = 0;
-  let snapAbort = null;
-
-  const availablePlans = $derived.by(() => {
-    const list = [];
-    if (draftPlan?.route?.length >= 2) {
-      list.push(draftPlan);
-    }
-    const withRoutes = $plans.filter((p) => Array.isArray(p.route) && p.route.length >= 2);
-    const withoutRoutes = $plans.filter((p) => !Array.isArray(p.route) || p.route.length < 2);
-    return [...list, ...withRoutes, ...withoutRoutes];
-  });
-
-  function readDraftPlan() {
-    if (typeof sessionStorage === 'undefined') return null;
-    try {
-      const raw = sessionStorage.getItem('trana:draft_planned_route');
-      const parsed = raw ? JSON.parse(raw) : null;
-      if (parsed?.route?.length >= 2) return { ...parsed, id: 'draft', isDraft: true };
-    } catch {
-      // ignore invalid draft storage
-    }
-    return null;
-  }
 
   // Blue dot: join the shared follow-me watch; the returned cleanup releases
   // it (sync onMount → client-only; top-level onDestroy breaks this SSR
@@ -125,8 +74,6 @@
       if (q) term = q;
     })();
     return () => {
-      clearTimeout(snapTimer);
-      snapAbort?.abort();
       releaseLivePosition();
     };
   });
@@ -147,18 +94,11 @@
     editingDetail = false;
     editDraft = null;
     confirmingDelete = null;
-    detailElevation = null;
-    hoverDistKm = null;
     detail = activity;
     if (activity?.id && !activity.route_geojson && activity.source === 'gps') {
       void activityApi.get(activity.id).then((full) => {
         if (detail?.id === full?.id) detail = full;
       }).catch(() => {});
-    }
-    if (Array.isArray(activity?.route) && activity.route.length >= 2) {
-      void fetchRouteElevation(activity.route, activity.activity_type).then((res) => {
-        if (detail?.id === activity.id && res?.profile?.length >= 2) detailElevation = res;
-      });
     }
   }
 
@@ -207,23 +147,18 @@
     }
   }
 
+  // Splits are derived from the distance and duration you logged. There is no
+  // GPS track to segment any more, so every split gets the same average pace.
   const detailSplits = $derived(
     detail
       ? computeGpsSplits({
-          points: Array.isArray(detail.route) ? detail.route : [],
-          elevationProfile: detailElevation?.profile ?? [],
+          points: [],
           totalDurationMin: Number(detail.duration_min) || 0,
           totalDistanceKm: Number(detail.distance_km) || 0,
           unit: $unitSystem,
         })
       : [],
   );
-
-  const detailHoverCoord = $derived.by(() => {
-    if (hoverDistKm == null || !Array.isArray(detail?.route) || detail.route.length < 2) return null;
-    const totalKm = Math.max(0.01, Number(detailElevation?.profile?.at(-1)?.distKm ?? detail.distance_km) || 0.01);
-    return interpolateRoutePosition(detail.route, hoverDistKm / totalKm);
-  });
 
   function blankDraft() {
     const now = new Date();
@@ -272,23 +207,9 @@
     ),
   );
 
-  const draftRouteKm = $derived(
-    routePath.length > 1
-      ? routeLengthKm(routePath)
-      : draft.route.length > 1
-        ? routeLengthKm(draft.route)
-        : 0,
-  );
-
-  // Navigation-app behaviour: while a route exists, the distance field itself
-  // shows the measured (road-snapped) route length — not the typed value.
-  $effect(() => {
-    if (draftRouteKm > 0.05) draft.distance_km = Number(draftRouteKm.toFixed(2));
-  });
-
   const draftCalories = $derived.by(() => {
     if (draft.calories_override) return Number(draft.calories_override);
-    const kmValue = draftRouteKm > 0 ? draftRouteKm : Number(draft.distance_km) || 0;
+    const kmValue = Number(draft.distance_km) || 0;
     const minutes = Number(draft.duration_min) || 0;
     if (!kmValue || !minutes) return 0;
     const speed = kmValue / (minutes / 60);
@@ -325,183 +246,18 @@
   function openAdd() {
     draft = blankDraft();
     draft.activity_type = filter === 'all' ? 'run' : filter;
-    draftRouteOpen = false;
-    routeSource = 'none';
-    selectedPlanId = null;
-    importedSource = null;
-    importedGeojson = null;
-    draftPlan = readDraftPlan();
-    routeMode = 'roads';
-    resetSnap();
     addOpen = true;
-  }
-
-  async function handleImportActivityFile(event) {
-    const file = event?.currentTarget?.files?.[0];
-    if (!file) return;
-    try {
-      const raw = /\.fit$/i.test(file.name) ? await file.arrayBuffer() : await file.text();
-      const parsed = parseActivityFile(raw, file.name);
-      draft = blankDraft();
-      draft.activity_type = parsed.activityType;
-      draft.distance_km = Math.max(0.05, parsed.distanceKm);
-      draft.duration_min = parsed.durationMin ?? Math.max(1, Math.round(parsed.distanceKm * 6));
-      draft.elevation_gain_m = parsed.elevationGainM;
-      draft.avg_heart_rate = parsed.avgHeartRate != null ? String(parsed.avgHeartRate) : '';
-      draft.started_at = toDatetimeLocal(parsed.startedAt);
-      draft.route = waypointsFromPath(parsed.route);
-      draft.notes = parsed.name || `Imported from ${file.name}`;
-      importedSource = parsed.source;
-      importedGeojson = parsed.routeGeojson;
-      routeSource = 'create';
-      draftRouteOpen = true;
-      resetSnap();
-      routePath = parsed.route;
-      addOpen = true;
-      await tick();
-      routeMap?.fitRouteBounds?.();
-      notify(`Parsed ${file.name} (${parsed.distanceKm} km) — review and save.`);
-    } catch (err) {
-      notify(err?.message || 'Could not import GPX / TCX / FIT file', 'error');
-    } finally {
-      event.currentTarget.value = '';
-    }
-  }
-
-  function selectRouteSource(mode) {
-    routeSource = mode;
-    if (mode === 'none') {
-      draftRouteOpen = false;
-      selectedPlanId = null;
-      clearRoute();
-      return;
-    }
-    if (mode === 'create') {
-      selectedPlanId = null;
-      draftRouteOpen = true;
-      return;
-    }
-    if (mode === 'plan') {
-      draftPlan = readDraftPlan();
-    }
-  }
-
-  async function applyPlanRoute(plan) {
-    if (!plan) return;
-    selectedPlanId = plan.isDraft ? 'draft' : plan.id;
-    routeSource = 'plan';
-    draft.activity_type = plan.activity_type || draft.activity_type;
-    if (plan.elevation_gain_m != null) draft.elevation_gain_m = Number(plan.elevation_gain_m) || 0;
-    if (plan.distance_km) draft.distance_km = Number(plan.distance_km);
-
-    if (Array.isArray(plan.route) && plan.route.length >= 2) {
-      draft.route = waypointsFromPath(plan.route);
-      draftRouteOpen = true;
-      if (plan.route.length > 2) {
-        resetSnap();
-        routePath = [...plan.route];
-        await tick();
-        routeMap?.fitRouteBounds?.();
-      } else {
-        routeMode = 'roads';
-        scheduleSnap({ immediate: true, fitAfter: true });
-        await tick();
-        routeMap?.fitRouteBounds?.();
-      }
-    } else {
-      draft.route = [];
-      resetSnap();
-      draftRouteOpen = true;
-      notify('Loaded plan distance — tap Start & End on the map if you want to draw its path.', 'info');
-    }
-  }
-
-  function resetSnap() {
-    clearTimeout(snapTimer);
-    snapAbort?.abort();
-    snapAbort = null;
-    snapSeq += 1;
-    routePath = [];
-    routing = false;
-  }
-
-  /** Re-route the draft's stops along roads & paths (debounced, stale-safe). */
-  function scheduleSnap({ immediate = false, fitAfter = false } = {}) {
-    clearTimeout(snapTimer);
-    snapAbort?.abort();
-    snapAbort = null;
-
-    if (routeMode !== 'roads' || draft.route.length < 2) {
-      snapSeq += 1;
-      routePath = [];
-      routing = false;
-      return;
-    }
-    routing = true;
-    snapTimer = setTimeout(() => runSnap({ fitAfter }), immediate ? 0 : 220);
-  }
-
-  async function runSnap({ fitAfter = false } = {}) {
-    const seq = ++snapSeq;
-    const controller = new AbortController();
-    snapAbort = controller;
-
-    const waypoints = [...draft.route];
-    const activityType = draft.activity_type;
-    const result = await routeThroughRoads(waypoints, activityType, {
-      allowKeyless: true,
-      signal: controller.signal,
-    });
-    if (seq !== snapSeq) return; // a newer edit superseded this request
-    routePath = result?.path ?? [];
-    routing = false;
-    if (fitAfter && routePath.length >= 2) {
-      await tick();
-      routeMap?.fitRouteBounds?.();
-    }
-  }
-
-  function setRouteMode(mode) {
-    routeMode = mode;
-    if (mode === 'straight') resetSnap();
-    else scheduleSnap({ immediate: true });
-  }
-
-  function makeOutAndBack() {
-    if (draft.route.length < 2 || isClosedLoop(draft.route)) return;
-    draft.route = outAndBackWaypoints(draft.route);
-    scheduleSnap({ immediate: true });
-  }
-
-  function makeLoop() {
-    if (draft.route.length < 2 || isClosedLoop(draft.route)) return;
-    draft.route = closeLoopWaypoints(draft.route);
-    scheduleSnap({ immediate: true });
-  }
-
-  function clearRoute() {
-    draft.route = [];
-    resetSnap();
-  }
-
-  /** Remove only the last stop — keeps the rest of the drawn route. */
-  function undoPoint() {
-    if (!draft.route.length) return;
-    draft.route = draft.route.slice(0, -1);
-    scheduleSnap({ immediate: true });
   }
 
   function setDraftType(id) {
     draft.activity_type = id;
-    scheduleSnap({ immediate: true }); // routing profile follows the activity type
   }
 
   async function submit() {
     saving = true;
     let written = false;
     try {
-      const distance = draftRouteKm > 0 ? Number(draftRouteKm.toFixed(2)) : Number(draft.distance_km);
-      const finalRoute = routePath.length > 1 ? routePath : draft.route.length > 1 ? draft.route : null;
+      const distance = Number(draft.distance_km);
       const priorActivities = [...$activities];
       const created = await api.activities.create({
         activity_type: draft.activity_type,
@@ -512,9 +268,9 @@
         avg_heart_rate: draft.avg_heart_rate !== '' ? Math.round(Number(draft.avg_heart_rate)) : null,
         gear_id: draft.gear_id !== '' ? Number(draft.gear_id) : null,
         started_at: new Date(draft.started_at).toISOString(),
-        route: finalRoute,
-        route_geojson: importedGeojson,
-        source: importedSource || 'manual',
+        route: null,
+        route_geojson: null,
+        source: 'manual',
         notes: draft.notes || null,
       });
       written = true;
@@ -550,22 +306,6 @@
     }
   }
 
-  function onPick(mode, index, latlng) {
-    if (!latlng) return;
-    const point = [Number(latlng.lat.toFixed(5)), Number(latlng.lng.toFixed(5))];
-    if (mode === 'remove') {
-      draft.route = draft.route.filter((_, i) => i !== index);
-      scheduleSnap({ immediate: true });
-      return;
-    }
-    if (mode === 'move') {
-      draft.route = draft.route.map((existing, i) => (i === index ? point : existing));
-      scheduleSnap();
-      return;
-    }
-    draft.route = [...draft.route, point];
-    scheduleSnap({ immediate: draft.route.length >= 2 });
-  }
 </script>
 
 <div class="space-y-5">
@@ -578,10 +318,6 @@
       </p>
     </div>
     <div class="flex flex-wrap items-center gap-2 self-start">
-      <input bind:this={gpxInput} type="file" accept=".gpx,.tcx,.fit" class="hidden" onchange={handleImportActivityFile} />
-      <button class="btn-ghost" onclick={() => gpxInput?.click()} title="Import a .gpx, .tcx, or .fit workout from Garmin, Apple Watch, or Strava">
-        <Upload size={15} /> Import GPX / TCX / FIT
-      </button>
       <button class="btn-ghost" onclick={exportCsv} disabled={exporting} title="Download your full history as CSV">
         {#if exporting}<LoaderCircle size={15} class="animate-spin" /> Exporting…{:else}<Download size={15} /> Export CSV{/if}
       </button>
@@ -686,7 +422,7 @@
     </div>
 
     <div>
-      <span class="label">Distance ({distanceUnit($unitSystem)}) {draftRouteKm > 0 ? '(from route)' : ''}</span>
+      <span class="label">Distance ({distanceUnit($unitSystem)})</span>
       <input
         class="input"
         type="number"
@@ -697,12 +433,7 @@
           const val = Number(e.currentTarget.value);
           if (Number.isFinite(val)) draft.distance_km = fromDisplayDistance(val, $unitSystem);
         }}
-        disabled={draftRouteKm > 0}
-        class:bg-brand-50={draftRouteKm > 0}
       />
-      {#if draftRouteKm > 0}
-        <p class="mt-1 text-[10px] font-bold text-brand-600">Measured from your drawn route</p>
-      {/if}
     </div>
 
     <div>
@@ -745,119 +476,6 @@
     <div class="sm:col-span-2">
       <span class="label">Notes</span>
       <input class="input" placeholder="Optional — how did it feel?" bind:value={draft.notes} />
-    </div>
-
-    <div class="sm:col-span-2 space-y-2.5">
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <span class="label !mb-0">Route (optional)</span>
-        <div class="flex flex-wrap items-center gap-1.5">
-          <div class="flex max-w-full flex-wrap rounded-2xl border border-brand-100 bg-brand-50/70 p-0.5 sm:inline-flex" role="group" aria-label="Activity route source">
-            <button
-              type="button"
-              class="flex-1 whitespace-nowrap rounded-xl px-2.5 py-1 text-[11px] font-extrabold transition sm:flex-initial {routeSource === 'none'
-                ? 'bg-white text-brand-600 shadow-soft'
-                : 'text-ink-500 hover:text-ink-900'}"
-              onclick={() => selectRouteSource('none')}
-            >
-              No route
-            </button>
-            <button
-              type="button"
-              class="inline-flex flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-xl px-2.5 py-1 text-[11px] font-extrabold transition sm:flex-initial {routeSource === 'create'
-                ? 'bg-white text-brand-600 shadow-soft'
-                : 'text-ink-500 hover:text-ink-900'}"
-              onclick={() => selectRouteSource('create')}
-            >
-              <Pencil size={11} /> Create path
-            </button>
-            <button
-              type="button"
-              class="inline-flex flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-xl px-2.5 py-1 text-[11px] font-extrabold transition sm:flex-initial {routeSource === 'plan'
-                ? 'bg-white text-brand-600 shadow-soft'
-                : 'text-ink-500 hover:text-ink-900'}"
-              onclick={() => selectRouteSource('plan')}
-            >
-              <Sparkles size={11} /> From Plan Activity
-            </button>
-          </div>
-          {#if draftRouteOpen}
-            <button
-              type="button"
-              class="btn-chip"
-              class:btn-chip-active={routeMode === 'roads'}
-              onclick={() => setRouteMode(routeMode === 'roads' ? 'straight' : 'roads')}
-            >
-              <RouteIcon size={12} /> {routeMode === 'roads' ? 'Follow roads: ON' : 'Straight lines'}
-            </button>
-          {/if}
-        </div>
-      </div>
-
-      {#if routeSource === 'plan'}
-        {#if availablePlans.length}
-          <div class="grid gap-1.5 sm:grid-cols-2">
-            {#each availablePlans as plan (plan.isDraft ? 'draft' : plan.id)}
-              {@const hasRoute = Array.isArray(plan.route) && plan.route.length >= 2}
-              {@const planKey = plan.isDraft ? 'draft' : plan.id}
-              <button
-                type="button"
-                class="flex items-center gap-2 rounded-2xl border p-2 text-left transition {String(selectedPlanId) === String(planKey)
-                  ? 'border-brand-400 bg-brand-50/70 ring-2 ring-brand-200'
-                  : 'border-brand-100 bg-white hover:border-brand-300'}"
-                onclick={() => applyPlanRoute(plan)}
-              >
-                <ActivityIcon type={plan.activity_type || 'run'} size="sm" />
-                <div class="min-w-0 flex-1">
-                  <p class="truncate text-xs font-extrabold capitalize text-ink-900">
-                    {plan.distance_km} km {plan.activity_type}
-                    {#if plan.isDraft}<span class="ml-1 text-[10px] text-brand-600">(Draft)</span>{/if}
-                  </p>
-                  <p class="truncate text-[10px] font-semibold text-ink-400">
-                    {#if plan.created_at}{shortDate(plan.created_at)} · {/if}
-                    {hasRoute ? 'Start → End path' : 'Distance only'}
-                  </p>
-                </div>
-                <span class="shrink-0 rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-extrabold text-brand-600">
-                  {String(selectedPlanId) === String(planKey) ? 'Loaded' : 'Use'}
-                </span>
-              </button>
-            {/each}
-          </div>
-        {:else}
-          <p class="rounded-2xl border border-dashed border-brand-200 bg-brand-50/40 px-3 py-2 text-[11px] font-semibold text-ink-500">
-            No saved plans from Plan Activity yet — switch to Create path to draw Start & End directly.
-          </p>
-        {/if}
-      {/if}
-
-      {#if draftRouteOpen}
-        <div class="mt-2">
-          <RouteMap
-            bind:this={routeMap}
-            points={draft.route}
-            path={routePath}
-            height={230}
-            interactive
-            {routing}
-            {routeMode}
-            userLocation={livePosition.current ? [livePosition.current.latitude, livePosition.current.longitude] : null}
-            onPick={onPick}
-          />
-        </div>
-        <div class="mt-2 flex flex-wrap items-center gap-1.5">
-          {#if draft.route.length >= 2 && !isClosedLoop(draft.route)}
-            <button type="button" class="btn-chip" onclick={makeOutAndBack}><ArrowLeftRight size={12} /> Out & back</button>
-            <button type="button" class="btn-chip" onclick={makeLoop}><Repeat size={12} /> Close loop</button>
-          {/if}
-          {#if draft.route.length}
-            <button type="button" class="btn-chip" onclick={undoPoint}><Undo2 size={12} /> Undo</button>
-            <button type="button" class="btn-chip" onclick={clearRoute}><Trash2 size={12} /> Clear route</button>
-          {/if}
-          {#if routing}
-            <span class="pill"><LoaderCircle size={12} class="animate-spin" /> Following roads…</span>
-          {/if}
-        </div>
-      {/if}
     </div>
 
     <div class="sm:col-span-2 rounded-2xl border border-brand-100 bg-brand-50/60 p-3">
@@ -967,24 +585,6 @@
       </div>
     {:else}
       <div class="grid gap-4 sm:grid-cols-2">
-        {#if detail.route?.length}
-          <div class="sm:col-span-2">
-            <RouteMap points={detail.route} hoverCoord={detailHoverCoord} height={230} />
-          </div>
-        {/if}
-
-        {#if detailElevation?.profile?.length >= 2}
-          <div class="sm:col-span-2">
-            <ElevationProfile
-              profile={detailElevation.profile}
-              gainM={detailElevation.gainM}
-              lossM={detailElevation.lossM}
-              source={detailElevation.source}
-              onHover={(dist) => (hoverDistKm = dist)}
-            />
-          </div>
-        {/if}
-
         <div class="grid grid-cols-2 gap-2 sm:col-span-2 sm:grid-cols-4">
           {#each [
             { label: 'Distance', value: `${km(detail.distance_km, $unitSystem)} ${distanceUnit($unitSystem)}`, Icon: MapPin },
@@ -1003,7 +603,7 @@
         {#if detailSplits.length >= 2}
           <div class="sm:col-span-2 rounded-2xl border border-brand-100 bg-brand-50/40 p-3">
             <p class="text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink-400 mb-2">
-              {detail.route?.length >= 2 ? 'GPS splits & Grade-Adjusted Pace (GAP)' : `Estimated ${distanceUnit($unitSystem)} splits`}
+              {`${distanceUnit($unitSystem)} splits`}
             </p>
             <div class="space-y-1.5 max-h-40 overflow-y-auto pr-1">
               {#each detailSplits as split (split.split)}
@@ -1059,22 +659,6 @@
         {:else}
           <button class="btn-ghost !text-rose-500" onclick={() => (confirmingDelete = detail.id)}><Trash2 size={14} /> Delete</button>
           <button class="btn-ghost" onclick={startEditDetail}><Pencil size={14} /> Edit</button>
-          {#if detail.route?.length >= 2}
-            <button
-              class="btn-ghost"
-              onclick={() => {
-                downloadGpx({
-                  name: `${detail.activity_type}-${detail.distance_km}km`,
-                  activityType: detail.activity_type,
-                  startedAt: detail.started_at,
-                  route: detail.route,
-                });
-                notify('GPX downloaded');
-              }}
-            >
-              <Download size={14} /> GPX
-            </button>
-          {/if}
           <button
             class="btn-ghost"
             onclick={() => {

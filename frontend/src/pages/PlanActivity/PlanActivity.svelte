@@ -1,40 +1,25 @@
 <script>
-  import { onMount, tick } from 'svelte';
+  import { onMount } from 'svelte';
   import {
     Sparkles,
     MapPin,
-    Route,
     Trash2,
     LoaderCircle,
     Save,
-    Ruler,
     Thermometer,
     Droplets,
     ArrowRight,
     Play,
-    Undo2,
-    Navigation,
-    Repeat,
-    RotateCcw,
-    ArrowLeftRight,
-    Search,
-    Pencil,
-    Lock,
-    History,
-    Maximize2,
-    Download,
-    Upload,
+    Mountain,
+    Activity,
   } from 'lucide-svelte';
   import Card from '../../components/common/Card.svelte';
   import Skeleton from '../../components/common/Skeleton.svelte';
   import BusyOverlay from '../../components/common/BusyOverlay.svelte';
   import ActivityIcon from '../../components/activities/ActivityIcon.svelte';
-  import TranaMap from '../../components/map/TranaMap.svelte';
-  import ElevationProfile from '../../components/route/ElevationProfile.svelte';
   import FuelingPlan from '../../components/fueling/FuelingPlan.svelte';
   import Segmented from '../../components/common/Segmented.svelte';
   import {
-    activities,
     goals,
     profile,
     plans,
@@ -47,24 +32,12 @@
     upsertPlan,
     removePlanById,
     unitSystem,
+    activities,
   } from '../../stores/index.js';
   import { api } from '../../services/client.js';
   import { navigate, query } from '../../lib/router.js';
   import { loadModel, predictPlan } from '../../lib/ml/index.js';
-  import { routeLengthKm, suggestElevation } from '../../lib/ml/index.js';
-  import {
-    pathToGeoJson,
-    routeThroughRoads,
-    waypointsFromPath,
-    outAndBackWaypoints,
-    closeLoopWaypoints,
-    reverseWaypoints,
-    isClosedLoop,
-    searchPlaces,
-  } from '../../services/roadRoutingService.js';
-  import { fetchRouteElevation } from '../../services/elevationService.js';
   import { fetchRouteWeather } from '../../services/weatherService.js';
-  import { downloadGpx, parseActivityFile } from '../../lib/gpx.js';
   import {
     distanceUnit,
     elevationUnit,
@@ -76,7 +49,6 @@
     toDisplayTemp,
   } from '../../lib/units.js';
   import { readCachedPlace } from '../../lib/location.js';
-  import { acquireLivePosition, releaseLivePosition, seedLivePosition, livePosition } from '../../lib/liveLocation.svelte.js';
   import { nf, toDatetimeLocal } from '../../lib/format.js';
 
   const TYPES = [
@@ -94,32 +66,16 @@
   let confirmDeletePlanId = $state(null);
   let deletingPlanId = $state(null);
   let showAllPlans = $state(false);
-  let drawing = $state(true);
-  let showRoads = $state(true);
-  let following = $state(true);
-  let routeMode = $state('roads'); // 'roads' (auto-follow roads & paths) | 'straight'
-  let customElevation = $state(false);
   let customPlannedFor = $state(false);
-  let routeMap = $state(null);
-  let gpxFileInput = $state(null);
 
-  // Real DEM elevation profile & route forecast weather
-  let elevationProfile = $state([]);
-  let elevationLossM = $state(0);
-  let elevationSource = $state('estimate');
-  let loadingElevation = $state(false);
-  let eleSeq = 0;
-  let eleAbort = null;
-
-  let routeWeather = $state(null);
+  let forecast = $state(null);
   let weatherSeq = 0;
 
   let form = $state({
     activity_type: 'run',
-    distance_km: 0,
-    elevation_gain_m: 0,
+    distance_km: '',
+    elevation_gain_m: '',
     temperature_c: 26,
-    route: [],
     sweat_profile: 'normal',
     planned_for: toDatetimeLocal(new Date()),
   });
@@ -127,62 +83,23 @@
   let prediction = $state(null);
   let computing = $state(false);
 
-  // Road-following geometry for the planner's stops ([] → straight lines).
-  let routePath = $state([]);
-  let routing = $state(false);
-  let routeProvider = $state(null); // 'ors' | 'osrm' | 'valhalla' | 'saved' | 'fallback' | null
-  let routeProviderLabel = $state('');
-  let snapTimer;
-  let snapSeq = 0;
-  let snapAbort = null;
-
-  // Destination / street search
-  let placeQuery = $state('');
-  let placeResults = $state([]);
-  let searchingPlace = $state(false);
-  let searchError = $state('');
-  let searchAbort = null;
-
-  let cachedPlace = readCachedPlace();
-  const lastKnownPosition = $derived.by(() => {
-    const pos = livePosition.current;
-    return pos && Number.isFinite(pos.latitude) && Number.isFinite(pos.longitude) ? pos : null;
-  });
-  const livePositionFix = $derived(
-    livePosition.status === 'active' && lastKnownPosition?.source === 'gps'
-      ? lastKnownPosition
-      : null,
-  );
-  const liveCoords = $derived(
-    livePositionFix ? [livePositionFix.latitude, livePositionFix.longitude] : null,
-  );
-  const liveAccuracy = $derived(livePositionFix?.accuracy ?? null);
-  const liveHeading = $derived(livePositionFix?.heading ?? null);
-  const mapCenter = $derived.by(() => {
-    if (liveCoords) return liveCoords;
-    if (lastKnownPosition) return [lastKnownPosition.latitude, lastKnownPosition.longitude];
-    if (cachedPlace && Number.isFinite(cachedPlace.latitude) && Number.isFinite(cachedPlace.longitude)) {
-      return [cachedPlace.latitude, cachedPlace.longitude];
-    }
-    return [14.676, 121.0437];
-  });
-
-  const lastActivityWithRoute = $derived($activities.find((a) => Array.isArray(a.route) && a.route.length >= 2) ?? null);
-  const routeClosed = $derived(isClosedLoop(form.route));
   const visiblePlans = $derived(showAllPlans ? $plans : $plans.slice(0, 4));
 
-  // Blue dot: join the shared follow-me watch; the returned cleanup releases
-  // it (sync onMount → client-only; top-level onDestroy breaks this SSR
-  // harness because ssr_context is already torn down at registration).
+  /** Distance in km the model should use, or 0 when the field is unusable. */
+  const typedDistanceKm = $derived.by(() => {
+    const raw = Number(form.distance_km);
+    if (!Number.isFinite(raw) || raw <= 0) return 0;
+    // The field is edited in the athlete's own unit system.
+    return $unitSystem === 'imperial' ? raw * 1.609344 : raw;
+  });
+
+  const canPredict = $derived(Boolean($profile) && Boolean(model) && typedDistanceKm > 0.1);
+
   onMount(() => {
-    if (cachedPlace) seedLivePosition(cachedPlace);
-    acquireLivePosition();
     void loadFuelItems();
     void loadRaceEvents();
     void (async () => {
       model = await loadModel();
-      // hydrate from a saved plan link (?plan=12) or profile defaults;
-      // predictions start only after a route is added on the map.
       const params = $query;
       const planId = params.get('plan');
       const requestedPlan = planId ? $plans.find((p) => String(p.id) === String(planId)) : null;
@@ -198,8 +115,11 @@
           : ($profile?.typical_temperature_c ?? 26);
         const eleParam = Number(params.get('elevation'));
         if (Number.isFinite(eleParam) && params.get('elevation') !== null && eleParam >= 0) {
-          form.elevation_gain_m = Math.round(eleParam);
-          customElevation = true;
+          form.elevation_gain_m = String(Math.round(toDisplayElevation(eleParam, $unitSystem)));
+        }
+        const distParam = Number(params.get('distance'));
+        if (Number.isFinite(distParam) && params.get('distance') !== null && distParam > 0) {
+          form.distance_km = toDisplayDistance(distParam, $unitSystem).toFixed(2);
         }
         form.sweat_profile = $profile?.sweat_profile ?? 'normal';
         const dateParam = params.get('date');
@@ -211,99 +131,17 @@
         }
       }
     })();
-    return () => {
-      clearTimeout(timer);
-      clearTimeout(snapTimer);
-      clearTimeout(eleTimer);
-      snapAbort?.abort();
-      eleAbort?.abort();
-      searchAbort?.abort();
-      releaseLivePosition();
-    };
-  });
 
-  const routeKm = $derived(
-    routePath.length > 1
-      ? routeLengthKm(routePath)
-      : form.route.length > 1
-        ? routeLengthKm(form.route)
-        : 0,
-  );
-  const effectiveDistance = $derived(routeKm > 0.05 ? routeKm : Number(form.distance_km) || 0);
-  const plannedRoute = $derived(
-    routePath.length > 1 ? routePath : form.route.length > 1 ? form.route : null,
-  );
-  const plannedGeoJson = $derived(
-    plannedRoute?.length >= 2 ? pathToGeoJson(plannedRoute, form.activity_type) : null,
-  );
-  const routeDashed = $derived(
-    routeMode === 'straight' || (form.route.length >= 2 && routePath.length < 2),
-  );
-
-  // Navigation-app behaviour: while a route exists, the distance field itself
-  // shows the measured (road-following) route length — otherwise stays 0.
-  $effect(() => {
-    if (loadedFromSaved) return;
-    if (routeKm > 0.05) {
-      form.distance_km = Number(routeKm.toFixed(2));
-      if (!customElevation) {
-        form.elevation_gain_m = suggestElevation(routeKm, form.activity_type);
-      }
-    } else {
-      form.distance_km = 0;
-      elevationProfile = [];
-      elevationLossM = 0;
-      elevationSource = 'estimate';
-      routeWeather = null;
-      if (!customElevation) {
-        form.elevation_gain_m = 0;
-      }
-    }
-  });
-
-  // Fetch real DEM elevation profile + local forecast whenever route changes
-  let eleTimer;
-  $effect(() => {
-    const routeRef = plannedRoute;
-    const activeType = form.activity_type;
-    const whenStr = form.planned_for;
-    const kmVal = routeKm;
-    const isRouting = routeMode === 'roads' && routing;
-
-    clearTimeout(eleTimer);
-    eleAbort?.abort();
-
-    if (!Array.isArray(routeRef) || routeRef.length < 2 || kmVal <= 0.05 || isRouting) {
-      loadingElevation = false;
-      return;
-    }
-
-    const seq = ++eleSeq;
-    const wSeq = ++weatherSeq;
-    eleTimer = setTimeout(() => {
-      const ctrl = new AbortController();
-      eleAbort = ctrl;
-      loadingElevation = true;
-
-      void fetchRouteElevation(routeRef, activeType, { signal: ctrl.signal }).then((res) => {
-        if (seq !== eleSeq || ctrl.signal.aborted) return;
-        loadingElevation = false;
-        elevationProfile = res.profile ?? [];
-        elevationLossM = res.lossM ?? 0;
-        elevationSource = res.source ?? 'estimate';
-        if (res.source === 'dem' && !customElevation && !loadedFromSaved) {
-          form.elevation_gain_m = res.gainM;
-        }
-      });
-
-      const first = routeRef[0];
-      if (Array.isArray(first) && Number.isFinite(first[0]) && Number.isFinite(first[1])) {
-        const iso = whenStr ? new Date(whenStr).toISOString() : new Date().toISOString();
-        void fetchRouteWeather(first[0], first[1], iso).then((w) => {
-          if (wSeq === weatherSeq) routeWeather = w;
+    // Optional convenience: the forecast for the athlete's last known place.
+    // Purely informational — it prefills nothing, and a failure is silent.
+    const cachedPlace = readCachedPlace();
+    if (cachedPlace) {
+      const seq = ++weatherSeq;
+      void fetchRouteWeather(cachedPlace.latitude, cachedPlace.longitude, new Date().toISOString())
+        .then((result) => {
+          if (seq === weatherSeq) forecast = result;
         });
-      }
-    }, 320);
+    }
   });
 
   function markEdited() {
@@ -313,8 +151,7 @@
   }
 
   async function run() {
-    if (!$profile || !model) return;
-    if (!Array.isArray(plannedRoute) || plannedRoute.length < 2 || routeKm <= 0.05) {
+    if (!canPredict) {
       computing = false;
       return;
     }
@@ -323,10 +160,11 @@
       prediction = await predictPlan({
         activity: {
           activity_type: form.activity_type,
-          distance_km: effectiveDistance,
+          distance_km: typedDistanceKm,
           elevation_gain_m: Number(form.elevation_gain_m) || 0,
           temperature_c: Number(form.temperature_c),
-          route: plannedRoute,
+          // No drawn route any more: the athlete states the distance.
+          route: null,
         },
         profile: {
           ...$profile,
@@ -343,7 +181,8 @@
     }
   }
 
-  // Recompute whenever a valid route is plotted on the map (debounced).
+  // Recompute whenever the inputs change (debounced), so the fueling numbers
+  // follow the fields live instead of waiting for a button press.
   let timer;
   $effect(() => {
     void model;
@@ -354,51 +193,34 @@
     void form.temperature_c;
     void form.sweat_profile;
     void form.planned_for;
-    void form.route.length;
-    void routePath;
-    void routing;
-    void routeMode;
     void $activities.length;
 
     clearTimeout(timer);
     if (loadedFromSaved) return;
 
-    const hasPlottedRoute = Array.isArray(plannedRoute) && plannedRoute.length >= 2 && routeKm > 0.05;
-    if (!hasPlottedRoute) {
+    if (!canPredict) {
       computing = false;
       prediction = null;
       return;
     }
-    if (routeMode === 'roads' && routing) return;
 
-    timer = setTimeout(run, 160);
+    timer = setTimeout(run, 180);
   });
 
   function startOver() {
     clearTimeout(timer);
-    resetSnap();
     saveSeq += 1;
-    customElevation = false;
     customPlannedFor = false;
     saved = null;
     loadedFromSaved = false;
     confirmDeletePlanId = null;
     prediction = null;
     computing = false;
-    elevationProfile = [];
-    elevationLossM = 0;
-    elevationSource = 'estimate';
-    routeWeather = null;
-    drawing = true;
-    placeQuery = '';
-    placeResults = [];
-    searchError = '';
     form = {
       activity_type: 'run',
-      distance_km: 0,
-      elevation_gain_m: 0,
+      distance_km: '',
+      elevation_gain_m: '',
       temperature_c: $profile?.typical_temperature_c ?? 26,
-      route: [],
       sweat_profile: $profile?.sweat_profile ?? 'normal',
       planned_for: toDatetimeLocal(new Date()),
     };
@@ -407,310 +229,24 @@
   function pickType(id) {
     markEdited();
     form.activity_type = id;
-    if (!customElevation && routeKm > 0.05) {
-      form.elevation_gain_m = suggestElevation(effectiveDistance, id);
-    }
-    scheduleSnap({ immediate: true }); // routing profile follows the activity type
-  }
-
-  function setRouteMode(mode) {
-    markEdited();
-    routeMode = mode;
-    if (mode === 'straight') {
-      resetSnap();
-    } else {
-      scheduleSnap({ immediate: true });
-    }
-  }
-
-  function resetSnap() {
-    clearTimeout(snapTimer);
-    snapAbort?.abort();
-    snapAbort = null;
-    snapSeq += 1;
-    routePath = [];
-    routing = false;
-    routeProvider = null;
-    routeProviderLabel = '';
-  }
-
-  /** Re-route the planner's stops along roads & paths (debounced, stale-safe). */
-  function scheduleSnap({ immediate = false, fitAfter = false } = {}) {
-    clearTimeout(snapTimer);
-    snapAbort?.abort();
-    snapAbort = null;
-
-    if (routeMode !== 'roads' || form.route.length < 2) {
-      snapSeq += 1;
-      routePath = [];
-      routing = false;
-      routeProvider = null;
-      routeProviderLabel = '';
-      return;
-    }
-
-    routing = true;
-    const delay = immediate ? 0 : 220;
-    snapTimer = setTimeout(() => runSnap({ fitAfter }), delay);
-  }
-
-  async function runSnap({ fitAfter = false } = {}) {
-    const seq = ++snapSeq;
-    const controller = new AbortController();
-    snapAbort = controller;
-
-    const waypoints = [...form.route];
-    const activityType = form.activity_type;
-    const result = await routeThroughRoads(waypoints, activityType, {
-      allowKeyless: true,
-      signal: controller.signal,
-    });
-    if (seq !== snapSeq || controller.signal.aborted) return; // a newer edit superseded this request
-
-    if (result?.path?.length >= 2) {
-      routePath = result.path;
-      routeProvider = result.provider;
-      routeProviderLabel = result.providerLabel || 'OpenStreetMap';
-      if (fitAfter) void tick().then(() => routeMap?.fitRouteBounds?.());
-    } else {
-      routePath = [];
-      routeProvider = 'fallback';
-      routeProviderLabel = '';
-    }
-    routing = false;
-  }
-
-  function clearRoute() {
-    markEdited();
-    form.route = [];
-    resetSnap();
-  }
-
-  /** Remove only the last stop — keeps the rest of the drawn route. */
-  function undoPoint() {
-    if (!form.route.length) return;
-    markEdited();
-    form.route = form.route.slice(0, -1);
-    scheduleSnap({ immediate: true });
-  }
-
-  function startFromGps() {
-    if (!liveCoords) return;
-    markEdited();
-    following = false;
-    const pt = [Number(liveCoords[0].toFixed(5)), Number(liveCoords[1].toFixed(5))];
-    if (!form.route.length) {
-      form.route = [pt];
-      void tick().then(() => routeMap?.focusPoint?.(pt, 16));
-      notify('Start set to your GPS location — tap your destination on the map.', 'info');
-      return;
-    }
-    form.route = [pt, ...form.route];
-    scheduleSnap({ immediate: true, fitAfter: true });
-  }
-
-  function makeOutAndBack() {
-    if (form.route.length < 2 || routeClosed) return;
-    markEdited();
-    following = false;
-    form.route = outAndBackWaypoints(form.route);
-    scheduleSnap({ immediate: true, fitAfter: true });
-  }
-
-  function makeLoop() {
-    if (form.route.length < 2 || routeClosed) return;
-    markEdited();
-    following = false;
-    form.route = closeLoopWaypoints(form.route);
-    scheduleSnap({ immediate: true, fitAfter: true });
-  }
-
-  function reverseRoute() {
-    if (form.route.length < 2) return;
-    markEdited();
-    form.route = reverseWaypoints(form.route);
-    scheduleSnap({ immediate: true });
-  }
-
-  function loadLastActivity() {
-    if (!lastActivityWithRoute) return;
-    markEdited();
-    following = false;
-    form.activity_type = lastActivityWithRoute.activity_type || form.activity_type;
-    form.route = waypointsFromPath(lastActivityWithRoute.route);
-    if (lastActivityWithRoute.route.length > 2) {
-      routePath = [...lastActivityWithRoute.route];
-      routeProvider = 'saved';
-      routeProviderLabel = 'Saved activity';
-      void tick().then(() => routeMap?.fitRouteBounds?.());
-    } else if (routeMode === 'roads') {
-      scheduleSnap({ immediate: true, fitAfter: true });
-    } else {
-      routePath = [];
-      routeProvider = null;
-      routeProviderLabel = '';
-      void tick().then(() => routeMap?.fitRouteBounds?.());
-    }
   }
 
   function loadSavedPlan(plan) {
     if (!plan) return;
     clearTimeout(timer);
-    clearTimeout(snapTimer);
-    snapAbort?.abort();
     confirmDeletePlanId = null;
     loadedFromSaved = true;
-    following = false;
     form.activity_type = plan.activity_type || 'run';
-    form.distance_km = Number(plan.distance_km) || 0;
-    form.elevation_gain_m = Number(plan.elevation_gain_m) || 0;
-    customElevation = true;
+    form.distance_km = toDisplayDistance(Number(plan.distance_km) || 0, $unitSystem).toFixed(2);
+    form.elevation_gain_m = String(Math.round(toDisplayElevation(Number(plan.elevation_gain_m) || 0, $unitSystem)));
     customPlannedFor = Boolean(plan.planned_for);
     form.temperature_c = Number(plan.temperature_c ?? ($profile?.typical_temperature_c ?? 26));
     form.sweat_profile = plan.sweat_profile || $profile?.sweat_profile || 'normal';
     form.planned_for = plan.planned_for ? toDatetimeLocal(plan.planned_for) : toDatetimeLocal(new Date());
-    if (Array.isArray(plan.route) && plan.route.length >= 2) {
-      form.route = waypointsFromPath(plan.route);
-      if (plan.route.length > 2) {
-        routePath = [...plan.route];
-        routeProvider = 'saved';
-        routeProviderLabel = 'Saved plan';
-        void tick().then(() => routeMap?.fitRouteBounds?.());
-      } else if (routeMode === 'roads') {
-        scheduleSnap({ immediate: true, fitAfter: true });
-      } else {
-        routePath = [];
-        routeProvider = null;
-        routeProviderLabel = '';
-        void tick().then(() => routeMap?.fitRouteBounds?.());
-      }
-    } else {
-      form.route = [];
-      resetSnap();
-    }
+    // Show exactly what was saved. Editing any field releases this and the
+    // numbers recompute from the new inputs.
     prediction = plan;
     saved = plan;
-  }
-
-  function onPick(mode, index, latlng) {
-    if (!latlng) return;
-    markEdited();
-    following = false;
-    const point = [Number(latlng.lat.toFixed(5)), Number(latlng.lng.toFixed(5))];
-    if (mode === 'remove') {
-      form.route = form.route.filter((_, i) => i !== index);
-      scheduleSnap({ immediate: true });
-      return;
-    }
-    if (mode === 'move') {
-      form.route = form.route.map((existing, i) => (i === index ? point : existing));
-      scheduleSnap();
-      return;
-    }
-    form.route = [...form.route, point];
-    // Snap right away once Start + Destination are set so road routing feels instant.
-    scheduleSnap({ immediate: form.route.length >= 2 });
-  }
-
-  async function handlePlaceSearch(event) {
-    event?.preventDefault?.();
-    const q = placeQuery.trim();
-    if (q.length < 2) {
-      placeResults = [];
-      searchError = 'Type at least 2 characters to search a street, park, or landmark.';
-      return;
-    }
-    searchAbort?.abort();
-    const controller = new AbortController();
-    searchAbort = controller;
-    searchingPlace = true;
-    searchError = '';
-
-    const results = await searchPlaces(q, {
-      near: liveCoords ?? form.route[form.route.length - 1] ?? null,
-      signal: controller.signal,
-    });
-    if (controller.signal.aborted) return;
-
-    searchingPlace = false;
-    placeResults = results;
-    if (!results.length) {
-      searchError = 'No matching streets or places found nearby.';
-    }
-  }
-
-  function addPlaceAsStop(place) {
-    markEdited();
-    following = false;
-    const pt = [place.latitude, place.longitude];
-    form.route = [...form.route, pt];
-    placeQuery = '';
-    placeResults = [];
-    searchError = '';
-    drawing = true;
-
-    if (form.route.length === 1) {
-      void tick().then(() => routeMap?.focusPoint?.(pt, 16));
-    } else {
-      scheduleSnap({ immediate: true, fitAfter: true });
-    }
-  }
-
-  function followOnTrack(planId = null) {
-    if (planId) {
-      navigate(`/track?plan=${planId}`);
-      return;
-    }
-    if (typeof sessionStorage !== 'undefined' && plannedRoute?.length >= 2) {
-      try {
-        sessionStorage.setItem('trana:draft_planned_route', JSON.stringify({
-          activity_type: form.activity_type,
-          distance_km: Number(effectiveDistance.toFixed(2)),
-          route: plannedRoute,
-          fueling: prediction?.fueling ?? null,
-        }));
-      } catch {
-        // ignore storage quota errors
-      }
-    }
-    navigate('/track?plan=draft');
-  }
-
-  async function handleImportGpx(event) {
-    const file = event?.currentTarget?.files?.[0];
-    if (!file) return;
-    try {
-      const payload = /\.fit$/i.test(file.name) ? await file.arrayBuffer() : await file.text();
-      const parsed = parseActivityFile(payload, file.name);
-      markEdited();
-      following = false;
-      form.activity_type = parsed.activityType;
-      form.route = waypointsFromPath(parsed.route);
-      routePath = parsed.route;
-      routeProvider = 'saved';
-      routeProviderLabel = parsed.source.toUpperCase();
-      if (parsed.elevationGainM > 0) {
-        form.elevation_gain_m = parsed.elevationGainM;
-        customElevation = true;
-      }
-      void tick().then(() => routeMap?.fitRouteBounds?.());
-      notify(`Loaded ${parsed.distanceKm} km route from ${file.name}`);
-    } catch (err) {
-      notify(err?.message || 'Could not read GPX/TCX file', 'error');
-    } finally {
-      event.currentTarget.value = '';
-    }
-  }
-
-  function exportCurrentGpx() {
-    if (!plannedRoute?.length) return;
-    downloadGpx({
-      name: `trana-${form.activity_type}-${effectiveDistance.toFixed(1)}km`,
-      activityType: form.activity_type,
-      startedAt: form.planned_for ? new Date(form.planned_for).toISOString() : new Date().toISOString(),
-      route: plannedRoute,
-    });
-    notify('Route GPX downloaded');
   }
 
   async function save() {
@@ -728,9 +264,9 @@
     try {
       created = await api.predictions.create({
         activity_type: form.activity_type,
-        distance_km: Number(effectiveDistance.toFixed(2)),
+        distance_km: Number(typedDistanceKm.toFixed(2)),
         elevation_gain_m: Number(form.elevation_gain_m) || 0,
-        route: plannedRoute,
+        // Deliberately omitted: there is no drawn route to send.
         temperature_c: Number(form.temperature_c),
         sweat_profile: form.sweat_profile,
         planned_for: plannedForIso,
@@ -798,7 +334,7 @@
       <span class="pill mb-2"><Sparkles size={12} /> TRANA prediction</span>
       <h1 class="font-display text-2xl sm:text-3xl">Plan your next session</h1>
       <p class="mt-1 text-sm font-semibold text-ink-400">
-        Pick a start and destination — TRANA automatically routes along designated roads, footpaths, and trails.
+        Tell TRANA how far you're going and what you're doing. You'll get the time it should take and exactly what to eat and drink beforehand.
       </p>
     </div>
     <button class="btn-ghost self-start" onclick={() => navigate('/activities')}>
@@ -807,69 +343,79 @@
   </div>
 
   <div class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
-    <!-- input (map-first on mobile via flex-col-reverse) -->
-    <div class="flex flex-col-reverse gap-4 min-w-0 xl:flex-col">
+    <div class="space-y-4 min-w-0">
       <div class="scroll-mt-20" data-tour="plan-activity-card">
-      <Card flat>
-        <h2 class="text-lg">Activity & conditions</h2>
-        <div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {#each TYPES as type (type.id)}
-            <button
-              class="flex flex-col items-start gap-2 rounded-2xl border p-3 text-left transition {form.activity_type === type.id
-                ? 'border-transparent bg-brand-gradient text-white shadow-glow'
-                : 'border-brand-100 bg-white/80 text-ink-500 hover:border-brand-200'}"
-              onclick={() => pickType(type.id)}
-            >
-              <ActivityIcon type={type.id} size="sm" tone={form.activity_type === type.id ? 'solid' : 'brand'} />
-              <span class="text-sm font-extrabold">{type.label}</span>
-              <span class="text-[11px] font-semibold leading-tight {form.activity_type === type.id ? 'text-white/80' : 'text-ink-400'}">
-                {type.hint}
-              </span>
-            </button>
-          {/each}
+        <Card flat>
+          <h2 class="text-lg">Activity & conditions</h2>
+          <div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {#each TYPES as type (type.id)}
+              <button
+                class="flex flex-col items-start gap-2 rounded-2xl border p-3 text-left transition {form.activity_type === type.id
+                  ? 'border-transparent bg-brand-gradient text-white shadow-glow'
+                  : 'border-brand-100 bg-white/80 text-ink-500 hover:border-brand-200'}"
+                onclick={() => pickType(type.id)}
+              >
+                <ActivityIcon type={type.id} size="sm" tone={form.activity_type === type.id ? 'solid' : 'brand'} />
+                <span class="text-sm font-extrabold">{type.label}</span>
+                <span class="text-[11px] font-semibold leading-tight {form.activity_type === type.id ? 'text-white/80' : 'text-ink-400'}">
+                  {type.hint}
+                </span>
+              </button>
+            {/each}
+          </div>
+        </Card>
+      </div>
+
+      <Card>
+        <div class="flex items-center gap-2">
+          <span class="grid h-9 w-9 place-items-center rounded-xl bg-brand-100 text-brand-600"><Activity size={17} /></span>
+          <div>
+            <h2 class="text-lg leading-tight">How far are you going?</h2>
+            <p class="text-xs font-semibold text-ink-400">This is the only number TRANA needs to estimate your fuel.</p>
+          </div>
         </div>
 
         <div class="mt-4 grid gap-3 sm:grid-cols-2">
           <div class="min-w-0">
-            <span class="label">Distance {routeKm > 0 ? '(from route)' : '(from map)'}</span>
+            <span class="label">Distance</span>
             <div class="flex gap-2">
               <input
                 class="input num-tabular"
                 type="number"
                 min="0"
                 step="0.1"
-                value={form.distance_km > 0 ? Number(toDisplayDistance(form.distance_km, $unitSystem).toFixed(2)) : ''}
-                placeholder="Add route on map"
-                disabled
-                class:bg-brand-50={routeKm > 0}
+                inputmode="decimal"
+                placeholder="e.g. 10"
+                aria-label="Distance"
+                value={form.distance_km}
+                oninput={(e) => { markEdited(); form.distance_km = e.currentTarget.value; }}
               />
               <span class="grid w-14 shrink-0 place-items-center rounded-2xl border border-brand-100 bg-brand-50 text-xs font-extrabold text-ink-500">{distanceUnit($unitSystem)}</span>
             </div>
-            {#if routeKm > 0}
-              <p class="mt-1 text-[11px] font-bold text-brand-600">Measured along your planned route</p>
+            {#if typedDistanceKm > 0}
+              <p class="mt-1 text-[11px] font-bold text-brand-600">Plan length set</p>
             {:else}
-              <p class="mt-1 text-[11px] font-semibold text-ink-400">Plot Start & Destination on the map</p>
+              <p class="mt-1 text-[11px] font-semibold text-ink-400">Enter a distance to see your plan</p>
             {/if}
           </div>
 
           <div class="min-w-0">
-            <span class="label">Elevation gain {elevationSource === 'dem' ? '· DEM terrain' : ''}</span>
+            <span class="label"><Mountain size={11} class="mr-1 inline" /> Climb (optional)</span>
             <div class="flex gap-2">
               <input
                 class="input num-tabular"
                 type="number"
                 min="0"
                 step="10"
-                value={Math.round(toDisplayElevation(form.elevation_gain_m, $unitSystem))}
-                oninput={(e) => {
-                  const val = Number(e.currentTarget.value);
-                  customElevation = true;
-                  markEdited();
-                  if (Number.isFinite(val)) form.elevation_gain_m = Math.max(0, Math.round(fromDisplayElevation(val, $unitSystem)));
-                }}
+                inputmode="numeric"
+                placeholder="0"
+                aria-label="Elevation gain"
+                value={form.elevation_gain_m}
+                oninput={(e) => { markEdited(); form.elevation_gain_m = e.currentTarget.value; }}
               />
               <span class="grid w-14 shrink-0 place-items-center rounded-2xl border border-brand-100 bg-brand-50 text-xs font-extrabold text-ink-500">{elevationUnit($unitSystem)}</span>
             </div>
+            <p class="mt-1 text-[11px] font-semibold text-ink-400">Leave 0 if it's flat.</p>
           </div>
 
           <div class="min-w-0">
@@ -889,16 +435,16 @@
               />
               <span class="grid w-14 shrink-0 place-items-center rounded-2xl border border-brand-100 bg-brand-50 text-xs font-extrabold text-ink-500">{tempUnit($unitSystem)}</span>
             </div>
-            {#if routeWeather}
+            {#if forecast?.tempC != null}
               <div class="mt-1 flex items-center gap-1.5 text-[11px] font-bold text-brand-600">
                 <span class="num-tabular">
-                  Forecast ({routeWeather.hourLabel}): {Math.round(toDisplayTemp(routeWeather.tempC, $unitSystem))}{tempUnit($unitSystem)}
-                  {#if routeWeather.humidityPct != null} · {routeWeather.humidityPct}% RH{/if}
+                  Forecast{forecast.hourLabel ? ` (${forecast.hourLabel})` : ''}: {Math.round(toDisplayTemp(forecast.tempC, $unitSystem))}{tempUnit($unitSystem)}
+                  {#if forecast.humidityPct != null} · {forecast.humidityPct}% RH{/if}
                 </span>
                 <button
                   type="button"
                   class="rounded-md bg-brand-50 px-1.5 py-0.5 text-[11px] font-extrabold text-brand-700 hover:bg-brand-100"
-                  onclick={() => { markEdited(); form.temperature_c = routeWeather.tempC; }}
+                  onclick={() => { markEdited(); form.temperature_c = forecast.tempC; }}
                 >
                   Apply
                 </button>
@@ -931,240 +477,6 @@
           />
         </div>
       </Card>
-      </div>
-
-      <Card>
-        <div class="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 class="text-lg">Route planner</h2>
-            <p class="text-xs font-semibold text-ink-400">
-              {routeMode === 'roads'
-                ? 'Tap Start & Destination — automatically follows roads, footpaths, and trails.'
-                : 'Straight-line mode — plot manual direct segments.'}
-            </p>
-          </div>
-          <div class="flex flex-wrap items-center gap-2.5">
-            <label class="inline-flex items-center gap-1.5 text-xs font-bold text-ink-700 cursor-pointer select-none">
-              <input type="checkbox" bind:checked={showRoads} class="accent-brand-600 rounded" />
-              <span>Show roads</span>
-            </label>
-            <button
-              type="button"
-              class="btn-chip"
-              class:btn-chip-active={drawing}
-              onclick={() => (drawing = !drawing)}
-              title={drawing ? 'Lock map to pan without adding stops' : 'Resume tapping stops on the map'}
-            >
-              {#if drawing}<Pencil size={12} /> Tap to add: ON{:else}<Lock size={12} /> Pan only{/if}
-            </button>
-          </div>
-        </div>
-
-        <!-- Auto road-follow mode switch + destination search -->
-        <div class="mt-3 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
-          <div class="flex flex-wrap rounded-2xl border border-brand-100 bg-brand-50/70 p-1 sm:inline-flex" role="group" aria-label="Routing mode">
-            <button
-              type="button"
-              class="inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-1.5 text-[11px] font-extrabold transition sm:flex-initial {routeMode === 'roads'
-                ? 'bg-white text-brand-600 shadow-soft'
-                : 'text-ink-500 hover:text-ink-900'}"
-              onclick={() => setRouteMode('roads')}
-            >
-              <Route size={12} /> Follow roads & paths
-            </button>
-            <button
-              type="button"
-              class="inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-1.5 text-[11px] font-extrabold transition sm:flex-initial {routeMode === 'straight'
-                ? 'bg-white text-brand-600 shadow-soft'
-                : 'text-ink-500 hover:text-ink-900'}"
-              onclick={() => setRouteMode('straight')}
-            >
-              Straight lines
-            </button>
-          </div>
-
-          <form class="flex min-w-0 flex-1 items-center gap-1.5 sm:max-w-xs" onsubmit={handlePlaceSearch}>
-            <label class="flex min-w-0 flex-1 items-center gap-1.5 rounded-2xl border border-brand-100 bg-white px-3 py-1.5 focus-within:border-brand-300">
-              <Search size={13} class="shrink-0 text-ink-400" />
-              <input
-                class="min-w-0 w-full bg-transparent text-base font-semibold text-ink-900 outline-none placeholder:font-medium placeholder:text-ink-400 sm:text-xs"
-                placeholder="Search street, park, or stop…"
-                bind:value={placeQuery}
-              />
-            </label>
-            <button type="submit" class="btn-chip shrink-0" disabled={searchingPlace}>
-              {#if searchingPlace}<LoaderCircle size={12} class="animate-spin" />{:else}Find{/if}
-            </button>
-          </form>
-        </div>
-
-        {#if searchError}
-          <p class="mt-2 text-[11px] font-semibold text-ink-400">{searchError}</p>
-        {/if}
-
-        {#if placeResults.length}
-          <div class="mt-2 divide-y divide-brand-100/70 overflow-hidden rounded-2xl border border-brand-100 bg-white shadow-soft">
-            {#each placeResults as place (place.label + place.latitude + place.longitude)}
-              <button
-                type="button"
-                class="flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition hover:bg-brand-50/70"
-                onclick={() => addPlaceAsStop(place)}
-              >
-                <MapPin size={13} class="shrink-0 text-brand-500" />
-                <div class="min-w-0 flex-1">
-                  <p class="truncate font-extrabold text-ink-900">{place.shortName}</p>
-                  <p class="truncate text-[10px] font-semibold text-ink-400">{place.label}</p>
-                </div>
-                <span class="shrink-0 text-[10px] font-extrabold text-brand-600">
-                  {form.route.length ? '+ Add stop' : 'Set Start'}
-                </span>
-              </button>
-            {/each}
-          </div>
-        {/if}
-
-        <div class="mt-3 relative h-[320px] sm:h-[380px] w-full">
-          <TranaMap
-            bind:this={routeMap}
-            plannedRoute={plannedGeoJson}
-            plannedWaypoints={form.route}
-            interactiveRoute={drawing}
-            {routeMode}
-            {routeDashed}
-            {routing}
-            onRoutePick={onPick}
-            fitRoute={false}
-            center={mapCenter}
-            currentPosition={liveCoords}
-            accuracyM={liveAccuracy}
-            heading={liveHeading}
-            bind:following
-            autoCenter={true}
-            {showRoads}
-          >
-            {#snippet overlay()}
-              {#if form.route.length > 0}
-                <div class="pointer-events-none absolute bottom-3 left-3 right-3 z-20 flex flex-wrap items-end justify-between gap-2">
-                  <div class="pointer-events-auto inline-flex items-center gap-2 rounded-2xl border border-white/70 bg-white/90 px-3 py-1.5 text-[11px] font-extrabold text-ink-900 shadow-soft backdrop-blur-md num-tabular">
-                    <Ruler size={13} class="text-brand-600" />
-                    <span>{routeKm > 0 ? `${nf(toDisplayDistance(routeKm, $unitSystem), 2)} ${distanceUnit($unitSystem)}` : 'Start set'}</span>
-                    <span class="text-ink-400">·</span>
-                    <span>{form.route.length} {form.route.length === 1 ? 'stop' : 'stops'}</span>
-                  </div>
-                  <button
-                    type="button"
-                    class="pointer-events-auto inline-flex items-center gap-1 rounded-xl border border-white/70 bg-white/90 px-2.5 py-1.5 text-[11px] font-extrabold text-ink-700 shadow-soft backdrop-blur-md hover:text-brand-600"
-                    onclick={undoPoint}
-                  >
-                    <Undo2 size={12} /> Undo
-                  </button>
-                </div>
-              {/if}
-            {/snippet}
-          </TranaMap>
-        </div>
-
-        <!-- Route quick helpers -->
-        <div class="mt-3 flex flex-wrap items-center gap-1.5">
-          {#if liveCoords}
-            <button type="button" class="btn-chip" onclick={startFromGps}>
-              <Navigation size={12} /> {form.route.length ? 'Start from my GPS' : 'Use my GPS as Start'}
-            </button>
-          {/if}
-          {#if !form.route.length && lastActivityWithRoute}
-            <button type="button" class="btn-chip" onclick={loadLastActivity}>
-              <History size={12} /> Load last activity route
-            </button>
-          {/if}
-          {#if form.route.length >= 2}
-            {#if !routeClosed}
-              <button type="button" class="btn-chip" onclick={makeOutAndBack} title="Route back to Start along the same roads">
-                <ArrowLeftRight size={12} /> Out & back
-              </button>
-              <button type="button" class="btn-chip" onclick={makeLoop} title="Connect Destination back to Start along roads">
-                <Repeat size={12} /> Close loop
-              </button>
-            {/if}
-            <button type="button" class="btn-chip" onclick={reverseRoute} title="Swap Start and Destination">
-              <RotateCcw size={12} /> Reverse
-            </button>
-            <button type="button" class="btn-chip" onclick={() => { following = false; routeMap?.fitRouteBounds?.(); }}>
-              <Maximize2 size={12} /> Fit route
-            </button>
-          {/if}
-          {#if form.route.length}
-            <button type="button" class="btn-chip" onclick={undoPoint}><Undo2 size={12} /> Undo</button>
-            <button type="button" class="btn-chip" onclick={clearRoute}><Trash2 size={12} /> Clear</button>
-          {/if}
-          <input bind:this={gpxFileInput} type="file" accept=".gpx,.tcx,.fit" class="hidden" onchange={handleImportGpx} />
-          <button type="button" class="btn-chip" onclick={() => gpxFileInput?.click()}>
-            <Upload size={12} /> Import GPX / FIT
-          </button>
-          {#if plannedRoute?.length >= 2}
-            <button type="button" class="btn-chip" onclick={exportCurrentGpx}>
-              <Download size={12} /> Export GPX
-            </button>
-          {/if}
-        </div>
-
-        <!-- Live route status pills -->
-        <div class="mt-3 flex flex-wrap items-center gap-2">
-          <span class="pill">
-            <MapPin size={12} />
-            {form.route.length === 0
-              ? 'No stops yet'
-              : form.route.length === 1
-                ? 'Start set — pick Destination'
-                : `${form.route.length} stops`}
-          </span>
-          <span class="pill"><Ruler size={12} /> {routeKm > 0 ? `${nf(toDisplayDistance(routeKm, $unitSystem), 2)} ${distanceUnit($unitSystem)}` : '—'}</span>
-          {#if loadingElevation}
-            <span class="pill"><LoaderCircle size={12} class="animate-spin" /> Checking terrain…</span>
-          {/if}
-          {#if routing}
-            <span class="pill"><LoaderCircle size={12} class="animate-spin" /> Routing along roads…</span>
-          {:else if form.route.length >= 2 && routeKm <= 0.05}
-            <span class="pill !bg-amber-50 !text-amber-700">
-              Stops must be more than 50 m apart to predict
-            </span>
-          {:else if routeMode === 'straight' && form.route.length >= 2}
-            <span class="pill">Straight-line mode</span>
-          {:else if routePath.length > 1}
-            <span class="pill !bg-emerald-50 !text-emerald-700">
-              <Route size={12} /> Following roads ({routeProviderLabel || 'OpenStreetMap'})
-            </span>
-          {:else if form.route.length >= 2 && routeProvider === 'fallback'}
-            <span class="pill !bg-amber-50 !text-amber-700">
-              Straight fallback — no road found near a stop
-            </span>
-            <button
-              type="button"
-              class="btn-chip"
-              onclick={() => scheduleSnap({ immediate: true })}
-            >
-              Retry road snap
-            </button>
-          {/if}
-        </div>
-
-        {#if elevationProfile.length >= 2 || loadingElevation}
-          <div class="mt-3">
-            <ElevationProfile
-              profile={elevationProfile}
-              gainM={form.elevation_gain_m}
-              lossM={elevationLossM}
-              source={elevationSource}
-              loading={loadingElevation}
-            />
-          </div>
-        {/if}
-
-        {#if drawing && form.route.length}
-          <p class="mt-2 text-[11px] font-semibold text-ink-400">
-            Drag any marker to reroute along nearby roads, click a marker to remove that stop, or tap the map to extend your route.
-          </p>
-        {/if}
-      </Card>
     </div>
 
     <!-- result -->
@@ -1181,10 +493,10 @@
             <MapPin size={22} />
           </div>
           <h3 class="mt-4 font-display text-lg font-extrabold text-ink-900">
-            Add a route on the map to start predicting
+            Enter a distance to see your fueling plan
           </h3>
           <p class="mt-1.5 max-w-sm text-xs font-semibold text-ink-500">
-            Tap <strong>Start</strong> and <strong>Destination</strong> on the Route planner map (or search a street/place, use GPS, or load your last activity route). TRANA will calculate your distance, duration, and fueling plan automatically.
+            TRANA turns the distance and climb into the time it should take, then the calories, carbs, and electrolytes you'll need before you set off.
           </p>
         </Card>
       {:else if prediction}
@@ -1193,9 +505,9 @@
             <div class="flex items-center gap-2">
               <ActivityIcon type={form.activity_type} size="sm" />
               <div>
-                <p class="text-sm font-extrabold capitalize">{nf(toDisplayDistance(effectiveDistance, $unitSystem), 2)} {distanceUnit($unitSystem)} {form.activity_type}</p>
+                <p class="text-sm font-extrabold capitalize">{nf(toDisplayDistance(typedDistanceKm, $unitSystem), 2)} {distanceUnit($unitSystem)} {form.activity_type}</p>
                 <p class="text-[11px] font-semibold text-ink-400">
-                  {nf(Math.round(toDisplayElevation(form.elevation_gain_m, $unitSystem)))} {elevationUnit($unitSystem)} gain · {Math.round(toDisplayTemp(form.temperature_c, $unitSystem))} {tempUnit($unitSystem)}
+                  {nf(Math.round(toDisplayElevation(Number(form.elevation_gain_m) || 0, $unitSystem)))} {elevationUnit($unitSystem)} gain · {Math.round(toDisplayTemp(form.temperature_c, $unitSystem))} {tempUnit($unitSystem)}
                 </p>
               </div>
             </div>
@@ -1229,11 +541,6 @@
                 <Save size={16} /> Save this plan
               {/if}
             </button>
-            {#if plannedRoute?.length >= 2}
-              <button class="btn-ghost flex-1" onclick={() => followOnTrack(saved?.id ?? null)}>
-                <Navigation size={15} /> Track this route
-              </button>
-            {/if}
             <button class="btn-ghost" onclick={startOver}>
               <Play size={15} /> Start over
             </button>
@@ -1241,7 +548,7 @@
 
           {#if saved}
             <div class="mt-3 rounded-2xl bg-emerald-50 p-3 text-[11px] font-bold text-emerald-700">
-              Plan #{saved.id} saved. Tap “Track this route” to follow it with live GPS, or log it under Activities once you finish.
+              Plan #{saved.id} saved. Once you've done it, log what actually happened under Activities — TRANA compares the two.
             </div>
           {/if}
         </Card>
@@ -1278,9 +585,6 @@
                   <div class="min-w-0 flex-1">
                     <p class="truncate text-xs font-extrabold capitalize">
                       {$unitSystem === 'imperial' ? `${Number(toDisplayDistance(plan.distance_km, 'imperial').toFixed(2))} mi` : `${plan.distance_km} km`} {plan.activity_type}
-                      {#if plan.route?.length >= 2}
-                        <span class="ml-1 text-[10px] font-bold text-brand-700">· Route</span>
-                      {/if}
                     </p>
                     <p class="text-[10px] font-semibold text-ink-400">
                       ~{Math.round(plan.duration?.minutes ?? 0)} min · {plan.fueling?.carbs?.perHourG ?? 0} g carbs/h
@@ -1315,17 +619,6 @@
                   </div>
                 {:else}
                   <div class="ml-auto flex shrink-0 items-center gap-1.5">
-                    {#if plan.route?.length >= 2}
-                      <button
-                        type="button"
-                        class="btn-chip shrink-0"
-                        title="Follow this planned route on live tracking"
-                        disabled={Boolean(deletingPlanId)}
-                        onclick={() => followOnTrack(plan.id)}
-                      >
-                        <Navigation size={11} /> Track
-                      </button>
-                    {/if}
                     <button
                       type="button"
                       class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-brand-100 bg-white/80 text-ink-400 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"

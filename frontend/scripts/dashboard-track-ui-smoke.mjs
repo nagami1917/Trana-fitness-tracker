@@ -23,12 +23,6 @@ const bundle = await build({
   plugins: [svelte()],
   resolve: {
     alias: [
-      { find: /^leaflet\/dist\/leaflet\.css$/, replacement: resolve(root, 'scripts/stubs/empty.css') },
-      { find: /^leaflet$/, replacement: resolve(root, 'scripts/stubs/leaflet-interactive.js') },
-      { find: /^@maplibre\/maplibre-gl-leaflet$/, replacement: resolve(root, 'scripts/stubs/maplibre-gl-leaflet.js') },
-      { find: /^maplibre-gl\/dist\/maplibre-gl\.css$/, replacement: resolve(root, 'scripts/stubs/empty.css') },
-      { find: 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url', replacement: resolve(root, 'scripts/stubs/empty-url.js') },
-      { find: /^maplibre-gl$/, replacement: resolve(root, 'scripts/stubs/maplibre-gl-interactive.js') },
       { find: /^chart\.js\/auto$/, replacement: resolve(root, 'scripts/stubs/chart.js') },
     ],
   },
@@ -201,26 +195,8 @@ try {
   await harness.mountDashboard();
   assert.match(document.body.textContent, /Track Activity/);
   assert.match(document.body.textContent, /Ready/);
-  assert.match(document.body.textContent, /No route saved yet/);
-  assert.match(document.body.textContent, /Route preview only; the estimate uses the distance and elevation you entered/);
-
-  // When there is no recorded route, clearly label the plan-route fallback.
-  harness.seedStores([], [{
-    id: 20,
-    activity_type: 'run',
-    distance_km: 2,
-    duration: { minutes: 15 },
-    fueling: {
-      calories: { total: 120 },
-      carbs: { perHourG: 0 },
-      sodium: { perHourMg: 500 },
-      fluid: { perHourMl: 400 },
-    },
-    created_at: new Date().toISOString(),
-    route: [[14.676, 121.0437], [14.682, 121.049]],
-  }]);
-  await harness.mountDashboard();
-  assert.match(document.body.textContent, /Saved plan route/);
+  assert.match(document.body.textContent, /What you get/);
+  assert.equal(document.querySelector('.leaflet-container'), null, 'Dashboard must not mount a map');
 
   // Reset to a clean dashboard before testing the live tracking flow.
   harness.seedStores([]);
@@ -254,22 +230,16 @@ try {
   assert.equal(harness.liveTracker.tracking, true, 'Live tracking must persist when leaving Track Activity');
   assert.match(document.body.textContent, /Track Activity · Bike ride/);
   assert.match(document.body.textContent, /In progress/);
-  assert.match(document.body.textContent, /Live map · 2 GPS pts/);
   assert.ok(window.sessionStorage.getItem('trana:live_tracker:7'), 'Active tracking snapshot must persist in sessionStorage');
 
-  // Emit a 3rd GPS coordinate while viewing Dashboard and confirm live map + km update
+  // Emit a 3rd GPS coordinate while viewing Dashboard and confirm the live
+  // distance keeps climbing there (no map any more, but tracking never stops).
   timeOffsetMs += 180_000;
   emitGpsFix(14.688, 121.055);
   await waitFor(
-    () => document.body.textContent.includes('Live map · 3 GPS pts'),
-    'Dashboard live map update after 3rd GPS point',
+    () => harness.liveTracker.distanceKm > 1.2,
+    'Dashboard live distance update after 3rd GPS point',
   );
-  const activeMaps = harness.getLeafletMaps().filter((m) => !m.removed);
-  const trackPromptMap = activeMaps[0];
-  const polylineLayer = trackPromptMap?.layers
-    ?.flatMap((g) => g.children)
-    ?.find((c) => c.kind === 'polyline' && !c.removed);
-  assert.ok(polylineLayer && polylineLayer.data.length === 3, 'Leaflet Dashboard map should draw all 3 recorded GPS coordinates');
 
   // 4. Pause & Resume directly from Dashboard prompt
   buttonsWithText('Pause')[0].click();
@@ -324,12 +294,11 @@ try {
   assert.ok(savedDailyPayloads.length === 1 && savedDailyPayloads[0].calories_burned > 0, 'Daily session calories_burned must update');
 
   await waitFor(
-    () => document.body.textContent.includes('Completed & saved') && document.body.textContent.includes('Recorded map'),
+    () => document.body.textContent.includes('Completed & saved'),
     'Dashboard Completed & saved card',
   );
   assert.match(document.body.textContent, /Saved to Activities and Today's Summary/);
   assert.ok(harness.getActivities().length === 1, 'Global activities store refreshed on Dashboard');
-  assert.match(document.body.textContent, /Latest recorded route/, 'Quick Plan route preview should switch to the newly saved GPS route');
 
   // 7. Discard flow -> Dashboard records Discarded status and Dismiss restores latest saved GPS activity
   await harness.mountTrack();

@@ -16,12 +16,10 @@
   } from 'lucide-svelte';
   import Card from '../common/Card.svelte';
   import ActivityIcon from '../activities/ActivityIcon.svelte';
-  import RouteMap from '../route/RouteMap.svelte';
   import GPSStatus from '../activity/GPSStatus.svelte';
   import { activities, unitSystem } from '../../stores/index.js';
   import { navigate } from '../../lib/router.js';
   import { liveTracker } from '../../lib/liveTracker.svelte.js';
-  import { livePosition } from '../../lib/liveLocation.svelte.js';
   import {
     activityLabel,
     clock,
@@ -35,21 +33,6 @@
     timeLabel,
   } from '../../lib/format.js';
   import { distanceUnit, paceUnit, speedUnit } from '../../lib/units.js';
-
-  let { fallbackCenter = [14.676, 121.0437] } = $props();
-
-  let historyMapExpanded = $state(false);
-
-  const liveUserPos = $derived(
-    liveTracker.currentPosition ??
-      (livePosition.current &&
-      Number.isFinite(livePosition.current.latitude) &&
-      Number.isFinite(livePosition.current.longitude)
-        ? [livePosition.current.latitude, livePosition.current.longitude]
-        : null),
-  );
-
-  const mapCenter = $derived(liveUserPos ?? fallbackCenter);
 
   const latestGpsActivity = $derived($activities.find((a) => a.source === 'gps') ?? null);
 
@@ -162,19 +145,6 @@
     ];
   });
 
-  const mapBadge = $derived.by(() => {
-    if (!view) return '';
-    if (view.isLive) {
-      if (view.route.length >= 2) return `Live map · ${view.route.length} GPS pts`;
-      if (view.route.length === 1) return 'Start pinned · Waiting for movement';
-      if (view.plannedPath.length >= 2) return 'Planned route · Waiting for GPS';
-      return 'GPS map · Locating…';
-    }
-    if (view.route.length >= 2) return `Recorded map · ${view.route.length} pts`;
-    if (view.route.length === 1) return 'Start location pinned';
-    return 'No GPS path recorded';
-  });
-
   const whenSummary = $derived.by(() => {
     if (!view?.started_at) return '';
     if (view.isLive) return `Started ${timeLabel(view.started_at)}`;
@@ -199,7 +169,7 @@
             </span>
           </div>
           <p class="mt-0.5 truncate text-xs font-semibold text-ink-400">
-            Live GPS map, timer, distance, pace, and fueling checkpoints sync automatically here.
+            GPS timer, distance, pace, and fueling checkpoints sync automatically here.
           </p>
         </div>
       </div>
@@ -213,47 +183,8 @@
       </button>
     </div>
   </Card>
-{:else if view.fromHistory && !historyMapExpanded}
-  <!-- Compact Tier-1 summary bar when returning to Dashboard with a past GPS session (avoids dual maps above the fold) -->
-  <Card flat class="!p-3.5 sm:!p-4">
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div class="flex items-center gap-3 min-w-0">
-        <ActivityIcon type={view.activity_type} size="md" />
-        <div class="min-w-0">
-          <div class="flex flex-wrap items-center gap-2">
-            <h2 class="text-sm sm:text-base font-extrabold text-ink-900">
-              Last GPS Track · {activityLabel(view.activity_type)}
-            </h2>
-            <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-extrabold text-emerald-700">
-              <CheckCircle2 size={11} /> {view.statusLabel}
-            </span>
-          </div>
-          <p class="num-tabular mt-0.5 truncate text-xs font-semibold text-ink-400">
-            {formatDistance(view.distance_km, $unitSystem)} {distanceUnit($unitSystem)} · {fmtDuration(view.duration_min)} · {kcal(view.calories)} kcal{#if whenSummary} · {whenSummary}{/if}
-          </p>
-        </div>
-      </div>
-
-      <div class="flex flex-wrap items-center gap-2 shrink-0">
-        <button
-          type="button"
-          class="btn-ghost !py-2 !px-3 !text-xs"
-          onclick={() => (historyMapExpanded = true)}
-        >
-          <ChevronDown size={13} /> Map preview
-        </button>
-        <button
-          type="button"
-          class="btn-ghost !py-2 !px-3 !text-xs font-extrabold text-brand-600"
-          onclick={() => navigate('/track')}
-        >
-          <Activity size={13} /> Track new activity
-        </button>
-      </div>
-    </div>
-  </Card>
 {:else}
-  <Card class="!p-4 sm:!p-5 border {view.isLive ? 'border-emerald-200 bg-gradient-to-br from-white via-white to-emerald-50/40' : view.status === 'discarded' ? 'border-rose-100 bg-white' : 'border-brand-100 bg-white'}">
+<Card class="!p-4 sm:!p-5 border {view.isLive ? 'border-emerald-200 bg-gradient-to-br from-white via-white to-emerald-50/40' : view.status === 'discarded' ? 'border-rose-100 bg-white' : 'border-brand-100 bg-white'}">
     <!-- header row -->
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div class="flex items-start gap-3 min-w-0">
@@ -303,15 +234,6 @@
       </div>
 
       <div class="flex flex-wrap items-center gap-2">
-        {#if view.fromHistory}
-          <button
-            type="button"
-            class="btn-ghost !py-2 !px-3 !text-xs"
-            onclick={() => (historyMapExpanded = false)}
-          >
-            <ChevronUp size={13} /> Collapse
-          </button>
-        {/if}
         {#if view.isLive}
           <button
             type="button"
@@ -355,27 +277,16 @@
       </div>
     </div>
 
-    <!-- recorded map + stats/controls -->
+    <!-- stats/controls -->
     <div class="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
-      <div class="relative">
-        <RouteMap
-          points={view.route}
-          plannedPath={view.plannedPath}
-          live={view.isLive}
-          center={mapCenter}
-          userLocation={liveUserPos}
-          height={212}
-          class="!rounded-2xl"
-        >
-          <div class="pointer-events-none absolute left-3 top-3 z-10 rounded-xl bg-white/90 px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide text-brand-600 shadow-soft">
-            {mapBadge}
-          </div>
-          {#if !view.isLive && view.route.length < 2 && view.plannedPath.length < 2}
-            <div class="pointer-events-none absolute inset-x-3 bottom-3 z-10 rounded-xl bg-white/90 px-3 py-1.5 text-center text-[11px] font-semibold text-ink-500 shadow-soft">
-              No multi-point GPS route was captured for this session.
-            </div>
+      <div class="flex flex-col justify-between gap-3">
+        <div class="rounded-2xl border border-brand-100 bg-brand-50/40 px-3.5 py-2.5">
+          <p class="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400">Session</p>
+          <p class="font-display text-base font-extrabold text-ink-900">{view.isLive ? 'Recording now' : 'Completed'}</p>
+          {#if whenSummary}
+            <p class="mt-0.5 text-[11px] font-semibold text-ink-500">{whenSummary}</p>
           {/if}
-        </RouteMap>
+        </div>
       </div>
 
       <div class="flex flex-col justify-between gap-3">
@@ -397,8 +308,8 @@
         {:else if view.isLive}
           <p class="rounded-2xl border border-emerald-100 bg-emerald-50/60 px-3.5 py-2 text-xs font-semibold text-emerald-800">
             {view.status === 'paused'
-              ? 'Workout paused — resume to keep recording GPS route and time, or save once you reach 0.05 km and 1:00.'
-              : 'Live GPS map, timer, and distance stay recording even while you view Dashboard.'}
+              ? 'Workout paused — resume to keep recording GPS time and distance, or save once you reach 0.05 km and 1:00.'
+              : 'GPS timer, distance, and pace keep recording even while you view Dashboard.'}
           </p>
         {/if}
 

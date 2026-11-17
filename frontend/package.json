@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
     "check": "svelte-check --output human",
-    "smoke": "node scripts/api-config-smoke.mjs && node scripts/live-api-smoke.mjs && node scripts/proxy-smoke.mjs && node scripts/same-origin-api-smoke.mjs && node scripts/smoke.mjs && node scripts/draw-smoke.mjs && node scripts/location-smoke.mjs && node scripts/location-ui-smoke.mjs && node scripts/login-ui-smoke.mjs && node scripts/register-ui-smoke.mjs && node scripts/preview-ui-smoke.mjs && node scripts/track-smoke.mjs && node scripts/dashboard-track-ui-smoke.mjs && node scripts/mascot-tour-ui-smoke.mjs && node scripts/mobile-responsive-smoke.mjs && node scripts/route-planner-smoke.mjs && node scripts/saved-plans-ui-smoke.mjs && node scripts/plan-when-ui-smoke.mjs && node scripts/render-smoke.mjs && node scripts/improvements-smoke.mjs && node scripts/ui-ux-polish-smoke.mjs && node scripts/error-monitor-smoke.mjs && node scripts/performance-smoke.mjs && node scripts/training-features-smoke.mjs && node scripts/session-route-ui-smoke.mjs",
+    "smoke": "node scripts/api-config-smoke.mjs && node scripts/live-api-smoke.mjs && node scripts/proxy-smoke.mjs && node scripts/same-origin-api-smoke.mjs && node scripts/smoke.mjs && node scripts/location-smoke.mjs && node scripts/location-ui-smoke.mjs && node scripts/login-ui-smoke.mjs && node scripts/register-ui-smoke.mjs && node scripts/preview-ui-smoke.mjs && node scripts/track-smoke.mjs && node scripts/dashboard-track-ui-smoke.mjs && node scripts/mascot-tour-ui-smoke.mjs && node scripts/mobile-responsive-smoke.mjs && node scripts/saved-plans-ui-smoke.mjs && node scripts/plan-typed-distance-smoke.mjs && node scripts/plan-when-ui-smoke.mjs && node scripts/render-smoke.mjs && node scripts/improvements-smoke.mjs && node scripts/ui-ux-polish-smoke.mjs && node scripts/error-monitor-smoke.mjs && node scripts/performance-smoke.mjs && node scripts/training-features-smoke.mjs",
     "test": "npm run check && npm run smoke"
   },
   "devDependencies": {
@@ -24,10 +24,7 @@
     "vite-plugin-pwa": "^0.21.1"
   },
   "dependencies": {
-    "@maplibre/maplibre-gl-leaflet": "^0.1.4",
     "chart.js": "^4.4.7",
-    "leaflet": "^1.9.4",
-    "lucide-svelte": "^0.469.0",
-    "maplibre-gl": "^6.17.0"
+    "lucide-svelte": "^0.469.0"
   }
 }

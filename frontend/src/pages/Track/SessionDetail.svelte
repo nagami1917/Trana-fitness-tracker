@@ -3,49 +3,20 @@
   import { link, query } from '../../lib/router.js';
   import { dailySessionApi, formatSessionDate } from '../../services/dailySessionService.js';
   import { notify } from '../../stores/index.js';
-  import { routeToTrackPoints } from '../../services/mapService.js';
   import DailyProgress from '../../components/activity/DailyProgress.svelte';
   import FoodLogger from '../../components/activity/FoodLogger.svelte';
-  import TranaMap from '../../components/map/TranaMap.svelte';
   import Skeleton from '../../components/common/Skeleton.svelte';
   import ActivityIcon from '../../components/activities/ActivityIcon.svelte';
-  import { Activity, Clock, Flame, MapPin } from 'lucide-svelte';
+  import { Activity, Clock, Flame, Route as RouteIcon } from 'lucide-svelte';
 
   let { sessionId = null } = $props();
 
   let session = $state(null);
   let loading = $state(true);
-  let activeRouteId = $state(null);
-
   const idFromQuery = $query.get('id');
 
-  /**
-   * Activities finished that day, with their tracks resolved to the
-   * { latitude, longitude } shape the map renders. Activities without a
-   * recorded GPS track are kept so the list still shows what was done.
-   */
-  let dayActivities = $derived(
-    (session?.activities ?? []).map((activity) => {
-      const points = routeToTrackPoints(activity);
-      return { ...activity, points, hasTrack: points.length >= 2 };
-    })
-  );
-
-  let trackable = $derived(dayActivities.filter((activity) => activity.hasTrack));
-
-  let activeRoute = $derived(
-    trackable.find((activity) => activity.id === activeRouteId) ?? trackable[0] ?? null
-  );
-
-  /** Show the finished routes on a map as soon as the day has one. */
-  let focusRoute = $derived.by(() => {
-    if (!activeRoute) return null;
-    const points = activeRoute.points;
-    return {
-      start: [points[0].latitude, points[0].longitude],
-      finish: [points[points.length - 1].latitude, points[points.length - 1].longitude],
-    };
-  });
+  /** Activities finished that day, as logged. No GPS track is drawn. */
+  let dayActivities = $derived(session?.activities ?? []);
 
   function typeLabel(type) {
     if (!type) return 'Activity';
@@ -132,58 +103,19 @@
       </span>
     </div>
 
-    <!-- Routes finished that day -->
+    <!-- Activities finished that day -->
     {#if dayActivities.length > 0}
       <div class="card overflow-hidden">
-        <div class="flex flex-wrap items-center justify-between gap-2 p-4 sm:px-6 sm:py-4">
-          <div>
-            <p class="text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink-400">Accomplished</p>
-            <h2 class="font-display text-lg font-extrabold text-ink-900">
-              {dayActivities.length === 1 ? 'Route you finished' : `Routes you finished (${dayActivities.length})`}
-            </h2>
-          </div>
-          {#if activeRoute}
-            <span class="num-tabular inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1 text-[11px] font-bold text-brand-700">
-              <MapPin size={12} />
-              {formatDistance(activeRoute.distance_km)} · {formatDuration(activeRoute.duration_min)}
-            </span>
-          {/if}
+        <div class="p-4 sm:px-6 sm:py-4">
+          <p class="text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink-400">Accomplished</p>
+          <h2 class="font-display text-lg font-extrabold text-ink-900">
+            {dayActivities.length === 1 ? 'Session you finished' : `Sessions you finished (${dayActivities.length})`}
+          </h2>
         </div>
 
-        {#if activeRoute}
-          <div class="h-[300px] w-full sm:h-[360px]">
-            <TranaMap
-              points={activeRoute.points}
-              center={focusRoute.start}
-              startPosition={focusRoute.start}
-              finishPosition={focusRoute.finish}
-              fitRoute={true}
-              autoCenter={false}
-              following={false}
-              fitPadding={48}
-            />
-          </div>
-        {:else}
-          <div class="px-4 pb-2 sm:px-6">
-            <div class="rounded-2xl border border-dashed border-brand-200 bg-brand-50/50 px-4 py-8 text-center">
-              <MapPin size={18} class="mx-auto text-ink-300" />
-              <p class="mt-2 text-sm font-semibold text-ink-600">No GPS track recorded</p>
-              <p class="mt-1 text-xs text-ink-400">
-                These activities were logged without a route, so there is no map to show.
-              </p>
-            </div>
-          </div>
-        {/if}
-
-        <!-- One row per activity; tapping switches the map above. -->
         <div class="divide-y divide-brand-100 border-t border-brand-100">
           {#each dayActivities as activity (activity.id)}
-            <button
-              type="button"
-              class="flex w-full items-center gap-3 px-4 py-3 text-left transition sm:px-6 {activity.hasTrack ? 'hover:bg-brand-50/60' : 'cursor-default'} {activeRoute?.id === activity.id ? 'bg-brand-50/70' : ''}"
-              disabled={!activity.hasTrack}
-              onclick={() => { if (activity.hasTrack) activeRouteId = activity.id; }}
-            >
+            <div class="flex items-center gap-3 px-4 py-3 sm:px-6">
               <ActivityIcon type={activity.activity_type} size="sm" />
               <span class="min-w-0 flex-1">
                 <span class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
@@ -191,26 +123,21 @@
                   {#if activity.started_at}
                     <span class="text-[11px] font-bold text-ink-400">{formatTime(activity.started_at)}</span>
                   {/if}
-                  {#if !activity.hasTrack}
+                  {#if activity.source === 'manual'}
                     <span class="rounded-full bg-ink-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-ink-500">
-                      No track
+                      Logged
                     </span>
                   {/if}
                 </span>
                 <span class="num-tabular mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] font-bold text-ink-500">
-                  <span class="inline-flex items-center gap-1"><MapPin size={11} />{formatDistance(activity.distance_km)}</span>
+                  <span class="inline-flex items-center gap-1"><RouteIcon size={11} />{formatDistance(activity.distance_km)}</span>
                   <span class="inline-flex items-center gap-1"><Clock size={11} />{formatDuration(activity.duration_min)}</span>
                   {#if activity.calories}
                     <span class="inline-flex items-center gap-1"><Flame size={11} />{activity.calories} kcal</span>
                   {/if}
                 </span>
               </span>
-              {#if activity.hasTrack}
-                <span class="text-[11px] font-bold {activeRoute?.id === activity.id ? 'text-brand-700' : 'text-ink-300'}">
-                  {activeRoute?.id === activity.id ? 'Viewing' : 'View'}
-                </span>
-              {/if}
-            </button>
+            </div>
           {/each}
         </div>
       </div>
@@ -223,7 +150,7 @@
           <div>
             <p class="text-sm font-extrabold text-ink-900">No activity on this day</p>
             <p class="text-xs text-ink-500">
-              Only food or water was logged, so there is no route to show.
+              Only food or water was logged, so there is no session to show.
             </p>
           </div>
         </div>
