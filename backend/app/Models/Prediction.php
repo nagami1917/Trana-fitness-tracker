@@ -81,6 +81,7 @@ class Prediction extends Model
                     : null,
                 'speedKmh' => $this->distance_km > 0 ? round($this->distance_km / ($this->duration_min / 60), 2) : null,
                 'confidence' => $this->confidence,
+                'historyCount' => $this->payload['duration']['historyCount'] ?? null,
                 'referenceSpeedKmh' => $this->payload['duration']['referenceSpeedKmh'] ?? null,
                 'basis' => $this->payload['duration']['basis'] ?? null,
             ],

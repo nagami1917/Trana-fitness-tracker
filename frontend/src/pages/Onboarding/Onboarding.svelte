@@ -37,31 +37,101 @@
     { id: 'hike', label: 'Hiking', hint: 'Trail with climbing' },
   ];
 
-  /** A baseline row is only useful when it looks like a real session. */
-  function validBaseline(row) {
-    const distance = Number(row.distance_km);
-    const minutes = Number(row.duration_min);
-    const elevation = row.elevation_gain_m === '' ? 0 : Number(row.elevation_gain_m);
-    if (!(distance >= 0.1 && distance <= 500)) return false;
-    if (!(minutes >= 1 && minutes <= 1440)) return false;
-    if (!(elevation >= 0 && elevation <= 12000)) return false;
-    if (!row.performed_on) return false;
-    const date = new Date(row.performed_on);
-    if (!Number.isFinite(date.getTime())) return false;
-    const today = new Date(); today.setHours(23, 59, 59, 999);
-    return date.getTime() <= today.getTime();
+  /**
+   * Plausible speed per sport, in km/h. Mirrors the server's
+   * SPEED_BOUNDS_KMH, which mirrors the model's own filter: a row outside
+   * these bounds is silently discarded by the duration model, so we warn
+   * before the athlete submits rather than after.
+   */
+  const SPEED_BOUNDS = {
+    run: [2.5, 30],
+    ride: [1.5, 65],
+    walk: [0.5, 14],
+    hike: [0.5, 14],
+  };
+
+  /** Coarse recency, so nobody has to recall an exact day. */
+  const PERIODS = [
+    { id: 'this_week', label: 'This week' },
+    { id: 'last_week', label: 'Last week' },
+    { id: 'this_month', label: 'This month' },
+    { id: 'few_months', label: 'A few months ago' },
+    { id: 'longer_ago', label: 'Longer ago' },
+  ];
+
+  function blankBaselineRow(type) {
+    return {
+      activity_type: type,
+      mode: 'pace', // distance + pace, or distance + time
+      distance_km: '',
+      duration_min: '',
+      pace_min_per_km: '',
+      elevation_gain_m: '',
+      performed_period: 'last_week',
+    };
   }
 
-  /** Pace is derived, never asked for: duration ÷ distance. */
-  function paceLabel(row) {
-    const distance = Number(row.distance_km);
+  /** The session's duration, whichever way the athlete chose to express it. */
+  function rowMinutes(row) {
+    if (row.mode === 'pace') {
+      const distance = Number(row.distance_km);
+      const pace = Number(row.pace_min_per_km);
+      if (!(distance > 0) || !(pace > 0)) return 0;
+      return pace * distance;
+    }
     const minutes = Number(row.duration_min);
+    return minutes > 0 ? minutes : 0;
+  }
+
+  /** The derived value, shown read-only so the two can never disagree. */
+  function rowPace(row) {
+    const distance = Number(row.distance_km);
+    const minutes = rowMinutes(row);
     if (!(distance > 0) || !(minutes > 0)) return '';
     const pace = minutes / distance;
     const mm = Math.floor(pace);
     const ss = Math.round((pace - mm) * 60);
     return `${mm}:${String(ss).padStart(2, '0')} /${distanceUnit(form.units)}`;
   }
+
+  /** Speed in km/h, used for the plausibility check. */
+  function rowSpeedKmh(row) {
+    const distance = Number(row.distance_km);
+    const minutes = rowMinutes(row);
+    if (!(distance > 0) || !(minutes > 0)) return 0;
+    return distance / (minutes / 60);
+  }
+
+  /** A row is complete when everything the model needs is present. */
+  function validBaseline(row) {
+    const distance = Number(row.distance_km);
+    const elevation = row.elevation_gain_m === '' ? 0 : Number(row.elevation_gain_m);
+    if (!(distance >= 0.1 && distance <= 500)) return false;
+    const minutes = rowMinutes(row);
+    if (!(minutes >= 1 && minutes <= 1440)) return false;
+    if (!(elevation >= 0 && elevation <= 12000)) return false;
+    return true;
+  }
+
+  /** Non-blocking warning: the model would discard this row. */
+  function speedWarning(row) {
+    if (!validBaseline(row)) return '';
+    const [min, max] = SPEED_BOUNDS[row.activity_type] ?? [0.5, 60];
+    const speed = rowSpeedKmh(row);
+    if (speed < min || speed > max) {
+      return `That works out to ${speed.toFixed(1)} km/h, which the model can't use for ${activityLabel(row.activity_type).toLowerCase()} (${min}–${max} km/h). Check the distance and ${row.mode === 'pace' ? 'pace' : 'time'}.`;
+    }
+    return '';
+  }
+
+  function activityLabel(id) {
+    return ACTIVITY_TYPES.find((type) => type.id === id)?.label ?? id;
+  }
+
+  /** Ask about the sports the athlete actually picked; all four if unpicked. */
+  const baselineSports = $derived(
+    preferredActivities.length > 0 ? [...preferredActivities] : ACTIVITY_TYPES.map((t) => t.id),
+  );
 
   const TRAINING_PRESETS = [
     {
@@ -96,29 +166,43 @@
   let step = $state(0);
   // Null in storage means "never asked"; the UI starts with nothing selected.
   let preferredActivities = $state(Array.isArray($profile?.preferred_activities) ? [...$profile.preferred_activities] : []);
-  // Two blank rows: the model needs two reference points to fit a pace curve.
-  let baselines = $state([blankBaseline(), blankBaseline()]);
+  // Two reference points per sport: the model fits one pace curve per
+  // activity type, so two walks never help a planned ride.
+  //
+  // Every sport's rows exist up front. Creating them lazily on render would
+  // mutate state while the template is evaluating, which Svelte forbids;
+  // unused sports are simply never posted.
+  let baselineRows = $state(
+    Object.fromEntries(ACTIVITY_TYPES.map((type) => [type.id, [blankBaselineRow(type.id), blankBaselineRow(type.id)]])),
+  );
   let baselineSaving = $state(false);
   let baselineError = $state('');
 
-  function blankBaseline() {
-    return { activity_type: 'run', distance_km: '', duration_min: '', elevation_gain_m: '', performed_on: '' };
+  /** Rows for one sport — always present, never created during render. */
+  function rowsFor(type) {
+    return baselineRows[type] ?? [];
   }
+
+  /** Sports with at least one usable row — the ones we actually post. */
+  const filledBySport = $derived.by(() => {
+    const filled = {};
+    for (const type of baselineSports) {
+      const rows = (baselineRows[type] ?? []).filter(validBaseline);
+      if (rows.length > 0) filled[type] = rows;
+    }
+    return filled;
+  });
+
+  const filledSportCount = $derived(Object.keys(filledBySport).length);
+  const anyBaselineWarning = $derived(
+    baselineSports.some((type) => (baselineRows[type] ?? []).some((row) => speedWarning(row))),
+  );
 
   function toggleActivity(id) {
     preferredActivities = preferredActivities.includes(id)
       ? preferredActivities.filter((item) => item !== id)
       : [...preferredActivities, id];
-    // Picking a sport is also the most useful default for the baseline rows.
-    if (preferredActivities.includes(id)) {
-      for (const row of baselines) {
-        if (!row.performed_on) row.activity_type = id;
-      }
-    }
   }
-
-  const filledBaselines = $derived(baselines.filter(validBaseline));
-  const baselineComplete = $derived(filledBaselines.length >= 2);
   let saving = $state(false);
   let locating = $state(false);
   let activePreset = $state('runner');
@@ -155,40 +239,43 @@
     if (step === 1) return Number(form.experience_level) >= 1;
     // Sports: allow "everything" explicitly, but not an unanswered question.
     if (step === 3) return Array.isArray(preferredActivities);
-    // Baseline: rows are optional individually, but Skip must be deliberate.
-    if (step === 4) return true;
+    // Baseline: each sport is optional, but a filled row must be usable —
+    // the model would silently discard an implausible one.
+    if (step === 4) return !anyBaselineWarning;
     return true;
   });
 
   /**
-   * Post the filled baseline rows once. Rows already saved on a previous
-   * attempt are not re-sent, so retrying after a network error cannot create
-   * duplicates — the API caps at two anyway and answers 409.
+   * Post the filled baseline rows, grouped by sport. Rows already saved on a
+   * previous attempt are not re-sent, so retrying after a network error cannot
+   * create duplicates — the API caps each sport at two and answers 409.
    */
   async function saveBaselines() {
-    const rows = baselines.filter(validBaseline);
-    if (rows.length === 0) return;
+    const bySport = filledBySport;
+    if (Object.keys(bySport).length === 0) return;
 
     baselineSaving = true;
     baselineError = '';
     try {
       const existing = await api.baselineActivities.list();
-      let saved = existing?.data?.length ?? 0;
-      for (const row of rows) {
-        if (saved >= 2) break;
-        const date = new Date(row.performed_on);
-        await api.baselineActivities.create({
-          activity_type: row.activity_type,
-          distance_km: Number(row.distance_km),
-          duration_min: Number(row.duration_min),
-          elevation_gain_m: row.elevation_gain_m === '' ? 0 : Number(row.elevation_gain_m),
-          performed_on: [
-            date.getFullYear(),
-            String(date.getMonth() + 1).padStart(2, '0'),
-            String(date.getDate()).padStart(2, '0'),
-          ].join('-'),
-        });
-        saved += 1;
+      const alreadySaved = {};
+      for (const row of existing?.data ?? []) {
+        alreadySaved[row.activity_type] = (alreadySaved[row.activity_type] ?? 0) + 1;
+      }
+
+      for (const [type, rows] of Object.entries(bySport)) {
+        let saved = alreadySaved[type] ?? 0;
+        for (const row of rows) {
+          if (saved >= 2) break;
+          await api.baselineActivities.create({
+            activity_type: type,
+            distance_km: Number(row.distance_km),
+            duration_min: Number(rowMinutes(row).toFixed(2)),
+            elevation_gain_m: row.elevation_gain_m === '' ? 0 : Number(row.elevation_gain_m),
+            performed_period: row.performed_period,
+          });
+          saved += 1;
+        }
       }
     } catch (error) {
       baselineError = error.message || 'Could not save your past sessions.';
@@ -205,7 +292,7 @@
     try {
       // The past sessions go in first: they are the only part that can fail on
       // a per-row basis, and a profile saved as onboarded cannot be retried.
-      if (step === 4 || baselineComplete) {
+      if (filledSportCount > 0) {
         await saveBaselines();
       }
 
@@ -488,46 +575,85 @@
         <div class="flex items-center gap-3">
           <span class="grid h-11 w-11 place-items-center rounded-2xl bg-brand-100 text-brand-600"><Timer size={20} /></span>
           <div>
-            <h1 class="text-xl leading-tight">Two sessions you already did</h1>
-            <p class="text-xs font-semibold text-ink-400">Distance, time and climb from any past workout. This is what TRANA estimates from.</p>
+            <h1 class="text-xl leading-tight">Two sessions per sport</h1>
+            <p class="text-xs font-semibold text-ink-400">
+              Only the sports you train matter here. Fill any one of them — each sport learns its own pace.
+            </p>
           </div>
         </div>
 
         <div class="mt-4 space-y-3">
-          {#each baselines as row, index (index)}
+          {#each baselineSports as sport (sport)}
+            {@const rows = rowsFor(sport)}
             <div class="rounded-2xl border border-brand-100 bg-white p-3">
-              <div class="mb-2 flex items-center justify-between">
-                <span class="text-[11px] font-bold uppercase tracking-wide text-ink-400">Session {index + 1}</span>
-                {#if paceLabel(row)}
-                  <span class="pill num-tabular" title="Distance ÷ time — TRANA derives this, you never type it">{paceLabel(row)}</span>
-                {/if}
+              <div class="mb-2 flex items-center justify-between gap-2">
+                <span class="flex items-center gap-1.5 text-sm font-bold text-ink-700">
+                  {activityLabel(sport)}
+                  {#if rows.filter(validBaseline).length >= 2}
+                    <Check size={14} class="text-emerald-600" />
+                  {/if}
+                </span>
+                <span class="text-[11px] font-semibold text-ink-400">
+                  {rows.filter(validBaseline).length} of 2
+                </span>
               </div>
 
-              <div class="grid grid-cols-2 gap-2">
-                <label class="block">
-                  <span class="label">Activity</span>
-                  <select class="input" bind:value={row.activity_type}>
-                    {#each ACTIVITY_TYPES as type (type.id)}
-                      <option value={type.id}>{type.label}</option>
-                    {/each}
-                  </select>
-                </label>
-                <label class="block">
-                  <span class="label">Date</span>
-                  <input class="input" type="date" max={new Date().toISOString().slice(0, 10)} bind:value={row.performed_on} />
-                </label>
-                <label class="block">
-                  <span class="label">Distance ({distanceUnit(form.units)})</span>
-                  <input class="input num-tabular" type="number" min="0.1" step="0.1" placeholder="5.0" bind:value={row.distance_km} />
-                </label>
-                <label class="block">
-                  <span class="label">Time (minutes)</span>
-                  <input class="input num-tabular" type="number" min="1" step="1" placeholder="28" bind:value={row.duration_min} />
-                </label>
-                <label class="col-span-2 block">
-                  <span class="label">Elevation gain (m, optional)</span>
-                  <input class="input num-tabular" type="number" min="0" step="5" placeholder="0" bind:value={row.elevation_gain_m} />
-                </label>
+              <div class="space-y-2">
+                {#each rows as row, index (index)}
+                  <div class="rounded-xl border border-brand-100 bg-brand-50/40 p-2.5">
+                    <div class="mb-1.5 flex items-center justify-between gap-2">
+                      <span class="text-[10px] font-bold uppercase tracking-wide text-ink-400">Session {index + 1}</span>
+                      {#if rowPace(row)}
+                        <span class="pill num-tabular" title="Derived from distance and time">{rowPace(row)}</span>
+                      {/if}
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2">
+                      <label class="col-span-2 block">
+                        <span class="label">How do you remember it?</span>
+                        <select class="input" bind:value={row.mode}>
+                          <option value="pace">Distance + pace</option>
+                          <option value="time">Distance + time</option>
+                        </select>
+                      </label>
+
+                      <label class="block">
+                        <span class="label">Distance ({distanceUnit(form.units)})</span>
+                        <input class="input num-tabular" type="number" min="0.1" step="0.1" placeholder="5.0" bind:value={row.distance_km} />
+                      </label>
+
+                      {#if row.mode === 'pace'}
+                        <label class="block">
+                          <span class="label">Pace (min/{distanceUnit(form.units)})</span>
+                          <input class="input num-tabular" type="number" min="0.5" step="0.1" placeholder="6.0" bind:value={row.pace_min_per_km} />
+                        </label>
+                      {:else}
+                        <label class="block">
+                          <span class="label">Time (minutes)</span>
+                          <input class="input num-tabular" type="number" min="1" step="1" placeholder="28" bind:value={row.duration_min} />
+                        </label>
+                      {/if}
+
+                      <label class="block">
+                        <span class="label">Climb (m, optional)</span>
+                        <input class="input num-tabular" type="number" min="0" step="5" placeholder="0" bind:value={row.elevation_gain_m} />
+                      </label>
+
+                      <label class="block">
+                        <span class="label">When</span>
+                        <select class="input" bind:value={row.performed_period}>
+                          {#each PERIODS as period (period.id)}
+                            <option value={period.id}>{period.label}</option>
+                          {/each}
+                        </select>
+                      </label>
+                    </div>
+
+                    {#if speedWarning(row)}
+                      <p class="mt-1.5 text-[11px] font-semibold text-amber-700" role="alert">{speedWarning(row)}</p>
+                    {/if}
+                  </div>
+                {/each}
               </div>
             </div>
           {/each}
@@ -538,9 +664,13 @@
         {/if}
 
         <p class="mt-3 text-[11px] font-semibold leading-relaxed text-ink-400">
-          {baselineComplete
-            ? 'Both sessions are set — your first plan will use your own pace instead of a generic average.'
-            : 'Fill both for a personalised estimate. You can skip and add them later; TRANA will start from a generic pace until you do.'}
+          {#if anyBaselineWarning}
+            Fix the highlighted session and TRANA can use it — an implausible pace would otherwise be ignored.
+          {:else if filledSportCount > 0}
+            {activityLabel(Object.keys(filledBySport)[0])} will use your own pace. Other sports start from a generic average until you add past sessions.
+          {:else}
+            Fill any one sport and its first plan uses your own pace. You can add the rest later — TRANA starts from a generic pace until you do.
+          {/if}
         </p>
       {/if}
 
@@ -556,10 +686,12 @@
             Continue <ArrowRight size={16} />
           </button>
         {:else}
-          {#if step === 4 && !baselineComplete}
-            <button class="btn-ghost ml-auto" disabled={saving} onclick={() => finish()}>Skip</button>
+          {#if step === 4 && filledSportCount === 0}
+            <button class="btn-ghost ml-auto" disabled={saving || anyBaselineWarning} onclick={() => finish()}>
+              I don't remember
+            </button>
           {/if}
-          <button class="btn-primary {step === 4 && !baselineComplete ? '' : 'ml-auto'}" disabled={saving} onclick={() => finish()}>
+          <button class="btn-primary {step === 4 && filledSportCount === 0 ? '' : 'ml-auto'}" disabled={saving || anyBaselineWarning} onclick={() => finish()}>
             {#if saving}
               <LoaderCircle size={16} class="animate-spin" /> Saving…
             {:else}

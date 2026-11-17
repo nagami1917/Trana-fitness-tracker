@@ -90,6 +90,35 @@ def test_weight_does_not_distort_duration_prediction():
     assert light["minutes"] == pytest.approx(heavy["minutes"])
 
 
+def test_history_count_is_per_activity_type_and_reaches_the_client():
+    """The UI's "based on your 2 past runs" claim must come from the model.
+
+    It reports history_count, which is the number of past sessions *of the
+    planned activity type* the curve was fitted from. Two runs must not make a
+    ride look personalised, and a cold start must report zero.
+    """
+    model = DurationModel()
+    hist = [
+        {"activity_type": "run", "distance_km": 5.0, "duration_min": 30.0, "elevation_gain_m": 0},
+        {"activity_type": "run", "distance_km": 10.0, "duration_min": 65.0, "elevation_gain_m": 0},
+    ]
+
+    run = model.predict(activity_type="run", distance_km=8.0, elevation_gain_m=0.0, history=hist)
+    ride = model.predict(activity_type="ride", distance_km=20.0, elevation_gain_m=0.0, history=hist)
+    cold = model.predict(activity_type="run", distance_km=8.0, elevation_gain_m=0.0, history=[])
+
+    assert run["history_count"] == 2
+    assert ride["history_count"] == 0, "runs must not count as ride history"
+    assert cold["history_count"] == 0
+
+    # A baseline row the model would discard (implausible speed) must not be
+    # counted either — otherwise the API would promise personalisation it
+    # never used.
+    absurd = [{"activity_type": "walk", "distance_km": 5.0, "duration_min": 10.0}]
+    walk = model.predict(activity_type="walk", distance_km=3.0, elevation_gain_m=0.0, history=absurd)
+    assert walk["history_count"] == 0
+
+
 def test_training_frame_uses_strict_chronological_history():
     df = pd.DataFrame(
         [

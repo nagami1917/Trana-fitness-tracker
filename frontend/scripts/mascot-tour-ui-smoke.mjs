@@ -393,7 +393,7 @@ try {
   findButton('Continue').click();
   await waitFor(() => document.body.textContent.includes('What do you actually do?'), 'Onboarding step 4 (sports)');
   findButton('Continue').click();
-  await waitFor(() => document.body.textContent.includes('Two sessions you already did'), 'Onboarding step 5 (baseline)');
+  await waitFor(() => document.body.textContent.includes('Two sessions per sport'), 'Onboarding step 5 (baseline)');
   findButton('Start planning').click();
 
   await waitFor(() => harness.getRoute() === '/plan' && document.querySelector('[role="dialog"]'), 'Post-onboarding tour auto-opens on /plan');

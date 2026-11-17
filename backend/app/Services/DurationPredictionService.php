@@ -52,6 +52,9 @@ class DurationPredictionService
                     : null,
                 'speedKmh' => (float) ($duration['speed_kmh'] ?? 0),
                 'confidence' => (float) ($duration['confidence'] ?? 0.8),
+                // Same-activity history depth: the client labels the estimate
+                // "based on your 2 past runs" only when this is >= 2.
+                'historyCount' => (int) ($duration['history_count'] ?? 0),
                 'referenceSpeedKmh' => (float) ($duration['reference_speed_kmh'] ?? 0),
                 'basis' => $basis,
             ],

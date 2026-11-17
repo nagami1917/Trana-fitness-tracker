@@ -12,6 +12,21 @@
   const d = $derived(plan.duration);
   const f = $derived(plan.fueling);
 
+  const SPORT_LABEL = { run: 'run', ride: 'ride', walk: 'walk', hike: 'hike' };
+
+  /**
+   * Where this estimate comes from. historyCount is the model's own count of
+   * past sessions *of this activity type* — the only honest source for the
+   * claim. Never say "your sessions" when the model used none.
+   */
+  const basisLine = $derived.by(() => {
+    const sport = SPORT_LABEL[plan.activity_type] ?? 'session';
+    const count = Number(d.historyCount ?? 0);
+    if (count >= 2) return `Based on your ${count} past ${sport} sessions`;
+    if (count === 1) return `Based on 1 past ${sport} session`;
+    return `Generic ${sport} pace — add past sessions to personalise`;
+  });
+
   const tiles = $derived([
     {
       label: 'Calories',
@@ -30,10 +45,13 @@
       tone: 'from-amber-100 to-amber-200/60 text-amber-600',
     },
     {
-      label: 'Sodium',
+      // The model computes sodium only — it does not model potassium or
+      // magnesium, so the headline says "Electrolytes" but the unit line
+      // names what the number actually is.
+      label: 'Electrolytes',
       value: nf(f.sodium.totalMg),
-      unit: 'mg',
-      sub: `${nf(f.sodium.perHourMg)} /h`,
+      unit: 'mg sodium',
+      sub: `${nf(f.sodium.perHourMg)} mg/h`,
       Icon: Waves,
       tone: 'from-sky-100 to-sky-200/60 text-sky-600',
     },
@@ -66,13 +84,20 @@
         <p class="num-tabular font-display text-[40px] font-extrabold leading-none">{fmtDuration(d.minutes)}</p>
         <p class="num-tabular pb-1 text-sm font-bold text-white/90">{Math.round(d.low)}–{Math.round(d.high)} min range</p>
       </div>
+      <p class="mt-2 text-[11px] font-semibold text-white/85">{basisLine}</p>
       <div class="num-tabular mt-3 flex flex-wrap items-center gap-2 text-[11px] font-bold text-white/95">
         <span class="inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-1">
           <Gauge size={12} /> {d.paceMinPerKm ? pace(d.paceMinPerKm, $unitSystem) : speed(d.speedKmh, $unitSystem)}
         </span>
-        <span class="inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-1">
-          <Clock size={12} /> Estimate only
+        <span class="inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-1" title="How much to trust this estimate, based on how much history the model has for this sport">
+          <Clock size={12} /> {Math.round(Number(d.confidence ?? 0) * 100)}% confidence
         </span>
+        {#if Number(plan.elevation_gain_m) > 0}
+          {@const perKm = Math.round(Number(plan.elevation_gain_m) / Math.max(0.1, Number(plan.distance_km)))}
+          <span class="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1" title="This activity's climb and how steep that is per km">
+            ↑ {nf(plan.elevation_gain_m)} m · {perKm} m/km
+          </span>
+        {/if}
         <span class="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1">
           <Sparkles size={12} /> MET {f.met}
         </span>
