@@ -224,7 +224,9 @@ class BaselineActivityController extends Controller
 
         // Pace is the UI's alternative to a time entry; convert so the stored
         // row is identical whichever way the athlete chose to think about it.
-        if (isset($data['pace_min_per_km']) && ! isset($data['duration_min'])) {
+        // A partial update may send a pace without a distance (the stored
+        // distance applies), so that case is left to update(), which knows it.
+        if (isset($data['pace_min_per_km'], $data['distance_km']) && ! isset($data['duration_min'])) {
             $data['duration_min'] = round((float) $data['pace_min_per_km'] * (float) $data['distance_km'], 2);
         }
 

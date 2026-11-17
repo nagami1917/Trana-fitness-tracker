@@ -59,14 +59,16 @@ class BaselineActivityTest extends TestCase
         $this->assertSame('baseline', Activity::find($first->json('data.id'))->source);
         $this->assertTrue(Activity::find($first->json('data.id'))->is_baseline);
 
-        // A second sport is independent: walk is complete, ride is untouched.
+        // A second sport is independent: one run is still an incomplete run
+        // baseline, and the ride is tracked on its own.
         $this->postJson('/api/baseline-activities', $this->payload([
             'activity_type' => 'ride',
             'distance_km' => 20,
             'duration_min' => 50,
         ]), $this->bearer($token))
             ->assertCreated()
-            ->assertJsonPath('meta.by_type.run.complete', true)
+            ->assertJsonPath('meta.by_type.run.count', 1)
+            ->assertJsonPath('meta.by_type.run.complete', false)
             ->assertJsonPath('meta.by_type.ride.count', 1)
             ->assertJsonPath('meta.by_type.ride.complete', false);
     }
