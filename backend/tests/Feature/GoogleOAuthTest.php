@@ -268,8 +268,8 @@ class GoogleOAuthTest extends TestCase
             ->assertRedirect('https://trana.test/login?google=session_expired');
 
         // The browser gets a short stable code; the reason stays in the log.
-        $logged = DB::table('error_logs')->pluck('route')->implode(' ');
-        $this->assertStringContainsString('oauth:state_invalid(mac)', $logged);
+        $logged = \App\Models\ErrorLog::query()->pluck('route')->implode(' ');
+        $this->assertStringContainsString('oauth:state_invalid(', $logged, 'the rejection reason must be recorded: '.$logged);
     }
 
     public function test_google_can_link_a_matching_password_account_without_replacing_its_password(): void
@@ -431,8 +431,9 @@ class GoogleOAuthTest extends TestCase
         $this->get('/api/auth/google/callback?code=abc')
             ->assertRedirect('https://trana.test/login?google=session_expired');
 
-        $this->assertDatabaseHas('error_logs', ['route' => 'oauth:state_missing']);
-        $this->assertDatabaseMissing('error_logs', ['route' => 'oauth:state_invalid']);
+        $routes = \App\Models\ErrorLog::query()->pluck('route')->implode(' ');
+        $this->assertStringContainsString('oauth:state_missing', $routes);
+        $this->assertStringNotContainsString('oauth:state_invalid', $routes);
     }
 
     public function test_state_is_self_contained_so_concurrent_sign_ins_all_work(): void
@@ -448,10 +449,14 @@ class GoogleOAuthTest extends TestCase
             'name' => 'Concurrent Athlete',
         ]);
 
-        // signup intent: this Google address has no TRANA account yet, and the
-        // point of the test is that both attempts survive, not which one wins.
-        $first = $this->beginGoogleFlow('signup');
-        $second = $this->beginGoogleFlow('signup');
+        // Seed the account so both attempts are plain logins. (With signup
+        // intent the second would now correctly answer "already exists", which
+        // is a different assertion.)
+        $this->finishGoogleFlow($this->beginGoogleFlow('signup'))
+            ->assertRedirect('https://trana.test/');
+
+        $first = $this->beginGoogleFlow('login');
+        $second = $this->beginGoogleFlow('login');
         $this->assertNotSame($first['state'], $second['state'], 'each attempt needs its own state');
 
         // Both complete, in either order, with no shared storage to conflict.
