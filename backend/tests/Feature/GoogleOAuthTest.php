@@ -383,8 +383,10 @@ class GoogleOAuthTest extends TestCase
             'name' => 'Concurrent Athlete',
         ]);
 
-        $first = $this->beginGoogleFlow();
-        $second = $this->beginGoogleFlow();
+        // signup intent: this Google address has no TRANA account yet, and the
+        // point of the test is that both attempts survive, not which one wins.
+        $first = $this->beginGoogleFlow('signup');
+        $second = $this->beginGoogleFlow('signup');
         $this->assertNotSame($first['state'], $second['state'], 'each attempt needs its own state');
 
         // Both complete, in either order, with no shared storage to conflict.
