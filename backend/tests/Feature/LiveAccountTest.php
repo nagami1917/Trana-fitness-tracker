@@ -4,7 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Database\Connection;
 use Illuminate\Support\Facades\DB;
+use Mockery;
 use Illuminate\Support\Facades\Route;
 use Tests\Support\AuthTestHelpers;
 use Tests\TestCase;
@@ -31,13 +33,27 @@ class LiveAccountTest extends TestCase
     {
         $this->getJson('/api/health')->assertOk()->assertExactJson(['status' => 'ok']);
 
-        DB::shouldReceive('selectOne')->once()->with('select 1')
+        // Mock only the default connection. A bare `DB::shouldReceive()` makes
+        // the DatabaseManager itself a partial mock with no expectation for
+        // getConnections(), which any later facade call in this process then
+        // trips over with BadMethodCallException.
+        $manager = Mockery::mock(DB::getFacadeRoot())->makePartial();
+        $manager->shouldReceive('getConnections')->andReturn([]);
+        $manager->shouldReceive('connection')->andReturn(Mockery::mock(Connection::class)->makePartial());
+        $manager->shouldReceive('selectOne')->once()->with('select 1')
             ->andThrow(new \RuntimeException('private-database-detail'));
+        DB::swap($manager);
 
-        $this->getJson('/api/health')
-            ->assertStatus(503)
-            ->assertJsonPath('status', 'unavailable')
-            ->assertDontSee('private-database-detail');
+        try {
+            $this->getJson('/api/health')
+                ->assertStatus(503)
+                ->assertJsonPath('status', 'unavailable')
+                ->assertDontSee('private-database-detail');
+        } finally {
+            // Restore the real manager for every test that runs afterwards.
+            DB::clearResolvedInstances();
+            DB::swap(app('db'));
+        }
     }
 
     public function test_internal_errors_are_generic_even_with_debug_enabled(): void
