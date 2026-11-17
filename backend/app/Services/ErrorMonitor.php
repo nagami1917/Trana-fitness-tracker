@@ -116,6 +116,37 @@ final class ErrorMonitor
     }
 
     /**
+     * Record a Google sign-in failure.
+     *
+     * These used to be a bare Log::warning, which on Vercel is ephemeral and
+     * unreadable in practice — a broken OAuth round trip left no trace at all,
+     * so "sign-in did nothing" could not be diagnosed after the fact. The
+     * exception message is deliberately not stored: it can carry provider
+     * payloads. The stage plus the exception class is enough to tell
+     * redirect-configuration faults from network ones.
+     */
+    public static function recordOAuthFailure(string $stage, ?Throwable $e = null): void
+    {
+        self::guard(function () use ($stage, $e) {
+            $class = $e ? get_class($e) : 'OAuthFailure';
+            $message = 'Google sign-in failed at stage: '.self::clip($stage, 60);
+
+            self::persist([
+                'kind' => 'api',
+                'level' => 'error',
+                'fingerprint' => self::fingerprint('api', $class, $message, $stage),
+                'message' => $message,
+                'exception_class' => self::clip($class, 120),
+                'route' => 'oauth:'.$stage,
+                'method' => 'GET',
+                'user_id' => null,
+                'context' => ['stage' => $stage],
+                'trace' => null,
+            ]);
+        });
+    }
+
+    /**
      * Upsert by (kind, fingerprint): repeat hits bump the counter.
      * A unique-key race (two first occurrences at once) falls back to a
      * counter update instead of failing the caller's request.
