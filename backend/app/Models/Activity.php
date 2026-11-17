@@ -14,6 +14,9 @@ class Activity extends Model
 
     public const TYPES = ['run', 'ride', 'walk', 'hike'];
 
+    /** Source marker for a past session entered once during onboarding. */
+    public const SOURCE_BASELINE = 'baseline';
+
     protected $fillable = [
         'user_id',
         'gear_id',
@@ -31,6 +34,7 @@ class Activity extends Model
         'route_geojson',
         'notes',
         'source',
+        'is_baseline',
     ];
 
     protected function casts(): array
@@ -48,6 +52,7 @@ class Activity extends Model
             'average_speed' => 'float',
             'average_pace' => 'float',
             'route' => 'array',
+            'is_baseline' => 'boolean',
             'route_geojson' => 'array',
         ];
     }

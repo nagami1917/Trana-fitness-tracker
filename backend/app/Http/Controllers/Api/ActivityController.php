@@ -33,7 +33,10 @@ class ActivityController extends Controller
             'page' => ['nullable', 'integer', 'min:1'],
         ]);
 
+        // Baseline rows are onboarding input for the model, not sessions the
+        // athlete logged here. Showing them would invent workouts.
         $activities = $request->user()->activities()
+            ->where('is_baseline', false)
             ->select([
                 'id',
                 'user_id',

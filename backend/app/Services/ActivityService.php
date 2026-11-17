@@ -73,6 +73,7 @@ class ActivityService
             'route_geojson' => $validated['route_geojson'] ?? null,
             'notes' => $validated['notes'] ?? null,
             'source' => $validated['source'] ?? 'manual',
+            'is_baseline' => (bool) ($validated['is_baseline'] ?? false),
         ]);
 
         if ($activity->gear_id) {
@@ -179,7 +180,9 @@ class ActivityService
             return;
         }
 
-        $count = $user->activities()->count();
+        // Baseline rows do not count toward earned experience: two remembered
+        // sessions must not promote a beginner to level 2.
+        $count = $user->activities()->where('is_baseline', false)->count();
         $level = match (true) {
             $count >= 40 => 5,
             $count >= 24 => 4,

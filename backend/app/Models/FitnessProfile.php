@@ -39,6 +39,7 @@ class FitnessProfile extends Model
         'typical_temperature_c',
         'city',
         'units',
+        'preferred_activities',
         'resting_hr',
         'max_hr',
         'hr_zones',
@@ -57,6 +58,7 @@ class FitnessProfile extends Model
             'resting_hr' => 'integer',
             'max_hr' => 'integer',
             'hr_zones' => 'array',
+            'preferred_activities' => 'array',
             'onboarded_at' => 'datetime',
         ];
     }

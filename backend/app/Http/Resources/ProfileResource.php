@@ -37,6 +37,8 @@ class ProfileResource extends JsonResource
             'experience_level' => $profile->fitnessLevel(),
             'typical_temperature_c' => (float) $profile->typical_temperature_c,
             'units' => $profile->units,
+            // Null = never asked (older accounts); [] = trains everything.
+            'preferred_activities' => $profile->preferred_activities,
             'resting_hr' => $profile->resting_hr,
             'max_hr' => $profile->max_hr,
             'hr_zones' => $profile->hr_zones,

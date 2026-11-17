@@ -268,6 +268,15 @@ export const api = {
     exportCsv: () => downloadFile('/activities/export', 'trana-activities.csv'),
   },
 
+  // The one-time past-session entry from onboarding. Capped at two rows by the
+  // API; pace/speed come back derived so the UI never asks for them.
+  baselineActivities: {
+    list: () => request('/baseline-activities'),
+    create: (payload) => request('/baseline-activities', { method: 'POST', body: payload }),
+    update: (id, payload) => request(`/baseline-activities/${id}`, { method: 'PATCH', body: payload }),
+    remove: (id) => request(`/baseline-activities/${id}`, { method: 'DELETE' }),
+  },
+
   // Data rights: export lives under activities; erasure removes everything.
   account: {
     requestDeleteCode: () => request('/account/delete-code', { method: 'POST' }),

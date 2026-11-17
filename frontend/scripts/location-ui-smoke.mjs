@@ -210,6 +210,10 @@ try {
   await new Promise((resolve) => setTimeout(resolve, 0));
   await detectForPage('#onboarding-city', 'Onboarding City');
   assert.equal(patches.length, 2);
+  // Onboarding is now 5 steps (You → Training → Sweat → Sports → Baseline).
+  // Two clicks reach the last step, then the final button saves.
+  click(button('Continue'));
+  click(button('Continue'));
   click(button('Continue'));
   click(button('Continue'));
   click(button('Start planning'));

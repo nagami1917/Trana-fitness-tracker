@@ -12,7 +12,13 @@ class AnalyticsService
 {
     public function summary(User $user): array
     {
-        $activities = $user->activities()->orderByDesc('started_at')->get();
+        // Baseline sessions exist only to seed the duration model; counting
+        // them would inflate distance, calories and streaks with workouts the
+        // athlete never logged in the app.
+        $activities = $user->activities()
+            ->where('is_baseline', false)
+            ->orderByDesc('started_at')
+            ->get();
         $today = $activities->filter(fn (Activity $a) => $a->started_at?->isToday());
         $week = $activities->filter(fn (Activity $a) => $a->started_at?->greaterThanOrEqualTo(Carbon::now()->startOfWeek()));
 
