@@ -55,21 +55,32 @@ class GoogleOAuthTest extends TestCase
         $this->assertSame('select_account', $query['prompt'] ?? null);
         $this->assertDoesNotMatchRegularExpression('/test-google-client-secret/', $location);
         $this->assertIsString($query['state'] ?? null);
-        $this->assertSame(64, strlen($query['state']));
-        $this->assertInstanceOf(Cookie::class, $cookie);
-        $this->assertSame('/api/auth/google/callback', $cookie->getPath());
-        $this->assertTrue($cookie->isHttpOnly());
 
-        $statePayload = json_decode(Crypt::decryptString($cookie->getValue()), true, flags: JSON_THROW_ON_ERROR);
-        $this->assertIsArray($statePayload);
-        $this->assertSame($query['state'], $statePayload['state'] ?? null);
-        $this->assertSame($intent ?? 'login', $statePayload['intent'] ?? null);
+        // The state is self-contained and signed: v1.<payload>.<hmac>. No
+        // cookie is set, so a second tab or a retry cannot invalidate it.
+        $this->assertNull($cookie, 'the OAuth state must not depend on a cookie');
+        $statePayload = $this->decodeState($query['state']);
+        $this->assertSame($intent ?? 'login', $statePayload['i'] ?? null);
         $this->assertSame(
             $query['code_challenge'],
-            rtrim(strtr(base64_encode(hash('sha256', $statePayload['verifier'], true)), '+/', '-_'), '='),
+            rtrim(strtr(base64_encode(hash('sha256', $statePayload['v'], true)), '+/', '-_'), '='),
         );
 
-        return ['state' => $query['state'], 'cookie' => $cookie->getValue()];
+        return ['state' => $query['state']];
+    }
+
+    /** @return array<string, mixed> Verified state payload, or fails the test. */
+    private function decodeState(string $state): array
+    {
+        $parts = explode('.', $state);
+        $this->assertCount(3, $parts, 'state must be v1.<payload>.<mac>');
+        [$version, $encoded, $mac] = $parts;
+        $this->assertSame('v1', $version);
+
+        $key = hash_hmac('sha256', 'trana-google-oauth-state', (string) config('app.key'), true);
+        $this->assertSame(hash_hmac('sha256', $version.'.'.$encoded, $key), $mac, 'state MAC must verify');
+
+        return json_decode(base64_decode(strtr($encoded, '-_', '+/')), true, flags: JSON_THROW_ON_ERROR);
     }
 
     /** @param array<string, mixed> $googleProfile */
@@ -85,17 +96,13 @@ class GoogleOAuthTest extends TestCase
         ]);
     }
 
-    /** @param array{state: string, cookie: string} $flow */
+    /** @param array{state: string} $flow */
     private function finishGoogleFlow(array $flow, ?string $state = null)
     {
-        // The cookie value is already encrypted by the OAuth state helper. API
-        // routes do not run Laravel's EncryptCookies middleware, so prevent the
-        // HTTP test harness from adding its own test-cookie encryption prefix.
-        return $this->withUnencryptedCookie(self::STATE_COOKIE, $flow['cookie'])
-            ->get('/api/auth/google/callback?'.http_build_query([
-                'code' => 'test-authorization-code',
-                'state' => $state ?? $flow['state'],
-            ]));
+        return $this->get('/api/auth/google/callback?'.http_build_query([
+            'code' => 'test-authorization-code',
+            'state' => $state ?? $flow['state'],
+        ]));
     }
 
     private function responseCookie($response, string $name): ?Cookie
@@ -349,91 +356,90 @@ class GoogleOAuthTest extends TestCase
         $this->assertSame(1, \App\Models\ErrorLog::query()->where('route', 'oauth:state_invalid')->count());
     }
 
-    public function test_a_missing_state_cookie_is_distinguished_from_an_invalid_one(): void
+    public function test_a_missing_state_is_distinguished_from_an_invalid_one(): void
     {
-        // "Something blocked me" and "the cookie was tampered with" produce the
-        // same user-visible message but need completely different fixes.
+        // "Google sent us nothing" and "what it sent does not verify" produce
+        // the same user-visible message but need completely different fixes.
         $this->configureGoogle();
         Http::fake();
 
-        $this->get('/api/auth/google/callback?code=abc&state='.str_repeat('a', 64))
+        $this->get('/api/auth/google/callback?code=abc')
             ->assertRedirect('https://trana.test/login?google=failed');
 
-        $this->assertDatabaseHas('error_logs', ['route' => 'oauth:state_cookie_missing']);
+        $this->assertDatabaseHas('error_logs', ['route' => 'oauth:state_missing']);
         $this->assertDatabaseMissing('error_logs', ['route' => 'oauth:state_invalid']);
     }
 
-    public function test_state_cookie_survives_the_cross_site_redirect_to_google_and_back(): void
+    public function test_state_is_self_contained_so_concurrent_sign_ins_all_work(): void
     {
-        // Deployed TRANA runs the SPA (trana-web) and API (trana-api) on
-        // separate sites. The browser therefore reaches the callback through a
-        // cross-site redirect chain, where Chrome drops SameSite=Lax cookies:
-        // the callback would find no state and bounce to ?google=failed. The
-        // state cookie must follow the session cookie policy instead.
+        // The failure this replaces: two tabs each started a sign-in, the
+        // second overwrote the single state cookie, and the first callback
+        // then failed validation with "sign-in could not be completed".
         $this->configureGoogle();
-        $previousEnvironment = app()->environment();
-        $previousSameSite = config('services.trana.cookie_same_site');
-        app()->instance('env', 'production');
-        config(['services.trana.cookie_same_site' => null]);
+        $this->fakeGoogleProfile([
+            'sub' => 'google-sub-concurrent',
+            'email' => 'concurrent@gmail.com',
+            'email_verified' => true,
+            'name' => 'Concurrent Athlete',
+        ]);
 
-        try {
-            $response = $this->get('/api/auth/google/redirect')->assertRedirect();
-            $cookie = $this->responseCookie($response, self::STATE_COOKIE);
+        $first = $this->beginGoogleFlow();
+        $second = $this->beginGoogleFlow();
+        $this->assertNotSame($first['state'], $second['state'], 'each attempt needs its own state');
 
-            $this->assertInstanceOf(Cookie::class, $cookie);
-            $this->assertTrue($cookie->isSecure());
-            $this->assertTrue($cookie->isHttpOnly());
-            $this->assertSame('none', $cookie->getSameSite());
-        } finally {
-            app()->instance('env', $previousEnvironment);
-            config(['services.trana.cookie_same_site' => $previousSameSite]);
-        }
+        // Both complete, in either order, with no shared storage to conflict.
+        $this->finishGoogleFlow($second)->assertRedirect('https://trana.test/');
+        $this->finishGoogleFlow($first)->assertRedirect('https://trana.test/');
     }
 
-    public function test_state_cookie_stays_lax_where_https_is_unavailable(): void
+    public function test_a_tampered_state_is_rejected_without_contacting_google(): void
     {
-        // Local development is plain HTTP: a Secure SameSite=None cookie would
-        // be rejected outright, so the local policy must remain Lax.
         $this->configureGoogle();
-        $previousSameSite = config('services.trana.cookie_same_site');
-        config(['services.trana.cookie_same_site' => null]);
+        Http::fake();
+        $flow = $this->beginGoogleFlow();
 
-        try {
-            $response = $this->get('/api/auth/google/redirect')->assertRedirect();
-            $cookie = $this->responseCookie($response, self::STATE_COOKIE);
+        // Flip one payload character but keep the MAC: must not verify.
+        $parts = explode('.', $flow['state']);
+        $tampered = $parts[0].'.'.$parts[1].'x'.$parts[2];
 
-            $this->assertInstanceOf(Cookie::class, $cookie);
-            $this->assertSame('lax', $cookie->getSameSite());
-        } finally {
-            config(['services.trana.cookie_same_site' => $previousSameSite]);
-        }
+        $this->finishGoogleFlow($flow, $tampered)
+            ->assertRedirect('https://trana.test/login?google=failed');
+
+        Http::assertNothingSent();
+        $this->assertSame(0, User::query()->count());
     }
 
-    public function test_failed_callback_clears_the_state_cookie_with_the_same_attributes(): void
+    public function test_an_expired_state_is_rejected(): void
     {
-        // A clearing cookie must repeat the attributes used when it was set,
-        // otherwise the browser keeps the stale state cookie around.
         $this->configureGoogle();
-        $previousEnvironment = app()->environment();
-        $previousSameSite = config('services.trana.cookie_same_site');
-        app()->instance('env', 'production');
-        config(['services.trana.cookie_same_site' => null]);
+        Http::fake();
+        $flow = $this->beginGoogleFlow();
 
-        try {
-            $flow = $this->beginGoogleFlow();
-            $response = $this->finishGoogleFlow($flow, 'attacker-controlled-state')
-                ->assertRedirect('https://trana.test/login?google=failed');
+        // Re-encode the payload with an old timestamp, keeping a valid MAC so
+        // the clock check (not the signature) is what rejects it.
+        $parts = explode('.', $flow['state']);
+        $payload = json_decode(base64_decode(strtr($parts[1], '-_', '+/')), true);
+        $payload['t'] = time() - 3600;
+        $encoded = rtrim(strtr(base64_encode(json_encode($payload)), '+/', '-_'), '=');
+        $key = hash_hmac('sha256', 'trana-google-oauth-state', (string) config('app.key'), true);
+        $stale = 'v1.'.$encoded.'.'.hash_hmac('sha256', 'v1.'.$encoded, $key);
 
-            $cookie = $this->responseCookie($response, self::STATE_COOKIE);
-            $this->assertInstanceOf(Cookie::class, $cookie);
-            $this->assertSame('', $cookie->getValue());
-            $this->assertTrue($cookie->isSecure());
-            $this->assertSame('none', $cookie->getSameSite());
-            $this->assertSame('/api/auth/google/callback', $cookie->getPath());
-        } finally {
-            app()->instance('env', $previousEnvironment);
-            config(['services.trana.cookie_same_site' => $previousSameSite]);
-        }
+        $this->finishGoogleFlow($flow, $stale)
+            ->assertRedirect('https://trana.test/login?google=failed');
+
+        Http::assertNothingSent();
+    }
+
+    public function test_the_state_is_never_left_in_the_browser_as_a_cookie(): void
+    {
+        $this->configureGoogle();
+
+        $response = $this->get('/api/auth/google/redirect')->assertRedirect();
+
+        $this->assertNull(
+            $this->responseCookie($response, self::STATE_COOKIE),
+            'a state cookie can only hold one in-flight sign-in',
+        );
     }
 
     public function test_missing_google_credentials_leave_the_password_flow_available(): void
