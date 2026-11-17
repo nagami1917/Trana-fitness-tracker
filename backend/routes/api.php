@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\AdminErrorLogController;
 use App\Http\Controllers\Api\AdminModelController;
 use App\Http\Controllers\Api\AdminUserController;
 use App\Http\Controllers\Api\ActivityPointController;
+use App\Http\Controllers\Api\BaselineActivityController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DailySessionController;
 use App\Http\Controllers\Api\ErrorReportController;
@@ -96,6 +97,13 @@ Route::middleware(['auth:sanctum', 'ensure.active', 'ensure.verified'])->group(f
     Route::match(['put', 'patch'], '/activities/{activity}', [ActivityController::class, 'update'])->middleware('throttle:writes');
     Route::delete('/activities/{activity}', [ActivityController::class, 'destroy'])->middleware('throttle:writes');
     Route::post('/activities/{activity}/points', [ActivityPointController::class, 'store'])->middleware('throttle:writes');
+
+    // One-time past-session entry used by onboarding. Capped at two rows in the
+    // controller so it can never become a bulk-import backdoor.
+    Route::get('/baseline-activities', [BaselineActivityController::class, 'index']);
+    Route::post('/baseline-activities', [BaselineActivityController::class, 'store'])->middleware('throttle:writes');
+    Route::match(['put', 'patch'], '/baseline-activities/{activity}', [BaselineActivityController::class, 'update'])->middleware('throttle:writes');
+    Route::delete('/baseline-activities/{activity}', [BaselineActivityController::class, 'destroy'])->middleware('throttle:writes');
 
     Route::apiResource('routes', RouteController::class)->only(['index', 'show']);
     Route::post('/routes', [RouteController::class, 'store'])->middleware('throttle:writes');

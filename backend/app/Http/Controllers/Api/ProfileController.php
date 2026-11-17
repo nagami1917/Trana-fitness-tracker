@@ -34,7 +34,7 @@ class ProfileController extends Controller
     private const PROFILE_FIELDS = [
         'weight_kg', 'height_cm', 'birth_year', 'sex', 'sweat_profile',
         'experience_level', 'activity_experience', 'typical_temperature_c',
-        'city', 'units', 'resting_hr', 'max_hr', 'hr_zones',
+        'city', 'units', 'preferred_activities', 'resting_hr', 'max_hr', 'hr_zones',
     ];
 
     public function __construct(private readonly ActivityService $activities)
@@ -184,6 +184,16 @@ class ProfileController extends Controller
 
         if (array_key_exists('activity_experience', $fields) && $fields['activity_experience'] !== null) {
             $fields['activity_experience'] = round((float) $fields['activity_experience'], 1);
+        }
+
+        if (array_key_exists('preferred_activities', $fields) && is_array($fields['preferred_activities'])) {
+            // Store in the canonical Activity::TYPES order so equality checks
+            // and diffing do not depend on the order the client sent.
+            $chosen = array_values(array_unique($fields['preferred_activities']));
+            $fields['preferred_activities'] = array_values(array_filter(
+                \App\Models\Activity::TYPES,
+                fn (string $type) => in_array($type, $chosen, true),
+            ));
         }
 
         return $fields;
