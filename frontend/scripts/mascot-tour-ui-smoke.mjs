@@ -389,6 +389,11 @@ try {
   await waitFor(() => document.body.textContent.includes('How do you train?'), 'Onboarding step 2');
   findButton('Continue').click();
   await waitFor(() => document.body.textContent.includes('How much do you sweat?'), 'Onboarding step 3');
+  // Steps 4 (Sports) and 5 (Baseline) were added for baseline seeding.
+  findButton('Continue').click();
+  await waitFor(() => document.body.textContent.includes('What do you actually do?'), 'Onboarding step 4 (sports)');
+  findButton('Continue').click();
+  await waitFor(() => document.body.textContent.includes('Two sessions you already did'), 'Onboarding step 5 (baseline)');
   findButton('Start planning').click();
 
   await waitFor(() => harness.getRoute() === '/plan' && document.querySelector('[role="dialog"]'), 'Post-onboarding tour auto-opens on /plan');
