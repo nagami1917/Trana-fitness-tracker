@@ -222,13 +222,24 @@ class GoogleOAuthTest extends TestCase
             'name' => 'Already There',
         ]);
 
-        $this->finishGoogleFlow($this->beginGoogleFlow('signup'))->assertRedirect('https://trana.test/');
+        // The case that actually confuses people: an account created with a
+        // password earlier, then "Create account" via Google with the same
+        // address. The account exists; the button was just the wrong one.
+        User::create([
+            'name' => 'Already There',
+            'username' => 'already_there',
+            'email' => 'already.there@example.com',
+            'password' => 'Old-password-123',
+        ]);
 
-        // Same address, signup intent again.
-        $second = $this->finishGoogleFlow($this->beginGoogleFlow('signup'));
+        $this->finishGoogleFlow($this->beginGoogleFlow('signup'))
+            ->assertRedirect('https://trana.test/login?google=account_exists');
 
-        $second->assertRedirect('https://trana.test/login?google=account_exists');
         $this->assertSame(1, User::query()->count(), 'a duplicate signup must not create a second account');
+        $this->assertNull(
+            User::query()->where('email', 'already.there@example.com')->value('google_sub'),
+            'reporting the conflict must not link or create anything',
+        );
     }
 
     public function test_logging_in_with_an_unknown_google_account_still_says_not_found(): void
@@ -257,7 +268,7 @@ class GoogleOAuthTest extends TestCase
             ->assertRedirect('https://trana.test/login?google=session_expired');
 
         // The browser gets a short stable code; the reason stays in the log.
-        $logged = (string) DB::table('error_logs')->where('route', 'like', 'oauth:state_invalid%')->value('route');
+        $logged = DB::table('error_logs')->pluck('route')->implode(' ');
         $this->assertStringContainsString('oauth:state_invalid(mac)', $logged);
     }
 
@@ -336,8 +347,10 @@ class GoogleOAuthTest extends TestCase
         $existing->forceFill(['google_sub' => 'google-sub-already-linked'])->save();
         $flow = $this->beginGoogleFlow();
 
+        // A conflict is not a state problem: the round trip was fine, the
+        // identities just disagree. Saying so is the whole point.
         $response = $this->finishGoogleFlow($flow)
-            ->assertRedirect('https://trana.test/login?google=failed');
+            ->assertRedirect('https://trana.test/login?google=identity_conflict');
 
         $this->assertSame('google-sub-already-linked', $existing->fresh()->google_sub);
         $this->assertSame(0, $existing->fresh()->tokens()->count());
@@ -380,7 +393,7 @@ class GoogleOAuthTest extends TestCase
         $flow = $this->beginGoogleFlow();
 
         $this->finishGoogleFlow($flow, 'attacker-controlled-state')
-            ->assertRedirect('https://trana.test/login?google=failed');
+            ->assertRedirect('https://trana.test/login?google=session_expired');
 
         Http::assertNothingSent();
         $this->assertSame(0, User::query()->count());
@@ -395,7 +408,7 @@ class GoogleOAuthTest extends TestCase
         $flow = $this->beginGoogleFlow();
 
         $this->finishGoogleFlow($flow, 'attacker-controlled-state')
-            ->assertRedirect('https://trana.test/login?google=failed');
+            ->assertRedirect('https://trana.test/login?google=session_expired');
 
         $log = \App\Models\ErrorLog::query()->where('route', 'oauth:state_invalid')->first();
         $this->assertNotNull($log, 'a rejected OAuth state must be recorded');
@@ -404,7 +417,7 @@ class GoogleOAuthTest extends TestCase
 
         // Repeats group onto one row rather than flooding the table.
         $this->finishGoogleFlow($flow, 'attacker-controlled-state')
-            ->assertRedirect('https://trana.test/login?google=failed');
+            ->assertRedirect('https://trana.test/login?google=session_expired');
         $this->assertSame(1, \App\Models\ErrorLog::query()->where('route', 'oauth:state_invalid')->count());
     }
 
@@ -416,7 +429,7 @@ class GoogleOAuthTest extends TestCase
         Http::fake();
 
         $this->get('/api/auth/google/callback?code=abc')
-            ->assertRedirect('https://trana.test/login?google=failed');
+            ->assertRedirect('https://trana.test/login?google=session_expired');
 
         $this->assertDatabaseHas('error_logs', ['route' => 'oauth:state_missing']);
         $this->assertDatabaseMissing('error_logs', ['route' => 'oauth:state_invalid']);
@@ -457,7 +470,7 @@ class GoogleOAuthTest extends TestCase
         $tampered = $parts[0].'.'.$parts[1].'x'.$parts[2];
 
         $this->finishGoogleFlow($flow, $tampered)
-            ->assertRedirect('https://trana.test/login?google=failed');
+            ->assertRedirect('https://trana.test/login?google=session_expired');
 
         Http::assertNothingSent();
         $this->assertSame(0, User::query()->count());
@@ -479,7 +492,7 @@ class GoogleOAuthTest extends TestCase
         $stale = 'v1.'.$encoded.'.'.hash_hmac('sha256', 'v1.'.$encoded, $key);
 
         $this->finishGoogleFlow($flow, $stale)
-            ->assertRedirect('https://trana.test/login?google=failed');
+            ->assertRedirect('https://trana.test/login?google=session_expired');
 
         Http::assertNothingSent();
     }
