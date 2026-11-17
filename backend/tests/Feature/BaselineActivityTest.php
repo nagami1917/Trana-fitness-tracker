@@ -44,10 +44,13 @@ class BaselineActivityTest extends TestCase
     {
         $token = $this->registerAthlete();
 
-        $first = $this->postJson('/api/baseline-activities', $this->payload(), $this->bearer($token))
-            ->assertCreated()
-            ->assertJsonPath('data.pace_min_per_km', 6.0)
-            ->assertJsonPath('data.speed_kmh', 10.0)
+        $first = $this->postJson('/api/baseline-activities', $this->payload(), $this->bearer($token));
+
+        // Surface the validator's own words if this ever regresses.
+        $this->assertSame(201, $first->status(), 'baseline create failed: '.$first->getContent());
+
+        $first->assertJsonPath('data.pace_min_per_km', 6)
+            ->assertJsonPath('data.speed_kmh', 10)
             ->assertJsonPath('meta.remaining', 1)
             ->assertJsonPath('meta.complete', false);
 

@@ -53,7 +53,9 @@ trait MapsProfileFields
             // Null clears the answer; an empty list is allowed and means the
             // athlete trains everything, so the two are deliberately distinct.
             'preferred_activities' => ['sometimes', 'nullable', 'array', 'max:4'],
-            'preferred_activities.*' => ['string', 'distinct', 'in:run,ride,walk,hike'],
+            // No `distinct`: a client may repeat a value, and profileFields()
+            // de-duplicates and re-orders it into canonical TYPES order.
+            'preferred_activities.*' => ['string', 'in:run,ride,walk,hike'],
             'resting_hr' => ['sometimes', 'nullable', 'integer', 'min:30', 'max:120'],
             'max_hr' => ['sometimes', 'nullable', 'integer', 'min:100', 'max:240'],
             'hr_zones' => ['sometimes', 'nullable', 'array', 'max:5'],
