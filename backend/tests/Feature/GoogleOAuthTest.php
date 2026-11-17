@@ -209,6 +209,58 @@ class GoogleOAuthTest extends TestCase
         $this->assertInstanceOf(Cookie::class, $this->responseCookie($loginResponse, 'trana_session'));
     }
 
+    public function test_signing_up_with_an_existing_google_account_says_it_already_exists(): void
+    {
+        // Signing up twice is a normal mistake, not a fault. It must not read
+        // as the generic "could not be completed", because that leaves the
+        // athlete guessing whether their account exists at all.
+        $this->configureGoogle();
+        $this->fakeGoogleProfile([
+            'sub' => 'google-sub-already-there',
+            'email' => 'already.there@example.com',
+            'email_verified' => true,
+            'name' => 'Already There',
+        ]);
+
+        $this->finishGoogleFlow($this->beginGoogleFlow('signup'))->assertRedirect('https://trana.test/');
+
+        // Same address, signup intent again.
+        $second = $this->finishGoogleFlow($this->beginGoogleFlow('signup'));
+
+        $second->assertRedirect('https://trana.test/login?google=account_exists');
+        $this->assertSame(1, User::query()->count(), 'a duplicate signup must not create a second account');
+    }
+
+    public function test_logging_in_with_an_unknown_google_account_still_says_not_found(): void
+    {
+        // The mirror image: login intent must never silently create anything.
+        $this->configureGoogle();
+        $this->fakeGoogleProfile([
+            'sub' => 'google-sub-stranger',
+            'email' => 'stranger@example.com',
+            'email_verified' => true,
+            'name' => 'Stranger',
+        ]);
+
+        $this->finishGoogleFlow($this->beginGoogleFlow('login'))
+            ->assertRedirect('https://trana.test/login?google=account_not_found');
+
+        $this->assertSame(0, User::query()->count());
+    }
+
+    public function test_a_rejected_state_reports_an_expired_session_not_a_generic_failure(): void
+    {
+        $this->configureGoogle();
+        Http::fake();
+
+        $this->get('/api/auth/google/callback?code=abc&state=v1.bogus.mac')
+            ->assertRedirect('https://trana.test/login?google=session_expired');
+
+        // The browser gets a short stable code; the reason stays in the log.
+        $logged = (string) DB::table('error_logs')->where('route', 'like', 'oauth:state_invalid%')->value('route');
+        $this->assertStringContainsString('oauth:state_invalid(mac)', $logged);
+    }
+
     public function test_google_can_link_a_matching_password_account_without_replacing_its_password(): void
     {
         $this->configureGoogle();

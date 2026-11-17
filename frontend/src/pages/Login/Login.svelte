@@ -27,11 +27,20 @@
 
   $: if (mode !== 'verify' && mode !== 'reset') clearInterval(timer);
 
+  /** Set when an error has an obvious next step, e.g. "log in instead". */
+  let errorAction = null;
+
   onMount(() => {
     if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
       const status = url.searchParams.get('google');
+      // Each backend outcome gets its own sentence. One catch-all message made
+      // "wrong button", "expired session" and "Google is down" look identical.
       const messages = {
+        account_exists: 'An account already exists for this Google address. Log in instead — your TRANA data is already there.',
+        session_expired: 'That sign-in link expired or was altered before it reached us. Start again.',
+        provider_error: 'Google could not confirm the sign-in just now. Try again in a moment.',
+        identity_conflict: 'That Google account is already linked to a different TRANA account. Sign in with the account you used before.',
         failed: 'Google sign-in could not be completed. Please try again or use your password.',
         cancelled: 'Google sign-in was cancelled.',
         not_configured: 'Google sign-in is not configured yet. Please use your password for now.',
@@ -41,6 +50,9 @@
       };
       if (status) {
         error = messages[status] || messages.failed;
+        // "Already exists" is not a failure: offer the way in rather than
+        // leaving the athlete to work out which tab they needed.
+        if (status === 'account_exists') errorAction = 'login';
         url.searchParams.delete('google');
         window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
       }
@@ -436,7 +448,18 @@
         <button class="text-button forgot" type="button" on:click={() => { mode = 'forgot'; email = identifier.includes('@') ? identifier : ''; error = ''; }}>Forgot password?</button>
       {/if}
     {/if}
-    {#if error}<div class:success-message={error.startsWith('If ')} class="form-message" role="alert">{error}</div>{/if}
+    {#if error}
+      <div class:success-message={error.startsWith('If ')} class="form-message" role="alert">
+        {error}
+        {#if errorAction === 'login'}
+          <button
+            type="button"
+            class="message-action"
+            on:click={() => { errorAction = null; mode = 'login'; error = ''; fieldErrors = {}; }}
+          >Log in instead</button>
+        {/if}
+      </div>
+    {/if}
     <p class="terms">By continuing, you agree to use TRANA responsibly and keep your account secure.</p>
   </div>
 </section>
@@ -450,7 +473,8 @@
   .brand{display:inline-block;margin-bottom:32px;color:#14251e;text-decoration:none;font-weight:900;font-size:24px;letter-spacing:.08em}.brand span{color:#23a26d}
   .eyebrow{color:#16845a;font-size:11px;font-weight:800;letter-spacing:.14em}h1{margin:8px 0;font-size:30px;letter-spacing:-.04em}.subtitle{margin:0 0 24px;color:#68766f;font-size:14px;line-height:1.55}.subtitle strong{color:#24382e;overflow-wrap:anywhere}
   .tabs{display:grid;grid-template-columns:1fr 1fr;padding:4px;margin:0 0 18px;background:#f0f4f1;border-radius:12px}.tabs button{min-height:44px;border:0;background:transparent;padding:11px;color:#65736b;font-weight:700;border-radius:9px;cursor:pointer}.tabs button.active{background:#fff;color:#14754e;box-shadow:0 2px 8px #193b2b12}
-  .google-signin{display:grid;gap:8px}.google-button{display:flex;align-items:center;justify-content:center;gap:12px;min-height:48px;box-sizing:border-box;padding:10px 16px;border:1px solid #d8dfdc;border-radius:10px;background:#fff;color:#26352d;text-decoration:none;font-size:14px;font-weight:750;box-shadow:0 1px 2px #13251b0d;transition:background .15s,border-color .15s,box-shadow .15s}.google-button:hover{background:#f9fbfa;border-color:#aebbb4;box-shadow:0 2px 7px #13251b12}.google-button:focus-visible{outline:3px solid #27a57255;outline-offset:2px}.google-button svg{width:20px;height:20px;flex:none}.google-signin p{margin:0;color:#7a8880;font-size:11px;text-align:center}.auth-divider{display:flex;align-items:center;gap:12px;margin:18px 0 10px;color:#89958d;font-size:10px}.auth-divider::before,.auth-divider::after{content:"";height:1px;flex:1;background:#e7ede9}.verify-google{margin-top:18px;padding-top:16px;border-top:1px solid #e7ede9}.verify-google-hint{max-width:34ch;justify-self:center;color:#7a8880;font-size:11px;line-height:1.5;text-align:center}
+  .form-message .message-action{margin-left:6px;padding:0;border:0;background:none;color:inherit;font:inherit;font-weight:800;text-decoration:underline;cursor:pointer}
+.google-signin{display:grid;gap:8px}.google-button{display:flex;align-items:center;justify-content:center;gap:12px;min-height:48px;box-sizing:border-box;padding:10px 16px;border:1px solid #d8dfdc;border-radius:10px;background:#fff;color:#26352d;text-decoration:none;font-size:14px;font-weight:750;box-shadow:0 1px 2px #13251b0d;transition:background .15s,border-color .15s,box-shadow .15s}.google-button:hover{background:#f9fbfa;border-color:#aebbb4;box-shadow:0 2px 7px #13251b12}.google-button:focus-visible{outline:3px solid #27a57255;outline-offset:2px}.google-button svg{width:20px;height:20px;flex:none}.google-signin p{margin:0;color:#7a8880;font-size:11px;text-align:center}.auth-divider{display:flex;align-items:center;gap:12px;margin:18px 0 10px;color:#89958d;font-size:10px}.auth-divider::before,.auth-divider::after{content:"";height:1px;flex:1;background:#e7ede9}.verify-google{margin-top:18px;padding-top:16px;border-top:1px solid #e7ede9}.verify-google-hint{max-width:34ch;justify-self:center;color:#7a8880;font-size:11px;line-height:1.5;text-align:center}
   form{display:flex;flex-direction:column;gap:9px}label{font-size:13px;font-weight:700;color:#34483d;margin-top:6px}input{width:100%;min-height:44px;box-sizing:border-box;padding:12px 13px;border:1px solid #dbe4de;border-radius:10px;background:#fff;color:#17251f;font:inherit;outline:none}input:focus{border-color:#27a572;box-shadow:0 0 0 3px #27a5721f}.hint{margin:-4px 0 3px;color:#7a8880;font-size:11px}.field-error{display:block;color:#bb3939;font-size:12px;margin-top:-4px}
   .password-wrap{position:relative}.password-wrap input{padding-right:62px}.password-wrap button{position:absolute;right:9px;top:50%;min-width:44px;min-height:44px;transform:translateY(-50%);border:0;background:transparent;color:#19805a;font-size:12px;font-weight:700;cursor:pointer}
   .primary-button{width:100%;min-height:44px;margin-top:14px;padding:13px 16px;border:0;border-radius:10px;background:#16845a;color:#fff;font-size:14px;font-weight:800;cursor:pointer;transition:background .15s,transform .15s}.primary-button:hover:not(:disabled){background:#106c49;transform:translateY(-1px)}.primary-button:disabled{opacity:.58;cursor:wait}
