@@ -115,17 +115,21 @@ window.fetch = async (url) => {
 window.eval(chunk.code);
 const harness = window.__polishTest;
 
-// 1. Settings 3-tab hub
+// 1. Settings 4-tab hub (Past sessions added so onboarding's "change this
+//    later" promise is real — it is the only way to fix a mistyped baseline).
 await harness.mountView('Settings');
 const tabs = [...document.querySelectorAll('[role="tab"]')].map((el) => el.textContent.trim());
-assert.deepEqual(tabs, ['Athlete Bio', 'Units & Appearance', 'Devices & Data']);
+assert.deepEqual(tabs, ['Athlete Bio', 'Past sessions', 'Units & Appearance', 'Devices & Data']);
 assert.ok(document.querySelector('#settings-city'), 'Athlete Bio tab must render #settings-city by default');
-document.querySelectorAll('[role="tab"]')[1].click();
-harness.flush();
-assert.match(document.body.textContent, /Dark Outdoor \(OLED\)/);
 document.querySelectorAll('[role="tab"]')[2].click();
 harness.flush();
+assert.match(document.body.textContent, /Dark Outdoor \(OLED\)/);
+document.querySelectorAll('[role="tab"]')[3].click();
+harness.flush();
 assert.match(document.body.textContent, /Wearable energy calibration/);
+document.querySelectorAll('[role="tab"]')[1].click();
+harness.flush();
+assert.match(document.body.textContent, /Past sessions/, 'the past-sessions editor is reachable from Settings');
 
 // 2. Onboarding Step 1 unit switch + Step 2 3 quick presets
 await harness.mountView('Onboarding');

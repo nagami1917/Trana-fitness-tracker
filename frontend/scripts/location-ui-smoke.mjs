@@ -233,7 +233,13 @@ try {
   await waitFor(() => document.body.textContent.includes('Two sessions per sport'));
   assert.ok(document.body.textContent.includes('Two sessions per sport'), 'baseline step renders');
   assert.ok(document.body.textContent.includes('How do you remember it?'), 'pace/time mode dropdown present');
-  assert.ok(document.body.textContent.includes('Pace (min/km)'), 'pace is the default entry mode');
+  // Running is pace-first, so the pace box is what shows by default. Cycling
+  // is speed-first — covered in baseline-sessions-smoke.mjs.
+  assert.ok(document.body.textContent.includes('Pace (min/km)'), 'running defaults to pace entry');
+  assert.ok(
+    [...document.querySelectorAll('select')].some((sel) => [...sel.options].some((o) => o.value === 'speed')),
+    'a speed option exists, so a cyclist is never forced into a pace box',
+  );
   assert.ok(!document.body.textContent.includes('Date'), 'no date picker');
   assert.ok(document.body.textContent.includes('I don\'t remember'), 'skip is relabelled, not removed');
 
@@ -258,6 +264,8 @@ try {
   paceInput.value = '1'; // 5 km at 1:00/km = 60 km/h
   paceInput.dispatchEvent(new window.Event('input'));
   await waitFor(() => document.body.textContent.includes('km/h'));
+  // 60 km/h is outside the model's hard bounds, so this blocks rather than nudges.
+  assert.match(document.body.textContent, /model can't use/, 'an unusable row says so plainly');
   await waitFor(() => button('Start planning').disabled === true);
   assert.equal(baselinePosts.length, 0, 'nothing is posted while the row is implausible');
 

@@ -2,7 +2,7 @@
   import { User, Target, Droplets, Footprints, Timer, ArrowRight, LoaderCircle, Check, MapPin, Sparkles, Plus, Trash2 } from 'lucide-svelte';
   import { profile, goals, notify, session } from '../../stores/index.js';
   import { api } from '../../services/client.js';
-  import { navigate } from '../../lib/router.js';
+  import { link, navigate } from '../../lib/router.js';
   import { mascotTour } from '../../lib/mascotTour.svelte.js';
   import {
     distanceUnit,
@@ -20,6 +20,20 @@
   } from '../../lib/units.js';
   import Segmented from '../../components/common/Segmented.svelte';
   import CityRegionInput from '../../components/common/CityRegionInput.svelte';
+  import {
+    ACTIVITY_TYPES,
+    PERIODS,
+    activityLabel,
+    blankRow,
+    derivedReadout,
+    hardError,
+    modeOptions,
+    normaliseRow,
+    rowMinutes,
+    softWarning,
+    toPayload,
+    validRow,
+  } from '../../lib/baselineSession.js';
 
   const STEPS = [
     { id: 0, label: 'You', Icon: User },
@@ -29,103 +43,33 @@
     { id: 4, label: 'Baseline', Icon: Timer },
   ];
 
-  /** Mirrors App\Models\Activity::TYPES. */
-  const ACTIVITY_TYPES = [
-    { id: 'run', label: 'Running', hint: 'Road, trail or treadmill' },
-    { id: 'ride', label: 'Cycling', hint: 'Road or gravel' },
-    { id: 'walk', label: 'Walking', hint: 'Easy or brisk' },
-    { id: 'hike', label: 'Hiking', hint: 'Trail with climbing' },
-  ];
-
-  /**
-   * Plausible speed per sport, in km/h. Mirrors the server's
-   * SPEED_BOUNDS_KMH, which mirrors the model's own filter: a row outside
-   * these bounds is silently discarded by the duration model, so we warn
-   * before the athlete submits rather than after.
-   */
-  const SPEED_BOUNDS = {
-    run: [2.5, 30],
-    ride: [1.5, 65],
-    walk: [0.5, 14],
-    hike: [0.5, 14],
-  };
-
-  /** Coarse recency, so nobody has to recall an exact day. */
-  const PERIODS = [
-    { id: 'this_week', label: 'This week' },
-    { id: 'last_week', label: 'Last week' },
-    { id: 'this_month', label: 'This month' },
-    { id: 'few_months', label: 'A few months ago' },
-    { id: 'longer_ago', label: 'Longer ago' },
-  ];
-
+  /** Rows are created by the shared module so both entry points agree. */
   function blankBaselineRow(type) {
-    return {
-      activity_type: type,
-      mode: 'pace', // distance + pace, or distance + time
-      distance_km: '',
-      duration_min: '',
-      pace_min_per_km: '',
-      elevation_gain_m: '',
-      performed_period: 'last_week',
-    };
+    return blankRow(type);
   }
 
-  /** The session's duration, whichever way the athlete chose to express it. */
-  function rowMinutes(row) {
-    if (row.mode === 'pace') {
-      const distance = Number(row.distance_km);
-      const pace = Number(row.pace_min_per_km);
-      if (!(distance > 0) || !(pace > 0)) return 0;
-      return pace * distance;
-    }
-    const minutes = Number(row.duration_min);
-    return minutes > 0 ? minutes : 0;
+  /** The derived line shown in the session pill — mirrors what the model sees. */
+  function rowReadout(row) {
+    return derivedReadout(row, form.units);
   }
 
-  /** The derived value, shown read-only so the two can never disagree. */
-  function rowPace(row) {
-    const distance = Number(row.distance_km);
-    const minutes = rowMinutes(row);
-    if (!(distance > 0) || !(minutes > 0)) return '';
-    const pace = minutes / distance;
-    const mm = Math.floor(pace);
-    const ss = Math.round((pace - mm) * 60);
-    return `${mm}:${String(ss).padStart(2, '0')} /${distanceUnit(form.units)}`;
+  /** Blocking: the model would discard this row. */
+  function rowHardError(row) {
+    return hardError(row, form.units);
   }
 
-  /** Speed in km/h, used for the plausibility check. */
-  function rowSpeedKmh(row) {
-    const distance = Number(row.distance_km);
-    const minutes = rowMinutes(row);
-    if (!(distance > 0) || !(minutes > 0)) return 0;
-    return distance / (minutes / 60);
+  /** Non-blocking: inside the model's bounds, outside what is normal. */
+  function rowSoftWarning(row) {
+    return softWarning(row, form.units);
   }
 
-  /** A row is complete when everything the model needs is present. */
   function validBaseline(row) {
-    const distance = Number(row.distance_km);
-    const elevation = row.elevation_gain_m === '' ? 0 : Number(row.elevation_gain_m);
-    if (!(distance >= 0.1 && distance <= 500)) return false;
-    const minutes = rowMinutes(row);
-    if (!(minutes >= 1 && minutes <= 1440)) return false;
-    if (!(elevation >= 0 && elevation <= 12000)) return false;
-    return true;
+    return validRow(row, form.units);
   }
 
-  /** Non-blocking warning: the model would discard this row. */
-  function speedWarning(row) {
-    if (!validBaseline(row)) return '';
-    const [min, max] = SPEED_BOUNDS[row.activity_type] ?? [0.5, 60];
-    const speed = rowSpeedKmh(row);
-    if (speed < min || speed > max) {
-      return `That works out to ${speed.toFixed(1)} km/h, which the model can't use for ${activityLabel(row.activity_type).toLowerCase()} (${min}–${max} km/h). Check the distance and ${row.mode === 'pace' ? 'pace' : 'time'}.`;
-    }
-    return '';
-  }
-
-  function activityLabel(id) {
-    return ACTIVITY_TYPES.find((type) => type.id === id)?.label ?? id;
+  /** Pace/speed/time options, cyclist-first for rides. */
+  function entryModes(type) {
+    return modeOptions(type);
   }
 
   /** Ask about the sports the athlete actually picked; all four if unpicked. */
@@ -194,8 +138,13 @@
   });
 
   const filledSportCount = $derived(Object.keys(filledBySport).length);
+  // Only a row the model would DISCARD blocks the step. A soft warning is
+  // advisory: a genuinely slow or fast athlete may proceed knowingly.
   const anyBaselineWarning = $derived(
-    baselineSports.some((type) => (baselineRows[type] ?? []).some((row) => speedWarning(row))),
+    baselineSports.some((type) => (baselineRows[type] ?? []).some((row) => rowHardError(row))),
+  );
+  const anySoftWarning = $derived(
+    baselineSports.some((type) => (baselineRows[type] ?? []).some((row) => rowSoftWarning(row))),
   );
 
   function toggleActivity(id) {
@@ -267,13 +216,7 @@
         let saved = alreadySaved[type] ?? 0;
         for (const row of rows) {
           if (saved >= 2) break;
-          await api.baselineActivities.create({
-            activity_type: type,
-            distance_km: Number(row.distance_km),
-            duration_min: Number(rowMinutes(row).toFixed(2)),
-            elevation_gain_m: row.elevation_gain_m === '' ? 0 : Number(row.elevation_gain_m),
-            performed_period: row.performed_period,
-          });
+          await api.baselineActivities.create(toPayload(row, form.units));
           saved += 1;
         }
       }
@@ -603,8 +546,8 @@
                   <div class="rounded-xl border border-brand-100 bg-brand-50/40 p-2.5">
                     <div class="mb-1.5 flex items-center justify-between gap-2">
                       <span class="text-[10px] font-bold uppercase tracking-wide text-ink-400">Session {index + 1}</span>
-                      {#if rowPace(row)}
-                        <span class="pill num-tabular" title="Derived from distance and time">{rowPace(row)}</span>
+                      {#if rowReadout(row)}
+                        <span class="pill num-tabular" title="What this session works out to">{rowReadout(row)}</span>
                       {/if}
                     </div>
 
@@ -612,20 +555,26 @@
                       <label class="col-span-2 block">
                         <span class="label">How do you remember it?</span>
                         <select class="input" bind:value={row.mode}>
-                          <option value="pace">Distance + pace</option>
-                          <option value="time">Distance + time</option>
+                          {#each entryModes(sport) as option (option.id)}
+                            <option value={option.id}>{option.label}</option>
+                          {/each}
                         </select>
                       </label>
 
                       <label class="block">
                         <span class="label">Distance ({distanceUnit(form.units)})</span>
-                        <input class="input num-tabular" type="number" min="0.1" step="0.1" placeholder="5.0" bind:value={row.distance_km} />
+                        <input class="input num-tabular" type="number" min="0.1" step="0.1" placeholder="5.0" bind:value={row.distance} />
                       </label>
 
                       {#if row.mode === 'pace'}
                         <label class="block">
                           <span class="label">Pace (min/{distanceUnit(form.units)})</span>
-                          <input class="input num-tabular" type="number" min="0.5" step="0.1" placeholder="6.0" bind:value={row.pace_min_per_km} />
+                          <input class="input num-tabular" type="number" min="0.5" step="0.1" placeholder="6.0" bind:value={row.pace} />
+                        </label>
+                      {:else if row.mode === 'speed'}
+                        <label class="block">
+                          <span class="label">Speed ({distanceUnit(form.units)}/h)</span>
+                          <input class="input num-tabular" type="number" min="1" step="0.1" placeholder="20" bind:value={row.speed} />
                         </label>
                       {:else}
                         <label class="block">
@@ -649,8 +598,10 @@
                       </label>
                     </div>
 
-                    {#if speedWarning(row)}
-                      <p class="mt-1.5 text-[11px] font-semibold text-amber-700" role="alert">{speedWarning(row)}</p>
+                    {#if rowHardError(row)}
+                      <p class="mt-1.5 text-[11px] font-semibold text-rose-600" role="alert">{rowHardError(row)}</p>
+                    {:else if rowSoftWarning(row)}
+                      <p class="mt-1.5 text-[11px] font-semibold text-amber-700" role="status">{rowSoftWarning(row)}</p>
                     {/if}
                   </div>
                 {/each}
@@ -663,15 +614,29 @@
           <p class="mt-2 text-[11px] font-semibold text-rose-600" role="alert">{baselineError}</p>
         {/if}
 
-        <p class="mt-3 text-[11px] font-semibold leading-relaxed text-ink-400">
-          {#if anyBaselineWarning}
-            Fix the highlighted session and TRANA can use it — an implausible pace would otherwise be ignored.
-          {:else if filledSportCount > 0}
-            {activityLabel(Object.keys(filledBySport)[0])} will use your own pace. Other sports start from a generic average until you add past sessions.
-          {:else}
-            Fill any one sport and its first plan uses your own pace. You can add the rest later — TRANA starts from a generic pace until you do.
-          {/if}
-        </p>
+        <div class="mt-3 space-y-1.5">
+          <p class="text-[11px] font-semibold leading-relaxed text-ink-400">
+            {#if anyBaselineWarning}
+              Fix the highlighted session — a pace the model can't use would be silently ignored.
+            {:else if filledSportCount > 0}
+              {activityLabel(Object.keys(filledBySport)[0])} will use your own pace.
+              {#if anySoftWarning}
+                The amber note is only a nudge — you can still start planning.
+              {/if}
+              {#if filledSportCount < baselineSports.length}
+                Other sports start from a generic average until you add past sessions.
+              {/if}
+            {:else}
+              Fill any one sport and its first plan uses your own pace. You can add the rest later — TRANA starts from a generic pace until you do.
+            {/if}
+          </p>
+          <p class="text-[11px] font-semibold leading-relaxed text-ink-400">
+            Not sure of the exact numbers? An honest rough estimate still beats a generic average.
+            <a href="/settings?tab=sessions" use:link class="font-extrabold text-brand-600 underline-offset-2 hover:underline">
+              You can change any of this later in Settings → Past sessions.
+            </a>
+          </p>
+        </div>
       {/if}
 
       <div class="mt-6 flex items-center gap-2">

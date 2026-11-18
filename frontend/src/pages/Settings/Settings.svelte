@@ -24,11 +24,13 @@
     BellRing,
     Plus,
     Mail,
+    Timer,
   } from 'lucide-svelte';
   import Card from '../../components/common/Card.svelte';
   import Segmented from '../../components/common/Segmented.svelte';
   import CityRegionInput from '../../components/common/CityRegionInput.svelte';
   import ProgressBar from '../../components/common/ProgressBar.svelte';
+  import PastSessions from '../../components/settings/PastSessions.svelte';
   import { profile, session, logout, notify, modelCard, activities, gearList, loadGear, unitSystem } from '../../stores/index.js';
   import { api } from '../../services/client.js';
   import { energyApi, importBatch, parseCsv, CSV_COLUMNS } from '../../services/energyService.js';
@@ -49,11 +51,11 @@
     toDisplayWeight,
     weightUnit,
   } from '../../lib/units.js';
-  import { navigate } from '../../lib/router.js';
+  import { navigate, query } from '../../lib/router.js';
   import { nf } from '../../lib/format.js';
   import { onMount } from 'svelte';
 
-  let activeTab = $state('bio'); // 'bio' | 'appearance' | 'devices'
+  let activeTab = $state('bio'); // 'bio' | 'sessions' | 'appearance' | 'devices'
 
   let form = $state({
     name: $profile?.name ?? '',
@@ -103,6 +105,11 @@
   let importNote = $state('');
 
   onMount(() => {
+    // Deep link from onboarding's "change this later" promise.
+    const requested = $query.get('tab');
+    if (['bio', 'sessions', 'appearance', 'devices'].includes(requested)) {
+      activeTab = requested;
+    }
     void loadCalibration();
     void loadGear();
     void loadPushStatus();
@@ -391,6 +398,15 @@
     <button
       type="button"
       role="tab"
+      aria-selected={activeTab === 'sessions'}
+      class="btn-chip {activeTab === 'sessions' ? 'btn-chip-active' : ''}"
+      onclick={() => (activeTab = 'sessions')}
+    >
+      <Timer size={14} /> Past sessions
+    </button>
+    <button
+      type="button"
+      role="tab"
       aria-selected={activeTab === 'appearance'}
       class="btn-chip {activeTab === 'appearance' ? 'btn-chip-active' : ''}"
       onclick={() => (activeTab = 'appearance')}
@@ -579,6 +595,10 @@
           </div>
         </Card>
       </div>
+    </div>
+  {:else if activeTab === 'sessions'}
+    <div class="grid gap-5 lg:grid-cols-2">
+      <PastSessions />
     </div>
   {:else if activeTab === 'appearance'}
     <div class="grid gap-5 lg:grid-cols-2">
