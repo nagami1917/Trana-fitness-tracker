@@ -166,7 +166,7 @@ try {
         assert.match(html, /Follow roads/);
         assert.match(html, /Straight lines/);
         assert.match(html, /Search street, park, or stop/);
-        assert.match(html, /Add a route on the map to start predicting/);
+        assert.match(html, /Enter a distance to start predicting/);
         assert.doesNotMatch(html, /PREDICTED DURATION/);
       }
       if (name === 'Track') {

@@ -46,6 +46,23 @@ window.__dashboardTrackTest = {
     component = mount(Dashboard, { target });
     flushSync();
   },
+  /**
+   * Simulate a page reload: a reload keeps sessionStorage and the signed-in
+   * user, so stash the snapshot across the sign-out/sign-in cycle the store
+   * performs on identity change.
+   */
+  rehydrate() {
+    const key = 'trana:live_tracker:7';
+    const backupKey = 'trana:live_tracker_backup:7';
+    const snapshot = window.sessionStorage.getItem(key);
+    const backup = window.localStorage.getItem(backupKey);
+    session.set(null);
+    flushSync();
+    if (snapshot) window.sessionStorage.setItem(key, snapshot);
+    if (backup) window.localStorage.setItem(backupKey, backup);
+    session.set({ id: 7, name: 'Test Athlete', email: 'athlete@example.test' });
+    flushSync();
+  },
   async mountTrack() {
     if (component) await unmount(component);
     component = mount(Track, { target });

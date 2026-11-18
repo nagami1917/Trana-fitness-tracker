@@ -36,7 +36,7 @@
   import ActivityIcon from '../../components/activities/ActivityIcon.svelte';
   import { link, navigate, query } from '../../lib/router.js';
   import { plans, notify, unitSystem, gearList, fuelItems, loadGear, loadFuelItems } from '../../stores/index.js';
-  import { distanceUnit, toDisplayDistance } from '../../lib/units.js';
+  import { distanceUnit, fromDisplayDistance, toDisplayDistance } from '../../lib/units.js';
   import { dailySessionApi } from '../../services/dailySessionService.js';
   import { readCachedPlace } from '../../lib/location.js';
   import { acquireLivePosition, releaseLivePosition, seedLivePosition, livePosition } from '../../lib/liveLocation.svelte.js';
@@ -75,6 +75,11 @@
   const gpsStatus = $derived(liveTracker.gpsStatus);
   const gpsMessage = $derived(liveTracker.gpsMessage);
   const roadSnapping = $derived(liveTracker.roadSnapping);
+  // 'gps'   -> distance comes from location fixes
+  // 'manual' -> the athlete types how far they went; no location is requested
+  const recordMode = $derived(liveTracker.recordMode);
+  const isManualMode = $derived(recordMode === 'manual');
+  let manualKmInput = $state('');
   const showRoads = $derived(liveTracker.showRoads);
 
   let following = $state(true);
@@ -598,17 +603,31 @@
   }
 
   // ── activity controls (delegated to shared liveTracker) ──────────────
+  function setRecordMode(mode) {
+    manualKmInput = '';
+    liveTracker.setRecordMode(mode);
+  }
+
   function startActivity() {
     following = true;
+    const typedKm = Math.max(0, fromDisplayDistance(Number(manualKmInput) || 0, $unitSystem));
     liveTracker.startActivity({
       activityType,
-      pathSource,
-      plannedPath: selectedPlannedPath,
-      plannedLabel: selectedPathLabel,
-      plannedPlanKey: selectedPlanKey,
-      plannedFueling: activePlan?.fueling ?? null,
-      plannedDurationMin: activePlan?.duration?.minutes ?? null,
+      recordMode,
+      manualDistanceKm: isManualMode ? typedKm : 0,
+      pathSource: isManualMode ? 'none' : pathSource,
+      plannedPath: isManualMode ? [] : selectedPlannedPath,
+      plannedLabel: isManualMode ? 'Manual entry' : selectedPathLabel,
+      plannedPlanKey: isManualMode ? null : selectedPlanKey,
+      plannedFueling: isManualMode ? null : activePlan?.fueling ?? null,
+      plannedDurationMin: isManualMode ? null : activePlan?.duration?.minutes ?? null,
     });
+  }
+
+  /** Mid-session edit of the typed distance. */
+  function onManualDistanceInput(value) {
+    manualKmInput = value;
+    liveTracker.setManualDistanceKm(Math.max(0, fromDisplayDistance(Number(value) || 0, $unitSystem)));
   }
 
   function pauseActivity() {
@@ -652,6 +671,10 @@
   function hydrateActivePathFromTracker() {
     if (!liveTracker.tracking) return;
     pathSource = liveTracker.pathSource || 'none';
+    if (liveTracker.recordMode === 'manual') {
+      const km = Number(liveTracker.manualDistanceKm) || 0;
+      manualKmInput = km > 0 ? String(Math.round(toDisplayDistance(km, $unitSystem) * 100) / 100) : '';
+    }
     if (pathSource === 'plan') {
       const key = liveTracker.plannedPlanKey;
       const found = key === 'draft'
@@ -669,7 +692,6 @@
 
   onMount(() => {
     if (cachedPlace) seedLivePosition(cachedPlace);
-    acquireLivePosition();
     loadTodaySession();
     void loadGear();
     void loadFuelItems();
@@ -697,8 +719,25 @@
       customSnapAbort?.abort();
       planSnapAbort?.abort();
       searchAbort?.abort();
-      releaseLivePosition();
+      if (gpsWatchHeld) {
+        gpsWatchHeld = false;
+        releaseLivePosition();
+      }
     };
+  });
+
+  // Manual mode never touches the GPS radio — the watch is only taken while
+  // the athlete is in Live GPS mode. Mode can only change outside a session.
+  let gpsWatchHeld = false;
+  $effect(() => {
+    const wantGps = !isManualMode;
+    if (wantGps && !gpsWatchHeld) {
+      gpsWatchHeld = true;
+      acquireLivePosition();
+    } else if (!wantGps && gpsWatchHeld) {
+      gpsWatchHeld = false;
+      releaseLivePosition();
+    }
   });
 
   // Apply ?plan=<id> if $plans arrives asynchronously after mount (e.g., hard reload on /track?plan=2).
@@ -723,7 +762,7 @@
         Track Activity
       </h1>
       <p class="text-sm text-ink-500 mt-1">
-        Record live GPS distance, pace, route, and calories — synced straight into today’s nutrition session.
+        Track with live GPS — or just type how many kilometres you covered. Either way it syncs into today’s nutrition session.
       </p>
     </div>
     <a href="/track/history" use:link class="btn-ghost text-xs">
@@ -733,7 +772,37 @@
 
   <!-- Primary Map-First Outdoor Card -->
   <div class="card p-4 sm:p-6 space-y-4">
-    <div class="flex flex-wrap items-center justify-between gap-3 scroll-mt-20" data-tour="track-controls-header">
+    <div class="flex flex-wrap items-center justify-between gap-2 scroll-mt-20" data-tour="track-controls-header">
+      <!-- How the distance gets measured -->
+      <div
+        class="flex w-full max-w-full flex-wrap items-center gap-1 rounded-2xl border border-brand-100 bg-white/70 p-1 sm:inline-flex sm:w-auto sm:rounded-full"
+        role="group"
+        aria-label="How to record distance"
+      >
+        <button
+          type="button"
+          disabled={tracking}
+          onclick={() => setRecordMode('gps')}
+          aria-pressed={!isManualMode}
+          class="flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-1.5 text-[11px] font-extrabold transition disabled:opacity-60 sm:flex-initial sm:rounded-full {!isManualMode
+            ? 'bg-brand-gradient text-white'
+            : 'text-ink-500 hover:text-ink-900'}"
+        >
+          <Navigation size={12} /> Live GPS
+        </button>
+        <button
+          type="button"
+          disabled={tracking}
+          onclick={() => setRecordMode('manual')}
+          aria-pressed={isManualMode}
+          class="flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-1.5 text-[11px] font-extrabold transition disabled:opacity-60 sm:flex-initial sm:rounded-full {isManualMode
+            ? 'bg-brand-gradient text-white'
+            : 'text-ink-500 hover:text-ink-900'}"
+        >
+          <Ruler size={12} /> Enter distance
+        </button>
+      </div>
+
       <div class="flex flex-wrap items-center gap-2" role="group" aria-label="Activity type">
         {#each SPORTS as sport (sport.id)}
           <button
@@ -750,31 +819,64 @@
         {/each}
       </div>
 
-      <div class="flex flex-wrap items-center gap-3">
-        <GPSStatus status={displayGpsStatus} message={displayGpsMessage} />
-        <label class="inline-flex items-center gap-1.5 text-xs font-bold text-ink-700 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={roadSnapping}
-            onchange={(e) => liveTracker.setRoadSnapping(e.currentTarget.checked)}
-            class="accent-brand-600 rounded"
-          />
-          <span>Road snap</span>
-        </label>
-        <label class="inline-flex items-center gap-1.5 text-xs font-bold text-ink-700 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={showRoads}
-            onchange={(e) => liveTracker.setShowRoads(e.currentTarget.checked)}
-            class="accent-brand-600 rounded"
-          />
-          <span>Show roads</span>
-        </label>
-      </div>
+      {#if !isManualMode}
+        <div class="flex flex-wrap items-center gap-3">
+          <GPSStatus status={displayGpsStatus} message={displayGpsMessage} />
+          <label class="inline-flex items-center gap-1.5 text-xs font-bold text-ink-700 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={roadSnapping}
+              onchange={(e) => liveTracker.setRoadSnapping(e.currentTarget.checked)}
+              class="accent-brand-600 rounded"
+            />
+            <span>Road snap</span>
+          </label>
+          <label class="inline-flex items-center gap-1.5 text-xs font-bold text-ink-700 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={showRoads}
+              onchange={(e) => liveTracker.setShowRoads(e.currentTarget.checked)}
+              class="accent-brand-600 rounded"
+            />
+            <span>Show roads</span>
+          </label>
+        </div>
+      {:else}
+        <span class="inline-flex items-center gap-1.5 rounded-full border border-brand-100 bg-brand-50 px-3 py-1.5 text-xs font-extrabold text-brand-700">
+          <Ruler size={12} /> Distance entered by you · no GPS
+        </span>
+      {/if}
     </div>
 
+    <!-- Distance you type yourself: no location is requested at all -->
+    {#if isManualMode}
+      <div class="rounded-2xl border border-brand-100 bg-brand-50/50 p-4">
+        <label class="label" for="manual-distance">How far did you go?</label>
+        <div class="flex gap-2">
+          <input
+            id="manual-distance"
+            class="input num-tabular"
+            type="number"
+            min="0"
+            step="0.1"
+            inputmode="decimal"
+            aria-label="Distance you covered"
+            placeholder="e.g. 5"
+            value={manualKmInput}
+            oninput={(e) => onManualDistanceInput(e.currentTarget.value)}
+          />
+          <span class="grid w-14 shrink-0 place-items-center rounded-2xl border border-brand-100 bg-white text-xs font-extrabold text-ink-500">
+            {distanceUnit($unitSystem)}
+          </span>
+        </div>
+        <p class="mt-1.5 text-[11px] font-semibold text-ink-400">
+          Type the distance any time — even mid-session. TRANA adds the elapsed time and works out pace and calories from it.
+        </p>
+      </div>
+    {/if}
+
     <!-- Map-first canvas with translucent floating HUD overlay -->
-    <div class="relative h-[340px] sm:h-[400px] lg:h-[430px] w-full" data-tour="track-map">
+    <div class="relative h-[340px] sm:h-[400px] lg:h-[430px] w-full {isManualMode ? 'hidden' : ''}" data-tour="track-map">
       <TranaMap
         bind:this={tranaMap}
         {points}
@@ -845,6 +947,7 @@
       {avgPaceMinKm}
       elevationGainM={elevationM}
       calories={estimatedCalories}
+      manualMode={isManualMode}
     />
 
     {#if tracking && ghostState && (ghostState.active || ghostState.offRouteMeters != null)}
@@ -995,7 +1098,8 @@
       onDiscard={discardActivity}
     />
 
-    <!-- Collapsible Path / Route Builder Panel (sits cleanly beneath primary controls) -->
+    <!-- Collapsible Path / Route Builder Panel (GPS mode only) -->
+    {#if !isManualMode}
     <div class="card-flat p-3 space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
@@ -1298,6 +1402,7 @@
         </div>
       {/if}
     </div>
+    {/if}
   </div>
 
   <!-- Daily Session & Food Log -->

@@ -11,10 +11,13 @@
     avgPaceMinKm = 0,
     elevationGainM = 0,
     calories = 0,
+    manualMode = false,
   } = $props();
 
   let timeText = $derived(durationSec !== null ? clock(durationSec) : formatDuration(durationMin));
-  let waitingForReliablePace = $derived(durationSec !== null && durationSec > 0 && distanceKm < 0.05);
+  let waitingForReliablePace = $derived(
+    !manualMode && durationSec !== null && durationSec > 0 && distanceKm < 0.05
+  );
 
   let stats = $derived([
     { label: 'Distance', value: formatDistance(distanceKm, $unitSystem), unit: ` ${distanceUnit($unitSystem)}` },

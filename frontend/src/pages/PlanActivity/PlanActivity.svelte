@@ -67,6 +67,7 @@
   import { downloadGpx, parseActivityFile } from '../../lib/gpx.js';
   import {
     distanceUnit,
+    fromDisplayDistance,
     elevationUnit,
     fromDisplayElevation,
     fromDisplayTemp,
@@ -229,7 +230,11 @@
         ? routeLengthKm(form.route)
         : 0,
   );
-  const effectiveDistance = $derived(routeKm > 0.05 ? routeKm : Number(form.distance_km) || 0);
+  // A drawn route wins (it is measured); otherwise the athlete states the
+  // distance. Either way this is the one number the model sees.
+  const typedDistance = $derived(Number(form.distance_km) || 0);
+  const usingDrawnRoute = $derived(routeKm > 0.05);
+  const effectiveDistance = $derived(usingDrawnRoute ? routeKm : typedDistance);
   const plannedRoute = $derived(
     routePath.length > 1 ? routePath : form.route.length > 1 ? form.route : null,
   );
@@ -240,8 +245,9 @@
     routeMode === 'straight' || (form.route.length >= 2 && routePath.length < 2),
   );
 
-  // Navigation-app behaviour: while a route exists, the distance field itself
-  // shows the measured (road-following) route length — otherwise stays 0.
+  // Navigation-app behaviour: while a route exists it mirrors the measured
+  // (road-following) length into the field. Without a route the field is the
+  // athlete's own typed distance — it must never be reset to 0 behind them.
   $effect(() => {
     if (loadedFromSaved) return;
     if (routeKm > 0.05) {
@@ -250,14 +256,10 @@
         form.elevation_gain_m = suggestElevation(routeKm, form.activity_type);
       }
     } else {
-      form.distance_km = 0;
       elevationProfile = [];
       elevationLossM = 0;
       elevationSource = 'estimate';
       routeWeather = null;
-      if (!customElevation) {
-        form.elevation_gain_m = 0;
-      }
     }
   });
 
@@ -314,7 +316,7 @@
 
   async function run() {
     if (!$profile || !model) return;
-    if (!Array.isArray(plannedRoute) || plannedRoute.length < 2 || routeKm <= 0.05) {
+    if (effectiveDistance <= 0.05) {
       computing = false;
       return;
     }
@@ -326,7 +328,8 @@
           distance_km: effectiveDistance,
           elevation_gain_m: Number(form.elevation_gain_m) || 0,
           temperature_c: Number(form.temperature_c),
-          route: plannedRoute,
+          // Null when the athlete typed a distance instead of drawing a route.
+          route: plannedRoute?.length >= 2 ? plannedRoute : null,
         },
         profile: {
           ...$profile,
@@ -343,7 +346,8 @@
     }
   }
 
-  // Recompute whenever a valid route is plotted on the map (debounced).
+  // Recompute whenever the inputs are usable — a drawn route or a typed
+  // distance — debounced so typing does not hammer the model.
   let timer;
   $effect(() => {
     void model;
@@ -363,13 +367,14 @@
     clearTimeout(timer);
     if (loadedFromSaved) return;
 
-    const hasPlottedRoute = Array.isArray(plannedRoute) && plannedRoute.length >= 2 && routeKm > 0.05;
-    if (!hasPlottedRoute) {
+    const hasUsableDistance = effectiveDistance > 0.05;
+    if (!hasUsableDistance) {
       computing = false;
       prediction = null;
       return;
     }
-    if (routeMode === 'roads' && routing) return;
+    // Wait for road snapping to settle only when it is actually measuring.
+    if (usingDrawnRoute && routeMode === 'roads' && routing) return;
 
     timer = setTimeout(run, 160);
   });
@@ -730,7 +735,7 @@
         activity_type: form.activity_type,
         distance_km: Number(effectiveDistance.toFixed(2)),
         elevation_gain_m: Number(form.elevation_gain_m) || 0,
-        route: plannedRoute,
+        route: usingDrawnRoute && plannedRoute?.length >= 2 ? plannedRoute : null,
         temperature_c: Number(form.temperature_c),
         sweat_profile: form.sweat_profile,
         planned_for: plannedForIso,
@@ -831,24 +836,36 @@
 
         <div class="mt-4 grid gap-3 sm:grid-cols-2">
           <div class="min-w-0">
-            <span class="label">Distance {routeKm > 0 ? '(from route)' : '(from map)'}</span>
+            <span class="label">Distance {usingDrawnRoute ? '(from route)' : ''}</span>
             <div class="flex gap-2">
               <input
                 class="input num-tabular"
                 type="number"
                 min="0"
                 step="0.1"
-                value={form.distance_km > 0 ? Number(toDisplayDistance(form.distance_km, $unitSystem).toFixed(2)) : ''}
-                placeholder="Add route on map"
-                disabled
-                class:bg-brand-50={routeKm > 0}
+                inputmode="decimal"
+                aria-label="Distance"
+                placeholder="e.g. 10"
+                value={form.distance_km > 0 ? Number(toDisplayDistance(typedDistance, $unitSystem).toFixed(2)) : ''}
+                readonly={usingDrawnRoute}
+                class:bg-brand-50={usingDrawnRoute}
+                oninput={(e) => {
+                  // Typing overrides a mapped distance: drop the route so the one
+                  // number on screen is the one being predicted.
+                  const val = Number(e.currentTarget.value);
+                  if (usingDrawnRoute) clearRoute();
+                  markEdited();
+                  form.distance_km = Number.isFinite(val)
+                    ? Math.max(0, fromDisplayDistance(val, $unitSystem))
+                    : 0;
+                }}
               />
               <span class="grid w-14 shrink-0 place-items-center rounded-2xl border border-brand-100 bg-brand-50 text-xs font-extrabold text-ink-500">{distanceUnit($unitSystem)}</span>
             </div>
-            {#if routeKm > 0}
+            {#if usingDrawnRoute}
               <p class="mt-1 text-[11px] font-bold text-brand-600">Measured along your planned route</p>
             {:else}
-              <p class="mt-1 text-[11px] font-semibold text-ink-400">Plot Start & Destination on the map</p>
+              <p class="mt-1 text-[11px] font-semibold text-ink-400">Type a distance, or plot Start &amp; Destination on the map</p>
             {/if}
           </div>
 
@@ -1181,10 +1198,10 @@
             <MapPin size={22} />
           </div>
           <h3 class="mt-4 font-display text-lg font-extrabold text-ink-900">
-            Add a route on the map to start predicting
+            Enter a distance to start predicting
           </h3>
           <p class="mt-1.5 max-w-sm text-xs font-semibold text-ink-500">
-            Tap <strong>Start</strong> and <strong>Destination</strong> on the Route planner map (or search a street/place, use GPS, or load your last activity route). TRANA will calculate your distance, duration, and fueling plan automatically.
+            Type the distance above and TRANA calculates your duration and fueling plan immediately — no map needed. You can also plot <strong>Start</strong> and <strong>Destination</strong> on the Route planner map (or search a street/place, use GPS, or load your last activity route) and TRANA measures it for you.
           </p>
         </Card>
       {:else if prediction}
@@ -1229,7 +1246,7 @@
                 <Save size={16} /> Save this plan
               {/if}
             </button>
-            {#if plannedRoute?.length >= 2}
+            {#if usingDrawnRoute && plannedRoute?.length >= 2}
               <button class="btn-ghost flex-1" onclick={() => followOnTrack(saved?.id ?? null)}>
                 <Navigation size={15} /> Track this route
               </button>

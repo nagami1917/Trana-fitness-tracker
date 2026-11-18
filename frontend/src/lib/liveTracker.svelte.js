@@ -25,6 +25,9 @@ const STORAGE_PREFIX = 'trana:live_tracker:';
 const BACKUP_PREFIX = 'trana:live_tracker_backup:';
 const MAX_STORED_POINTS = 2000;
 const MIN_ACTIVITY_DISTANCE_KM = 0.05; // 50 m: below this, GPS pace/speed is too noisy to show
+// Manual-entry sessions have no measured speed; use a typical pace per sport so
+// calories and fueling targets stay in range while time accumulates.
+const MANUAL_FALLBACK_SPEED_KMH = { run: 9, ride: 20, walk: 5, hike: 4 };
 
 let activeUserId = null;
 let userWeightKg = $state(60);
@@ -34,6 +37,10 @@ let userTempC = $state(26);
 let userCalibrationFactor = $state(1);
 
 let activityType = $state('run');
+// 'gps'    -> distance accumulates from location fixes
+// 'manual' -> the athlete types how far they went; no location is requested
+let recordMode = $state('gps');
+let manualDistanceKm = $state(0);
 let tracking = $state(false);
 let paused = $state(false);
 let saving = $state(false);
@@ -174,6 +181,8 @@ function persist() {
     }
     const payload = {
       activityType,
+      recordMode,
+      manualDistanceKm,
       tracking,
       paused,
       points: points.slice(-MAX_STORED_POINTS),
@@ -263,6 +272,8 @@ function resetLiveFields() {
   startedAtIso = null;
   activeSegmentStartMs = null;
   elapsedBeforePauseMs = 0;
+  recordMode = 'gps';
+  manualDistanceKm = 0;
   fluidLoggedMl = 0;
   carbsLoggedG = 0;
   lastHydrateSec = 0;
@@ -389,6 +400,7 @@ const durationSec = $derived.by(() => {
 const durationMin = $derived(durationSec / 60);
 
 const distanceKm = $derived.by(() => {
+  if (recordMode === 'manual') return Math.max(0, Number(manualDistanceKm) || 0);
   if (points.length < 2) return 0;
   let total = 0;
   for (let i = 1; i < points.length; i += 1) {
@@ -412,7 +424,13 @@ const elevationM = $derived(points.length >= 2 ? elevationGainM(points) : 0);
 const estimatedCalories = $derived.by(() => {
   if (durationMin <= 0) return 0;
   const elevPerKm = distanceKm > 0 ? elevationM / distanceKm : 0;
-  const met = estimateMet(activityType, avgSpeedKmh, elevPerKm);
+  // Manual mode with no distance typed yet has no measured speed; fall back to
+  // a typical speed for the sport so the live burn estimate stays sensible.
+  // GPS sessions keep the original 0-speed behaviour (identical numbers).
+  const speedForMet = recordMode === 'manual' && !(avgSpeedKmh > 0)
+    ? MANUAL_FALLBACK_SPEED_KMH[activityType] ?? 9
+    : avgSpeedKmh;
+  const met = estimateMet(activityType, speedForMet, elevPerKm);
   return Math.round(met * (Number(userWeightKg) || 60) * (durationMin / 60) * userCalibrationFactor);
 });
 
@@ -484,6 +502,8 @@ function clearRuntimeOnly() {
   activityType = 'run';
   roadSnapping = true;
   showRoads = true;
+  recordMode = 'gps';
+  manualDistanceKm = 0;
   pathSource = 'none';
   plannedPath = [];
   plannedLabel = 'Free GPS';
@@ -505,6 +525,8 @@ function hydrateForUser(userId) {
     if (!saved || typeof saved !== 'object') return;
 
     if (saved.activityType) activityType = saved.activityType;
+    recordMode = saved.recordMode === 'manual' ? 'manual' : 'gps';
+    manualDistanceKm = Math.max(0, Number(saved.manualDistanceKm) || 0);
     if (typeof saved.roadSnapping === 'boolean') roadSnapping = saved.roadSnapping;
     if (typeof saved.showRoads === 'boolean') showRoads = saved.showRoads;
     if (saved.pathSource) pathSource = saved.pathSource;
@@ -540,6 +562,13 @@ function hydrateForUser(userId) {
       if (paused) {
         gpsStatus = 'paused';
         gpsMessage = 'Paused';
+      } else if (recordMode === 'manual') {
+        // Resume the clock, but never reach for the GPS radio on a manual session.
+        startTicker();
+        void acquireWakeLock();
+        ensureVisibilityHook();
+        gpsStatus = 'idle';
+        gpsMessage = 'Manual entry — no GPS used';
       } else {
         startTicker();
         void acquireWakeLock();
@@ -584,6 +613,24 @@ session.subscribe((user) => {
 function setActivityType(type) {
   if (tracking || !type) return;
   activityType = type;
+}
+
+/**
+ * Choose how distance is recorded. Only switchable outside a session — a
+ * running session must not silently mix GPS distance with a typed one.
+ */
+function setRecordMode(mode) {
+  if (tracking) return;
+  recordMode = mode === 'manual' ? 'manual' : 'gps';
+  if (recordMode === 'gps') manualDistanceKm = 0;
+  persist();
+}
+
+/** Set the distance the athlete typed (always kilometres). */
+function setManualDistanceKm(km) {
+  const value = Number(km);
+  manualDistanceKm = Number.isFinite(value) && value > 0 ? Math.min(value, 1000) : 0;
+  if (tracking) persist();
 }
 
 function setRoadSnapping(value) {
@@ -656,6 +703,10 @@ function toggleVoiceCues() {
 function startActivity(overrides = {}) {
   if (tracking) return;
   if (overrides.activityType) activityType = overrides.activityType;
+  if (overrides.recordMode) recordMode = overrides.recordMode === 'manual' ? 'manual' : 'gps';
+  if (overrides.manualDistanceKm !== undefined) {
+    manualDistanceKm = Math.max(0, Number(overrides.manualDistanceKm) || 0);
+  }
   if (overrides.pathSource !== undefined) pathSource = overrides.pathSource;
     if (Array.isArray(overrides.plannedPath)) plannedPath = [...overrides.plannedPath];
   if (overrides.plannedLabel !== undefined) plannedLabel = overrides.plannedLabel;
@@ -691,7 +742,14 @@ function startActivity(overrides = {}) {
   startTicker();
   ensureVisibilityHook();
   void acquireWakeLock();
-  void startGps();
+
+  if (recordMode === 'manual') {
+    // Nothing to locate: the athlete supplies the distance themselves.
+    gpsStatus = 'idle';
+    gpsMessage = 'Manual entry — no GPS used';
+  } else {
+    void startGps();
+  }
 }
 
 function pauseActivity() {
@@ -716,7 +774,10 @@ function resumeActivity() {
   statusNote = '';
   startTicker();
   void acquireWakeLock();
-  if (!watcher) {
+  if (recordMode === 'manual') {
+    gpsStatus = 'idle';
+    gpsMessage = 'Manual entry — no GPS used';
+  } else if (!watcher) {
     void startGps();
   } else {
     gpsStatus = 'tracking';
@@ -763,15 +824,27 @@ async function stopActivity({ currentTodaySession = null, allowStationary = fals
   const finalDurationMin = Math.round(durationMin * 10) / 10;
   let finalDistanceKm = Math.round(distanceKm * 100) / 100;
 
-  if (finalDurationMin < 1 || (finalDistanceKm < MIN_ACTIVITY_DISTANCE_KM && !allowStationary)) {
+  // Manual mode has no GPS floor — the athlete states the distance, so only
+  // elapsed time has to be real.
+  const isManual = recordMode === 'manual';
+  const minDistanceKm = isManual ? 0 : MIN_ACTIVITY_DISTANCE_KM;
+
+  if (finalDurationMin < 1 || finalDistanceKm < minDistanceKm) {
     if (!paused) pauseActivity();
-    statusNote = 'Record at least 0.05 km (50 m) and 1:00 to save — resume moving or tap Discard.';
+    statusNote = isManual
+      ? 'Add how far you went (and record at least 1:00) to save — or tap Discard.'
+      : 'Record at least 0.05 km (50 m) and 1:00 to save — resume moving or tap Discard.';
     persist();
-    notify('Record at least 0.05 km (50 m) and 1:00 to save — or tap Discard to reset.', 'info');
+    notify(
+      isManual
+        ? statusNote
+        : 'Record at least 0.05 km (50 m) and 1:00 to save — or tap Discard to reset.',
+      'info',
+    );
     return { saved: false, reason: 'too_short' };
   }
 
-  if (finalDistanceKm < MIN_ACTIVITY_DISTANCE_KM && allowStationary) {
+  if (!isManual && finalDistanceKm < MIN_ACTIVITY_DISTANCE_KM && allowStationary) {
     finalDistanceKm = MIN_ACTIVITY_DISTANCE_KM;
   }
 
@@ -813,7 +886,8 @@ async function stopActivity({ currentTodaySession = null, allowStationary = fals
 
     const endedAt = new Date().toISOString();
     const intakeParts = [];
-    if (allowStationary && distanceKm < MIN_ACTIVITY_DISTANCE_KM) intakeParts.push('Indoor / stationary session');
+    if (isManual) intakeParts.push('Distance entered manually');
+    else if (allowStationary && distanceKm < MIN_ACTIVITY_DISTANCE_KM) intakeParts.push('Indoor / stationary session');
     if (fluidLoggedMl > 0 || carbsLoggedG > 0) {
       intakeParts.push(`Intake during session: ${fluidLoggedMl} ml fluid, ${carbsLoggedG} g carbs`);
     }
@@ -828,11 +902,11 @@ async function stopActivity({ currentTodaySession = null, allowStationary = fals
       calories: estimatedCalories,
       average_speed: avgSpeedKmh > 0 ? Math.round(avgSpeedKmh * 10) / 10 : null,
       average_pace: avgPaceMinKm > 0 ? Math.round(avgPaceMinKm * 100) / 100 : null,
-      route: routeCoords.length >= 2 ? routeCoords : null,
-      route_geojson: routeGeojson,
+      route: isManual ? null : routeCoords.length >= 2 ? routeCoords : null,
+      route_geojson: isManual ? null : routeGeojson,
       notes: intakeParts.length ? intakeParts.join(' · ') : null,
       gear_id: gearId || null,
-      source: allowStationary && distanceKm < MIN_ACTIVITY_DISTANCE_KM ? 'manual' : 'gps',
+      source: isManual || (allowStationary && distanceKm < MIN_ACTIVITY_DISTANCE_KM) ? 'manual' : 'gps',
     };
 
     const previousActivities = get(activities);
@@ -947,6 +1021,8 @@ function clearOutcome() {
 
 export const liveTracker = {
   get activityType() { return activityType; },
+  get recordMode() { return recordMode; },
+  get manualDistanceKm() { return manualDistanceKm; },
   get tracking() { return tracking; },
   get paused() { return paused; },
   get saving() { return saving; },
@@ -994,6 +1070,8 @@ export const liveTracker = {
   get lastDailySession() { return lastDailySession; },
 
   setActivityType,
+  setRecordMode,
+  setManualDistanceKm,
   setRoadSnapping,
   setShowRoads,
   setGearId,
