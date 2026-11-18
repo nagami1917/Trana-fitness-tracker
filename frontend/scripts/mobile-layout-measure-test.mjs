@@ -79,6 +79,7 @@ ok('a clean page reports nothing', () => {
   const m = audit('<button data-probe="a">Save</button>', {
     boxes: { a: { left: 16, right: 120, width: 104, height: 44 } },
   });
+  assert.equal(m.elements, 1, 'the element count is what proves something rendered');
   assert.equal(m.pastEdge.length, 0);
   assert.equal(m.smallTargets.length, 0);
   assert.equal(m.overlaps.length, 0);

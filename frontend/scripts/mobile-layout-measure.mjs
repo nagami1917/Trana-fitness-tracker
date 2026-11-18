@@ -25,6 +25,9 @@ export function measure() {
     overlaps: [],
     tinyText: [],
     controls: 0,
+    elements: 0,
+    rootWidth: 0,
+    tallest: 0,
   };
 
   const rect = (el) => el.getBoundingClientRect();
@@ -45,8 +48,11 @@ export function measure() {
     return `<${el.tagName.toLowerCase()}${cls}>${text ? ` "${text}"` : ''}`;
   };
 
+  out.rootWidth = Math.round(rect(root).width);
   for (const el of root.querySelectorAll('*')) {
     if (!visible(el)) continue;
+    out.elements++;
+    out.tallest = Math.max(out.tallest, Math.round(rect(el).height));
     const r = rect(el);
     const cs = getComputedStyle(el);
 

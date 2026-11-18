@@ -230,7 +230,9 @@ try {
 
       const problems = [];
       if (errors.length) problems.push(`page error: ${errors[0]}`);
-      if (!m.controls) problems.push('nothing interactive rendered - the fixture did not mount');
+      // A component with no buttons still renders; an unmounted one renders
+      // nothing at all. Check for content, not for interactivity.
+      if (m.elements < 5) problems.push(`only ${m.elements} elements rendered - the fixture did not mount`);
       if (m.docScroll > m.viewport + 1) problems.push(`scrolls sideways ${m.docScroll}px vs ${m.viewport}px`);
       if (m.pastEdge.length) problems.push(`${m.pastEdge.length} past right edge: ${JSON.stringify(m.pastEdge.slice(0, 3))}`);
       if (m.clipped.length) problems.push(`${m.clipped.length} clipped text: ${JSON.stringify(m.clipped.slice(0, 3))}`);
@@ -244,7 +246,11 @@ try {
         for (const p of problems) console.error(`  - ${p}`);
         await page.screenshot({ path: resolve(fixtureDir, `FAIL-${c.id}-${vp.width}.png`), fullPage: true });
       } else {
-        console.log(`ok   ${tag} (doc ${m.docScroll}px, ${m.controls} controls, ${m.tinyText.length} tiny)`);
+        // Print the geometry measured, so a passing CI log is evidence of what
+        // was actually checked rather than just a tick.
+        const tallest = m.pastEdge.length ? '' : '; nothing past edge';
+        console.log(`     root ${m.rootWidth}px, tallest block ${m.tallest}px${tallest}`);
+        console.log(`ok   ${tag} (doc ${m.docScroll}px, ${m.elements} elements, ${m.controls} controls, ${m.tinyText.length} tiny)`);
       }
       await ctx.close();
     }
