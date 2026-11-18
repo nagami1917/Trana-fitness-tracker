@@ -350,6 +350,79 @@ try {
   assert.equal(window.sessionStorage.getItem('trana:live_tracker:7'), null);
   assert.equal(harness.liveTracker.tracking, false);
 
+  // 9. Manual mode: type the distance instead of using GPS.
+  //    No watcher may be created, the typed km is what gets saved, and the
+  //    saved session carries no route.
+  harness.seedStores([]);
+  await harness.mountTrack();
+  const watchersBefore = geoWatchers.size;
+  const manualBtn = buttonsWithText('Enter distance')[0];
+  assert.ok(manualBtn, 'Enter distance option must render on Track Activity');
+  manualBtn.click();
+  harness.flush();
+  assert.equal(harness.liveTracker.recordMode, 'manual');
+  assert.match(document.body.textContent, /Distance entered by you/);
+  assert.ok(!document.body.textContent.includes('Road snap'), 'GPS-only road toggles hide in manual mode');
+  assert.equal(document.querySelector('[data-tour="track-map"]').className.includes('hidden'), true,
+    'The GPS map hides in manual mode');
+
+  const manualInput = document.querySelector('input[aria-label="Distance you covered"]');
+  assert.ok(manualInput, 'Manual distance field must render');
+  assert.equal(manualInput.disabled, false);
+  manualInput.value = '4.2';
+  manualInput.dispatchEvent(new window.Event('input', { bubbles: true }));
+  harness.flush();
+  assert.equal(harness.liveTracker.distanceKm, 4.2, 'Typed value becomes the live distance');
+
+  buttonsWithText('Start activity')[0].click();
+  harness.flush();
+  assert.equal(harness.liveTracker.recordMode, 'manual', 'Manual mode survives start');
+  assert.equal(harness.liveTracker.tracking, true);
+
+  // Give the elapsed clock something real to measure.
+  const postedBefore = postedActivities.length;
+  timeOffsetMs += 300_000; // 5 minutes
+  // The tracker re-reads the clock on its own tick, so let it catch up with the jump
+  // before ending — otherwise the guard sees the pre-jump elapsed time.
+  await waitFor(() => harness.liveTracker.durationMin >= 5, 'elapsed clock to reach 5 min');
+  buttonsWithText('End & save')[0].click();
+  await waitFor(() => postedActivities.length === postedBefore + 1, 'POST manual /api/activities');
+
+  const manualPayload = postedActivities[postedActivities.length - 1];
+  assert.equal(manualPayload.source, 'manual', 'Manual sessions are saved with source=manual');
+  assert.equal(manualPayload.distance_km, 4.2, 'The typed distance is what is saved');
+  assert.equal(manualPayload.duration_min, 5, 'Elapsed time is still measured, not typed');
+  assert.equal(manualPayload.route, null, 'No route on a manual session');
+  assert.equal(manualPayload.route_geojson, null, 'No route GeoJSON on a manual session');
+  assert.match(manualPayload.notes, /Distance entered manually/);
+  assert.equal(geoWatchers.size, watchersBefore, 'Manual mode must never start a GPS watcher');
+
+  // 10. A reload mid-session must restore manual mode -- and must not turn the
+  //     GPS radio back on for a session whose distance is typed.
+  harness.seedStores([]);
+  await harness.mountTrack();
+  buttonsWithText('Enter distance')[0].click();
+  harness.flush();
+  const reloadInput = document.querySelector('input[aria-label="Distance you covered"]');
+  reloadInput.value = '7.5';
+  reloadInput.dispatchEvent(new window.Event('input', { bubbles: true }));
+  harness.flush();
+  buttonsWithText('Start activity')[0].click();
+  harness.flush();
+  const watchersAtStart = geoWatchers.size;
+
+  harness.rehydrate();
+  await harness.mountTrack();
+  assert.equal(harness.liveTracker.recordMode, 'manual', 'Reload keeps manual mode');
+  assert.equal(harness.liveTracker.tracking, true, 'Reload keeps the session alive');
+  assert.equal(harness.liveTracker.distanceKm, 7.5, 'Reload keeps the typed distance');
+  assert.equal(geoWatchers.size, watchersAtStart, 'Reload must not start a GPS watcher in manual mode');
+  assert.equal(document.querySelector('input[aria-label="Distance you covered"]').value, '7.5',
+    'The typed distance is shown in the box after reload');
+
+  buttonsWithText('Discard')[0].click();
+  await waitFor(() => !harness.liveTracker.tracking, 'discard after reload check');
+
   console.log('Dashboard <-> Track Activity live & result update checks passed ✔');
 } finally {
   Date.now = realDateNow;
