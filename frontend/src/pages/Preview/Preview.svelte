@@ -151,7 +151,7 @@
         <Timer size={18} class="text-brand-500" />
         <p class="mt-2 text-2xl font-extrabold text-ink-900">{fmtDuration(plan.duration.minutes)}</p>
         <p class="text-[10px] font-bold uppercase tracking-wider text-ink-400">
-          likely · {fmtDuration(plan.duration.low)} – {fmtDuration(plan.duration.high)}
+          likely · {fmtDuration(plan.duration.validatedLow ?? plan.duration.low)} – {fmtDuration(plan.duration.validatedHigh ?? plan.duration.high)}
         </p>
       </Card>
       <Card class="p-4">

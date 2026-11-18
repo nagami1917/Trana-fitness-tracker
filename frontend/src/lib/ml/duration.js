@@ -24,6 +24,65 @@ export const SPEED_BOUNDS_KMH = {
 export const DOMAIN_MAX_DISTANCE_KM = { run: 45.0, ride: 150.0, walk: 25.0, hike: 40.0 };
 const RIEGEL_PRIOR_STRENGTH = 0.25;
 
+/**
+ * Measured real-world error, from the GeoLife external validation.
+ *
+ * These numbers come from `ml/evaluation/reports/geolife_validation.json`,
+ * which scores the shipped artifact against 4,362 real GPS trajectories. They
+ * are the counterweight to the synthetic holdout metrics: the model card
+ * reports MAPE 5.51% because it is being graded on data it generated from its
+ * own formulas, while on real movement the error is 25-40%.
+ *
+ * The quantile forests produce a band that contains the truth only ~17% of the
+ * time against a nominal 80%, and on cold-start accounts the model misses by
+ * ~51%. Showing that narrow band to an athlete presents a 12% window as if it
+ * were the real uncertainty.
+ *
+ * `mape` is the median absolute percentage error to mirror outward, so the
+ * displayed range reflects what the model has actually demonstrated. It is
+ * applied to the *presentation* of the range only — `minutes` stays the model's
+ * own estimate, and no prediction math changes.
+ *
+ * Keyed by sport. `hike` reuses run's figure: GeoLife has no hike label, and
+ * run's n is 2, so both are the conservative walk/run envelope rather than an
+ * invented number.
+ */
+export const VALIDATED_ERROR_PCT = {
+  run: 28.2,
+  ride: 25.7,
+  walk: 40.5,
+  hike: 40.5,
+};
+
+/**
+ * Extra error for thin history. GeoLife `cold_start` MAPE is 51.3% and
+ * `thin_history_1` is 52.6%, against 35.3% once two or more sessions exist.
+ * Expressed as a multiple of the sport's baseline error so a well-populated
+ * account is not penalised for a defect that belongs to new accounts.
+ */
+export const THIN_HISTORY_MULTIPLIER = {
+  none: 51.3 / 40.5, // ≈1.27 — no usable sessions for this sport
+  one: 52.6 / 40.5,  // ≈1.30 — a single point cannot establish fatigue decay
+  two: 1.0,
+};
+
+/**
+ * The error a prediction should honestly advertise, as a fraction.
+ *
+ * `historyCount` is the model's own count of same-sport sessions that reached
+ * the curve, so a row the model discarded does not earn a tighter range.
+ */
+export function validatedErrorFraction(activityType, historyCount = 0) {
+  const base = VALIDATED_ERROR_PCT[activityType] ?? 40.5;
+  const count = Number(historyCount) || 0;
+  const multiplier = count <= 0
+    ? THIN_HISTORY_MULTIPLIER.none
+    : count === 1
+      ? THIN_HISTORY_MULTIPLIER.one
+      : THIN_HISTORY_MULTIPLIER.two;
+  return (base * multiplier) / 100;
+}
+
 export const FEATURE_ORDER = [
   'distance_km',
   'elevation_gain_m',
@@ -312,11 +371,28 @@ export function predictDuration({
     maxHistoryKm,
   });
 
+  // What the athlete should be shown, as opposed to what the forests emitted.
+  //
+  // `low`/`high` are the model's own quantile interval. On real data it covers
+  // the truth ~17% of the time, so presenting it as "166-211 min range" states
+  // a precision the model has never demonstrated. The honest figure is the one
+  // measured against GeoLife: the median estimate ± that sport's MAPE, widened
+  // further for thin history.
+  const errorFraction = validatedErrorFraction(activityType, historyCount);
+  const honestLow = Math.max(1, median * (1 - errorFraction));
+  const honestHigh = median * (1 + errorFraction);
+
   return {
     minutes: Math.round(median * 10) / 10,
     hours: Math.round((median / 60) * 100) / 100,
     low: Math.round(low * 10) / 10,
     high: Math.round(high * 10) / 10,
+    // The range the UI should display (validated against real data).
+    validatedLow: Math.round(honestLow * 10) / 10,
+    validatedHigh: Math.round(honestHigh * 10) / 10,
+    validatedErrorPct: Math.round(errorFraction * 1000) / 10,
+    // Was this a synthetic-only band, or the measured one? Drives the label.
+    rangeBasis: 'geolife_validated',
     paceMinPerKm: ['run', 'walk', 'hike'].includes(activityType) ? median / distanceKm : null,
     speedKmh: Math.round(speedKmh * 100) / 100,
     confidence: Math.round(confidence * 100) / 100,
