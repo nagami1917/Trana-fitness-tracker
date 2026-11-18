@@ -1,6 +1,6 @@
 {
   "name": "TRANA external validation \u2014 GeoLife GPS Trajectories",
-  "generated_at": "2026-11-13T13:35:08+00:00",
+  "generated_at": "2026-11-18T14:17:31+00:00",
   "model_version": "20261113.1328",
   "source": {
     "dataset": "GeoLife GPS Trajectories Dataset (Microsoft Research)",
@@ -25,7 +25,7 @@
     ]
   },
   "limitations": [
-    "GeoLife has no elevation in the feature table \u2192 elevation features are 0 (Beijing is flat).",
+    "GeoLife has no elevation in the feature table \u2192 elevation features are 0. The raw .plt trajectories do carry an altitude column, but it is GPS altitude, not terrain: measured median ~102 m of apparent gain per km against a true 5-15 m/km for Beijing, with individual fixes peaking above 13,000 m. Suppressing it needs a DEM, so this report stays elevation-blind rather than gaining a number it cannot defend. Trana's own elevation path uses Copernicus GDEM via Open-Meteo, not this column.",
     "Durations are door-to-door elapsed GPS times (includes stops), matching Trana's elapsed-time target.",
     "Mode labels are transportation modes: bike\u2192ride, walk\u2192walk; motorised modes excluded; run has n=2.",
     "Weight and experience are synthetic assumptions, not measured per participant."
@@ -85,7 +85,7 @@
     "walk": {
       "n": 2988,
       "mae_min": 6.16,
-      "mape_pct": 40.54,
+      "mape_pct": 40.55,
       "mdape_pct": 26.16,
       "within_15_pct": 31.29,
       "within_20_pct": 40.6,

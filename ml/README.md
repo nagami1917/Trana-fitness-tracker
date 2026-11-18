@@ -83,6 +83,10 @@ python -m evaluation.validate_csv \
   --training-csv /secure/path/train.csv \
   --artifacts-dir artifacts/duration_model-candidate \
   --out artifacts/duration-model-validation.json
+
+# Does the learned exp(GBM) factor beat the personal curve it multiplies?
+# Paired on identical rows, with a bootstrap interval.
+python -m evaluation.ablation --json evaluation/reports/ablation_report.json
 ```
 
 If a candidate was calibrated on a separate CSV, pass
@@ -116,6 +120,6 @@ duration_model/      duration model, feature engineering, inference, trainer,
                      local CSV audit, calibration; shipped artifacts are here
 fueling_model/       deterministic fueling rules
 data/                synthetic bootstrap data generator
-evaluation/          sanity checks, GeoLife report, CSV candidate validator
+evaluation/          sanity checks, GeoLife report, ablation, CSV validator
 tests/               API, model, privacy, audit, and workflow tests
 ```
