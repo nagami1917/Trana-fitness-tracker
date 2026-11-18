@@ -38,15 +38,25 @@ import { measure } from './mobile-layout-measure.mjs';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const fixtureDir = resolve(root, 'scripts/.mobile-fixtures');
 
+// In CI, Chromium is installed on the step before this runs, so a missing
+// browser there means the install failed - not "no browser available here".
+// Failing loudly is the difference between a real check and a green tick that
+// measured nothing, so CI passes --require-browser.
+const requireBrowser = process.argv.includes('--require-browser');
+
 let chromium = null;
 try {
   ({ chromium } = await import('playwright-core'));
 } catch {
   console.error(
     'mobile-layout-smoke: `playwright-core` is not installed.\n' +
-      '  npm ci && npx playwright install --with-deps chromium\n' +
-      'SKIPPED - layout was NOT checked here.',
+      '  npm ci && npx playwright install --with-deps chromium',
   );
+  if (requireBrowser) {
+    console.error('--require-browser was passed, so this is a failure, not a skip.');
+    process.exit(1);
+  }
+  console.error('SKIPPED - layout was NOT checked here.');
   process.exit(0);
 }
 
@@ -155,9 +165,13 @@ try {
 if (!exe || !existsSync(exe)) {
   console.error(
     'mobile-layout-smoke: Chromium is not installed.\n' +
-      '  npx playwright install --with-deps chromium\n' +
-      'SKIPPED - layout was NOT checked here.',
+      '  npx playwright install --with-deps chromium',
   );
+  if (requireBrowser) {
+    console.error('--require-browser was passed, so this is a failure, not a skip.');
+    process.exit(1);
+  }
+  console.error('SKIPPED - layout was NOT checked here.');
   process.exit(0);
 }
 
