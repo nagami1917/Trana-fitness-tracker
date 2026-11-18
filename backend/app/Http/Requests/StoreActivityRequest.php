@@ -34,6 +34,13 @@ class StoreActivityRequest extends FormRequest
             'average_pace' => ['nullable', 'numeric', 'min:0', 'max:1440'],
             'gear_id' => ['nullable', 'integer', Rule::exists('gear', 'id')->where(fn ($q) => $q->where('user_id', $this->user()?->id))],
             'notes' => ['nullable', 'string', 'max:2000'],
+            // Intake actually consumed during the session. Bounded by physical
+            // plausibility: 5 L of fluid and 600 g of carbohydrate is already
+            // beyond what any gut absorbs in one session, so anything above it
+            // is a typo rather than data worth keeping.
+            'fluid_ml' => ['nullable', 'integer', 'min:0', 'max:5000'],
+            'carbs_g' => ['nullable', 'integer', 'min:0', 'max:600'],
+            'sodium_mg' => ['nullable', 'integer', 'min:0', 'max:6000'],
             'source' => ['nullable', 'string', 'max:24'],
         ];
     }

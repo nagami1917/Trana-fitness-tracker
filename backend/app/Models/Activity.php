@@ -33,6 +33,11 @@ class Activity extends Model
         'route',
         'route_geojson',
         'notes',
+        // Structured intake. `notes` still carries a human sentence, but these
+        // are what the fueling comparison reads.
+        'fluid_ml',
+        'carbs_g',
+        'sodium_mg',
         'source',
         'is_baseline',
     ];
@@ -52,6 +57,9 @@ class Activity extends Model
             'average_speed' => 'float',
             'average_pace' => 'float',
             'route' => 'array',
+            'fluid_ml' => 'integer',
+            'carbs_g' => 'integer',
+            'sodium_mg' => 'integer',
             'is_baseline' => 'boolean',
             'route_geojson' => 'array',
         ];

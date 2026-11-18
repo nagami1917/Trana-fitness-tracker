@@ -34,6 +34,11 @@ class UpdateActivityRequest extends FormRequest
             'average_pace' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:1440'],
             'gear_id' => ['sometimes', 'nullable', 'integer', Rule::exists('gear', 'id')->where(fn ($q) => $q->where('user_id', $this->user()?->id))],
             'notes' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            // Same bounds as StoreActivityRequest: these feed the fueling
+            // comparison, so a typo has to be correctable, not permanent.
+            'fluid_ml' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:5000'],
+            'carbs_g' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:600'],
+            'sodium_mg' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:6000'],
         ];
     }
 

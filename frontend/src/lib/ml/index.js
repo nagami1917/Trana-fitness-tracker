@@ -11,7 +11,7 @@
  */
 
 import { experienceLevel, loadModel, predictDuration, referenceSpeed } from './duration.js';
-import { recommendFueling } from './fueling.js';
+import { recommendFueling, intakeHistory, intakeComparisonNote } from './fueling.js';
 
 export { loadModel, predictDuration, referenceSpeed, experienceLevel };
 
@@ -102,6 +102,12 @@ export async function predictPlan({
     fuelItems,
   });
 
+  // What this athlete actually consumed on past sessions of this sport, and
+  // how it compares to the rate this plan asks for. Null when nothing was
+  // logged — the note is then omitted rather than invented.
+  const loggedIntake = intakeHistory(history, activity.activity_type);
+  const intakeNote = intakeComparisonNote(loggedIntake, fueling.carbs.perHourG);
+
   return {
     activity_type: activity.activity_type,
     distance_km: round(distanceKm, 2),
@@ -109,6 +115,9 @@ export async function predictPlan({
     route: activity.route ?? null,
     duration,
     fueling,
+    // Measured intake vs this plan's target, for the coach notes.
+    intake_history: loggedIntake,
+    intake_note: intakeNote || null,
     // What the model actually fitted from — NOT how many rows matched the
     // sport. duration.historyCount is the count of rows that survived
     // validHistoryPoints(), so a row outside SPEED_BOUNDS_KMH is excluded

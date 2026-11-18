@@ -1,5 +1,5 @@
 <script>
-  import { Flame, Salad, Droplets, Waves, Clock, Gauge, Utensils, Candy, CupSoda, Check, Sparkles, Info, Package, User, TriangleAlert } from 'lucide-svelte';
+  import { Flame, Salad, Droplets, Waves, Clock, Gauge, Utensils, Candy, CupSoda, Check, Sparkles, Info, Package, User, TriangleAlert, History } from 'lucide-svelte';
   import { duration as fmtDuration, pace, speed, kcal, nf, ml } from '../../lib/format.js';
   import { INTENSITY_COPY } from '../../lib/ml/fueling.js';
   import { unitSystem } from '../../stores/index.js';
@@ -249,6 +249,14 @@
             <Check size={13} class="mt-0.5 shrink-0 text-emerald-500" /> {note}
           </li>
         {/each}
+        {#if plan.intake_note}
+          <!-- Measured from what the athlete actually logged on past sessions
+               of this sport, not from a formula. Rendered apart from the generic
+               notes because it is the only line that is about them. -->
+          <li class="flex gap-2 rounded-xl bg-brand-50 px-2 py-1.5 text-[11.5px] font-semibold leading-relaxed text-brand-900">
+            <History size={13} class="mt-0.5 shrink-0 text-brand-600" /> {plan.intake_note}
+          </li>
+        {/if}
       </ul>
       {#if d.referenceSpeedKmh}
         <!-- The source of the estimate is stated once, in the hero badge. This
