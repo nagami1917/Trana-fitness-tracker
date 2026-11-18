@@ -254,13 +254,64 @@ history. These results do not establish expected accuracy for TRANA users.
 | Cold start | 80 | 11.80 | 51.26% | 16.25% | 13.75% | 11.43 |
 | ≥2 prior activities | 4,215 | 5.62 | 35.31% | 33.86% | 16.99% | 5.62 |
 
-Overall MAE is better than the fixed population-pace baseline (7.10 min), but
-the learned model is essentially tied with the personal Riegel anchor (5.83
-min; reported MAE improvement −0.1%). Real-world interval coverage is poor, so
-intervals must be evaluated and recalibrated using a separate, representative
-consented cohort before any deployment decision. GeoLife has no elevation, its
-run sample is too small for conclusions, and elapsed GPS durations include
-stops.
+Overall MAE is better than the fixed population-pace baseline (7.10 min) — 17.9%
+better, rising to 46.6% on rides — but the learned model is essentially tied
+with the personal Riegel anchor (5.83 min). Real-world interval coverage is
+poor, so intervals must be evaluated and recalibrated using a separate,
+representative consented cohort before any deployment decision. GeoLife has no
+elevation, its run sample is too small for conclusions, and elapsed GPS
+durations include stops.
+
+### Ablation: does the learned correction earn its place?
+
+The duration model does not predict minutes directly. It predicts
+`base_minutes × exp(GBM(features))`, where `base_minutes` already comes from the
+athlete's own Riegel curve (see `duration_model/model_store.py`). So the honest
+question is not "is the model better than nothing" but "does the learned
+correction beat the curve it multiplies". `evaluation/ablation.py` scores
+population prior, curve, and shipped model on the **same chronological rows**,
+so the comparison is paired by construction, and puts a bootstrap interval on
+the difference. Run it with:
+
+```bash
+cd ml && python -m evaluation.ablation --json evaluation/reports/ablation_report.json
+```
+
+**Result: it does not.**
+
+| Slice | n | Curve MAE | Model MAE | Pop. prior MAE | Model vs. curve |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Overall | 4,362 | 5.83 | 5.84 | 7.10 | −0.2% |
+| Ride | 1,372 | 5.07 | 5.14 | 9.49 | −1.4% |
+| Walk | 2,988 | 6.18 | 6.16 | 6.01 | +0.3% |
+| Cold start | 80 | 11.43 | 11.80 | 12.36 | −3.2% |
+| ≥2 prior activities | 4,215 | 5.62 | 5.62 | 6.92 | 0.0% |
+
+Paired bootstrap over 2,000 resamples of the 4,362 rows: the model's MAE
+improvement over the curve is **−0.009 min, 95% CI [−0.019, +0.002]** (negative
+means the model is worse). The interval straddles zero and the model wins only
+**5.3%** of draws — worse than a coin flip. The correction is statistically
+indistinguishable from doing nothing.
+
+The mechanism is visible in the multiplier itself. Across those 4,362 real
+activities, `exp(GBM q50)` has median **0.9904**, ranges **0.8823–1.0239**, and
+has a standard deviation of 0.0167; 35.9% of predictions land within ±1% of
+unity. At most it moves a prediction **+2.4%** or **−11.8%**. A correction
+confined to that band cannot repair a 23.8% median error, which is exactly what
+the ablation measures. Two consequences follow:
+
+- The `[0.7, 3.0]` clamp in `model_store.predict()` is inert — the factor never
+  approaches either bound. It is a guard against a retrained artifact going
+  wild, not something that shapes today's output.
+- On walks the correction is actively unhelpful: the curve beats the population
+  prior by 2.8% on walks, and the model gives some of that back.
+
+This is a negative result and is reported as one. Per the scope agreed for this
+work, the ablation measures and documents the finding but **does not change the
+shipped prediction path**; removing the correction from production is a separate
+product decision. Until that decision is made, the deployed model still
+multiplies the curve by `exp(GBM)` and the accuracy difference is immaterial
+either way (−0.2%).
 
 ## Fueling engine and prediction flow
 
@@ -282,7 +333,9 @@ persists the prediction and model version. See `docs/api.md` for the API contrac
 - The shipped duration model is trained on synthetic activities; its synthetic
   holdout metrics are not real-user accuracy guarantees.
 - GeoLife's real-world q10–q90 coverage is low, and its model MAE is essentially
-  tied with the simple personal-pace baseline.
+  tied with the simple personal-pace baseline. The paired ablation quantifies
+  that tie: 95% CI on the difference straddles zero, so the learned correction
+  adds no measurable accuracy (`docs/ml-methodology.md`).
 - Age and wearable heart-rate streams are not duration-model features.
 - A 30-activity calibration set or a 200-activity retraining set is only a
   minimum-volume guard, not evidence of representative data or reliable

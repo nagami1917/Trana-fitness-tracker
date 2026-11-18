@@ -1,0 +1,144 @@
+{
+  "name": "TRANA duration model \u2014 ablation of the gradient-boosted correction",
+  "generated_at": "2026-11-18T14:22:49+00:00",
+  "question": "Does exp(GBM(features)) improve on 1.0, given that the personal Riegel curve is already the baseline?",
+  "dataset": {
+    "rows": 4362,
+    "users": 51,
+    "note": "GeoLife GPS Trajectories; elevation unavailable, so elevation features are 0"
+  },
+  "overall": {
+    "n": 4362,
+    "curve_mae_min": 5.83,
+    "model_mae_min": 5.84,
+    "pop_mae_min": 7.1,
+    "curve_mdape_pct": 24.0,
+    "model_mdape_pct": 23.8,
+    "curve_within_20_pct": 43.7,
+    "model_within_20_pct": 43.8,
+    "curve_r2": 0.415,
+    "model_r2": 0.414,
+    "model_minus_curve_mae_min": 0.01,
+    "model_vs_curve_pct": -0.2,
+    "curve_vs_pop_pct": 17.9
+  },
+  "by_mode": {
+    "ride": {
+      "n": 1372,
+      "curve_mae_min": 5.07,
+      "model_mae_min": 5.14,
+      "pop_mae_min": 9.49,
+      "curve_mdape_pct": 19.1,
+      "model_mdape_pct": 19.7,
+      "curve_within_20_pct": 51.8,
+      "model_within_20_pct": 50.8,
+      "curve_r2": 0.476,
+      "model_r2": 0.474,
+      "model_minus_curve_mae_min": 0.07,
+      "model_vs_curve_pct": -1.4,
+      "curve_vs_pop_pct": 46.6
+    },
+    "run": {
+      "n": 2,
+      "curve_mae_min": 3.07,
+      "model_mae_min": 2.78,
+      "pop_mae_min": 2.45,
+      "curve_mdape_pct": 31.7,
+      "model_mdape_pct": 28.2,
+      "curve_within_20_pct": 50.0,
+      "model_within_20_pct": 50.0,
+      "curve_r2": -92.793,
+      "model_r2": -53.678,
+      "model_minus_curve_mae_min": -0.29,
+      "model_vs_curve_pct": 9.4,
+      "curve_vs_pop_pct": -25.3
+    },
+    "walk": {
+      "n": 2988,
+      "curve_mae_min": 6.18,
+      "model_mae_min": 6.16,
+      "pop_mae_min": 6.01,
+      "curve_mdape_pct": 26.7,
+      "model_mdape_pct": 26.2,
+      "curve_within_20_pct": 40.0,
+      "model_within_20_pct": 40.6,
+      "curve_r2": 0.387,
+      "model_r2": 0.386,
+      "model_minus_curve_mae_min": -0.02,
+      "model_vs_curve_pct": 0.3,
+      "curve_vs_pop_pct": -2.8
+    }
+  },
+  "by_history": {
+    "cold_start": {
+      "n": 80,
+      "curve_mae_min": 11.43,
+      "model_mae_min": 11.8,
+      "pop_mae_min": 12.36,
+      "curve_mdape_pct": 43.4,
+      "model_mdape_pct": 45.7,
+      "curve_within_20_pct": 20.0,
+      "model_within_20_pct": 22.5,
+      "curve_r2": 0.321,
+      "model_r2": 0.274,
+      "model_minus_curve_mae_min": 0.37,
+      "model_vs_curve_pct": -3.2,
+      "curve_vs_pop_pct": 7.5
+    },
+    "thin_history_1": {
+      "n": 67,
+      "curve_mae_min": 12.52,
+      "model_mae_min": 12.51,
+      "pop_mae_min": 12.31,
+      "curve_mdape_pct": 24.8,
+      "model_mdape_pct": 24.5,
+      "curve_within_20_pct": 38.8,
+      "model_within_20_pct": 41.8,
+      "curve_r2": 0.056,
+      "model_r2": 0.053,
+      "model_minus_curve_mae_min": -0.01,
+      "model_vs_curve_pct": 0.1,
+      "curve_vs_pop_pct": -1.7
+    },
+    "personalized_2plus": {
+      "n": 4215,
+      "curve_mae_min": 5.62,
+      "model_mae_min": 5.62,
+      "pop_mae_min": 6.92,
+      "curve_mdape_pct": 23.7,
+      "model_mdape_pct": 23.5,
+      "curve_within_20_pct": 44.3,
+      "model_within_20_pct": 44.2,
+      "curve_r2": 0.422,
+      "model_r2": 0.423,
+      "model_minus_curve_mae_min": 0.0,
+      "model_vs_curve_pct": 0.0,
+      "curve_vs_pop_pct": 18.8
+    }
+  },
+  "paired_bootstrap": {
+    "draws": 2000,
+    "mae_improvement_min": -0.009,
+    "ci95_low_min": -0.019,
+    "ci95_high_min": 0.002,
+    "share_draws_model_better_pct": 5.3,
+    "straddles_zero": true
+  },
+  "learned_factor": {
+    "n": 4362,
+    "min": 0.8823,
+    "p5": 0.9802,
+    "median": 0.9904,
+    "p95": 1.0175,
+    "max": 1.0239,
+    "std": 0.01671,
+    "share_within_1pct_of_unity": 35.9,
+    "max_upscale_pct": 2.4,
+    "max_downscale_pct": -11.8,
+    "note": "exp(GBM q50) as a multiplier on the personal-curve duration. A value of 1.0 means the correction changed nothing."
+  },
+  "verdict": {
+    "recommendation": "drop the corrected factor",
+    "reason": "The 95% CI on the MAE difference straddles zero ([-0.019, 0.002] min). The learned factor is statistically indistinguishable from 1.0, so it adds machinery without adding accuracy (-0.2% vs the curve)."
+  }
+}
