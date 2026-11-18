@@ -332,7 +332,13 @@ def build_report(frame: pd.DataFrame, model: DurationModel) -> dict:
             "speed_trim_kmh": list(SPEED_TRIM_KMH),
         },
         "limitations": [
-            "GeoLife has no elevation in the feature table → elevation features are 0 (Beijing is flat).",
+            "GeoLife has no elevation in the feature table → elevation features are 0. "
+            "The raw .plt trajectories do carry an altitude column, but it is GPS "
+            "altitude, not terrain: measured median ~102 m of apparent gain per km "
+            "against a true 5-15 m/km for Beijing, with individual fixes peaking above "
+            "13,000 m. Suppressing it needs a DEM, so this report stays elevation-blind "
+            "rather than gaining a number it cannot defend. Trana's own elevation path "
+            "uses Copernicus GDEM via Open-Meteo, not this column.",
             "Durations are door-to-door elapsed GPS times (includes stops), matching Trana's elapsed-time target.",
             "Mode labels are transportation modes: bike→ride, walk→walk; motorised modes excluded; run has n=2.",
             "Weight and experience are synthetic assumptions, not measured per participant.",

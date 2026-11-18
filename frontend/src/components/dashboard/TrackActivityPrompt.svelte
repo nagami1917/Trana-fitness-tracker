@@ -73,6 +73,7 @@
         pace_min_km: liveTracker.avgPaceMinKm,
         speed_kmh: liveTracker.avgSpeedKmh,
         elevation_gain_m: liveTracker.elevationM,
+        elevation_stats: liveTracker.elevationStats,
         calories: liveTracker.estimatedCalories,
         gpsStatus: liveTracker.gpsStatus,
         gpsMessage: liveTracker.gpsMessage,
@@ -157,10 +158,27 @@
       { label: 'Time', value: timeText },
       { label: 'Pace', value: view.pace_min_km > 0 ? `${formatPace(view.pace_min_km, $unitSystem)} ${paceUnit($unitSystem)}` : '—:—' },
       { label: 'Speed', value: view.speed_kmh > 0 ? `${formatSpeed(view.speed_kmh, $unitSystem)} ${speedUnit($unitSystem)}` : '—' },
-      { label: 'Elevation', value: elevationWithUnit(view.elevation_gain_m, $unitSystem) },
+      { label: 'Elevation', value: elevationWithUnit(view.elevation_gain_m, $unitSystem), hint: elevationHint(view.elevation_stats) },
       { label: 'Calories', value: `${kcal(view.calories)} kcal` },
     ];
   });
+
+  /**
+   * How the climb figure was derived, in words.
+   *
+   * GPS altitude is noisy enough that the honest answer is often "we suppressed
+   * a lot of this". Saying so beats showing a confident number that the device
+   * cannot actually support - elevation is the duration model's strongest
+   * input, so a fabricated climb predicts a fabricated duration.
+   */
+  function elevationHint(stats) {
+    if (!stats || !stats.usedPoints) return 'No altitude recorded';
+    if (stats.noiseM >= 8) {
+      return `GPS altitude noisy (±${Math.round(stats.noiseM)} m) - large wobbles ignored`;
+    }
+    if (stats.noiseM >= 4) return `Smoothed · ±${Math.round(stats.noiseM)} m altitude noise`;
+    return `Smoothed · low-noise altitude (±${Math.round(stats.noiseM)} m)`;
+  }
 
   const mapBadge = $derived.by(() => {
     if (!view) return '';
@@ -386,6 +404,9 @@
               <p class="num-tabular mt-0.5 font-display text-base sm:text-lg font-extrabold text-ink-900">
                 {tile.value}
               </p>
+              {#if tile.hint}
+                <p class="mt-0.5 text-[10px] font-bold leading-snug text-ink-400">{tile.hint}</p>
+              {/if}
             </div>
           {/each}
         </div>

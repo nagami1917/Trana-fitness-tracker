@@ -14,7 +14,8 @@ import { activityApi, validateTrackPoint } from '../services/activityService.js'
 import { dailySessionApi } from '../services/dailySessionService.js';
 import { watch, getCurrentPosition, trackPoint, GpsError } from '../services/gpsService.js';
 import { snapRoute } from '../services/roadSnappingService.js';
-import { haversineKm, elevationGainM } from './geo.js';
+import { haversineKm } from './geo.js';
+import { robustElevationGain } from './elevation.js';
 import { estimateMet, recommendFueling } from './ml/fueling.js';
 import { computeGhostPacerState } from './route/ghostPacer.js';
 import { detectNewPRs } from './analytics/records.js';
@@ -419,7 +420,16 @@ const avgSpeedKmh = $derived(
 const avgPaceMinKm = $derived(
   distanceKm >= MIN_ACTIVITY_DISTANCE_KM && durationMin > 0 ? durationMin / distanceKm : 0,
 );
-const elevationM = $derived(points.length >= 2 ? elevationGainM(points) : 0);
+// Altitude from the device carries metre-scale noise, and summing every
+// positive step of it invents climb on flat ground (a flat 20 km ride reads
+// ~6.7 km of ascent with 6 m noise). robustElevationGain() estimates this
+// track's own noise, smooths by distance and only counts rises that clear it.
+// Elevation is the duration model's most important feature, so a fake number
+// here propagates into the prediction.
+const elevationStats = $derived(
+  points.length >= 2 ? robustElevationGain(points, { haversine: haversineKm }) : null,
+);
+const elevationM = $derived(elevationStats?.gainM ?? 0);
 
 const estimatedCalories = $derived.by(() => {
   if (durationMin <= 0) return 0;
@@ -1071,6 +1081,7 @@ export const liveTracker = {
   get avgSpeedKmh() { return avgSpeedKmh; },
   get avgPaceMinKm() { return avgPaceMinKm; },
   get elevationM() { return elevationM; },
+  get elevationStats() { return elevationStats; },
   get estimatedCalories() { return estimatedCalories; },
   get lastOutcome() { return lastOutcome; },
   get lastDailySession() { return lastDailySession; },
