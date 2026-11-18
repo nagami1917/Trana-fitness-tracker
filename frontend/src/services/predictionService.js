@@ -11,7 +11,8 @@
  */
 
 import { api } from './client.js';
-import { polylineLengthKm, elevationGainM } from '../lib/geo.js';
+import { polylineLengthKm, haversineKm } from '../lib/geo.js';
+import { robustElevationGain } from '../lib/elevation.js';
 
 /**
  * Build the ML-facing analysis of a tracked or planned route.
@@ -40,6 +41,10 @@ export function routeAnalysis({
   const elevation = points
     .map((p) => p.altitudeM)
     .filter((v) => v != null);
+  // Same filtered ascent the tracker shows. Summing raw altitude steps here
+  // would feed a noise-inflated climb into the prediction that the athlete
+  // never saw, and the two numbers would disagree on the same activity.
+  const gain = robustElevationGain(points, { haversine: haversineKm });
 
   return {
     activityType,
@@ -47,7 +52,7 @@ export function routeAnalysis({
     durationMin: Math.round(durationMin * 10) / 10,
     avgSpeedKmh: Math.round(avgSpeedKmh * 10) / 10,
     avgPaceMinKm: Math.round(avgPaceMinKm * 100) / 100,
-    elevationGainM: Math.round(elevationGainM(points)),
+    elevationGainM: gain.gainM,
     route: coords,
     elevation,
     plannedDistanceKm,
