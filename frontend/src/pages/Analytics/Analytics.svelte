@@ -170,15 +170,16 @@
 
         <p class="mt-3 text-[11px] font-semibold leading-relaxed text-ink-500">
           {#if $modelCard?.training_source === 'synthetic'}
-            These test metrics use synthetic activities, not real-world validation.
+            The figures below are scored on synthetic activities this model generated itself — they measure
+            formula recovery, not real-world accuracy. Validated real-world error is shown separately.
           {:else}
             Test metrics may not reflect your individual results.
           {/if}
         </p>
         <div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {#each [
-            { label: 'R²', value: $modelCard?.metrics?.r2 ?? '—' },
-            { label: 'Test error', value: $modelCard?.metrics ? `±${Math.round($modelCard.metrics.mape_pct)}%` : '—' },
+            { label: 'R² (synthetic)', value: $modelCard?.metrics?.r2 ?? '—' },
+            { label: 'Error (synthetic)', value: $modelCard?.metrics ? `±${Math.round($modelCard.metrics.mape_pct)}%` : '—' },
             { label: 'MAE', value: $modelCard?.metrics ? `${$modelCard.metrics.mae_min} min` : '—' },
             { label: '80% band', value: $modelCard?.metrics ? `${$modelCard.metrics.interval_coverage_pct}%` : '—' },
           ] as metric (metric.label)}
@@ -188,6 +189,33 @@
             </div>
           {/each}
         </div>
+
+        {#if $modelCard?.training_source === 'synthetic'}
+          <!-- The honest counterweight to the synthetic numbers above. These are
+               the measured results of scoring the shipped artifact against
+               GeoLife's 4,362 real GPS trajectories (ml/evaluation/reports). -->
+          <div class="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3">
+            <p class="text-[10px] font-extrabold uppercase tracking-wide text-amber-800">
+              Validated on real activities (GeoLife)
+            </p>
+            <div class="mt-2 grid grid-cols-3 gap-2 text-center">
+              {#each [
+                { label: 'Cycling', value: '±26%' },
+                { label: 'Walking', value: '±41%' },
+                { label: 'Range covers truth', value: '17%' },
+              ] as real (real.label)}
+                <div>
+                  <p class="num-tabular font-display text-sm font-extrabold text-amber-900">{real.value}</p>
+                  <p class="text-[10px] font-bold text-amber-700">{real.label}</p>
+                </div>
+              {/each}
+            </div>
+            <p class="mt-2 text-[10px] font-semibold leading-relaxed text-amber-800">
+              4,362 real GPS activities from 51 people. Ranges shown on plans use these measured errors,
+              not the synthetic band.
+            </p>
+          </div>
+        {/if}
 
         <button class="mt-4 inline-flex items-center gap-1.5 text-[11px] font-extrabold text-brand-600" onclick={() => navigate('/plan')}>
           Run a prediction <ArrowRight size={13} />

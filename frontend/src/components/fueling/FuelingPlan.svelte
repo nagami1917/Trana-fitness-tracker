@@ -37,6 +37,24 @@
    */
   const basisTone = $derived(Number(d.historyCount ?? 0) >= 2 ? 'personal' : 'generic');
 
+  /**
+   * The range to display.
+   *
+   * The model's own q10-q90 band is calibrated against the synthetic corpus and
+   * covers real durations only ~17% of the time, so it is shown only when no
+   * validated figure is available. `validatedLow`/`High` come from the GeoLife
+   * external validation and reflect the error the model has actually
+   * demonstrated for this sport and history depth.
+   */
+  const displayLow = $derived(Number(d.validatedLow ?? d.low));
+  const displayHigh = $derived(Number(d.validatedHigh ?? d.high));
+
+  const rangeTitle = $derived(
+    d.validatedErrorPct
+      ? `Median estimate ±${d.validatedErrorPct}% — the error measured on real GPS activities (GeoLife validation), not the narrower synthetic-data band`
+      : 'Model quantile range',
+  );
+
   const tiles = $derived([
     {
       label: 'Calories',
@@ -92,7 +110,12 @@
       </div>
       <div class="mt-1 flex flex-wrap items-end gap-x-3 gap-y-1">
         <p class="num-tabular font-display text-[40px] font-extrabold leading-none">{fmtDuration(d.minutes)}</p>
-        <p class="num-tabular pb-1 text-sm font-bold text-white/90">{Math.round(d.low)}–{Math.round(d.high)} min range</p>
+        <p
+          class="num-tabular pb-1 text-sm font-bold text-white/90"
+          title={rangeTitle}
+        >
+          typically {Math.round(displayLow)}–{Math.round(displayHigh)} min
+        </p>
       </div>
       {#if basisTone === 'personal'}
         <p class="num-tabular mt-2 inline-flex items-center gap-1.5 rounded-full bg-white/25 px-2.5 py-1 text-[11px] font-extrabold text-white backdrop-blur">
@@ -110,8 +133,17 @@
         <span class="inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-1">
           <Gauge size={12} /> {d.paceMinPerKm ? pace(d.paceMinPerKm, $unitSystem) : speed(d.speedKmh, $unitSystem)}
         </span>
-        <span class="inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-1" title="How much to trust this estimate, based on how much history the model has for this sport">
-          <Clock size={12} /> {Math.round(Number(d.confidence ?? 0) * 100)}% confidence
+        <!-- Labeled "model" confidence, not confidence: the score weights the
+             band width against how much history this sport has, so it says how
+             much the model trusts itself, not how often it was right. Real-world
+             accuracy is the validated ± figure shown next to the range. -->
+        <span
+          class="inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-1"
+          title={d.validatedErrorPct
+            ? `Model self-confidence (${Math.round(Number(d.confidence ?? 0) * 100)}%). Measured real-world error for this sport is ±${d.validatedErrorPct}%.`
+            : 'Model self-confidence based on how much history this sport has'}
+        >
+          <Clock size={12} /> ±{d.validatedErrorPct ?? Math.round((1 - Number(d.confidence ?? 0)) * 100)}% typical error
         </span>
         {#if Number(plan.elevation_gain_m) > 0}
           {@const perKm = Math.round(Number(plan.elevation_gain_m) / Math.max(0.1, Number(plan.distance_km)))}
