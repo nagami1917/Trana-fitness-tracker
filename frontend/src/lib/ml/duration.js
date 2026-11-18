@@ -22,6 +22,27 @@ export const SPEED_BOUNDS_KMH = {
   hike: [0.5, 14.0],
 };
 export const DOMAIN_MAX_DISTANCE_KM = { run: 45.0, ride: 150.0, walk: 25.0, hike: 40.0 };
+
+/**
+ * Steepest climb-per-km that is physically plausible for a *whole* activity.
+ *
+ * A single kilometre of Alpe d'Huez is ~100 m/km, and the hardest sustained
+ * road climb in the world is ~130 m/km. Averaging 60 m/km over an entire
+ * session is already a serious mountain route.
+ *
+ * This matters because elevation drives the reference curve: a GPS track whose
+ * altitude noise inflated 300 m into 13,000 m becomes a ride the athlete never
+ * did. Run through `flatEquivalentDuration` it looks like they averaged 51 km/h
+ * on the flat instead of 22.6, and every later prediction inherits that.
+ *
+ * 60 rather than a looser 150 because a *clamped* value is still treated as
+ * real. At 150 m/km an impossible 4,000 m ride and an impossible 6,000 m ride
+ * both clamp to the same corner and produce identical, wrong predictions - the
+ * ceiling turns different errors into one confident lie. Rows above this are
+ * discarded by `isImplausibleElevation()` instead, so the ceiling only ever
+ * applies to input an athlete could actually have ridden.
+ */
+export const MAX_PLAUSIBLE_ELEV_PER_KM = 60;
 const RIEGEL_PRIOR_STRENGTH = 0.25;
 
 /**
@@ -108,9 +129,26 @@ export function loadModel() {
 }
 
 export function flatEquivalentDuration(durationMin, distanceKm, elevationGainM, activityType) {
-  const elevPerKm = Math.min(300, Math.max(0, Number(elevationGainM) || 0) / Math.max(distanceKm, 0.1));
+  const rawPerKm = Math.max(0, Number(elevationGainM) || 0) / Math.max(distanceKm, 0.1);
+  const elevPerKm = Math.min(MAX_PLAUSIBLE_ELEV_PER_KM, rawPerKm);
   const sens = FLAT_CLIMB_SENSITIVITY[activityType] ?? 1.0;
   return durationMin / (1 + sens * (elevPerKm / 100));
+}
+
+/**
+ * True when a history row's elevation is too steep to be real terrain.
+ *
+ * Used to discount - not delete - such rows when fitting the athlete's
+ * reference curve. Deleting would throw away a genuine session (and the pace
+ * the athlete really rode); trusting the elevation would corrupt the curve for
+ * everyone who shares that sport. Treating it as flat keeps the distance and
+ * duration and drops only the part that cannot be believed.
+ */
+export function isImplausibleElevation(distanceKm, elevationGainM, { tolerance = 1 } = {}) {
+  const distance = Number(distanceKm) || 0;
+  const elevation = Math.max(0, Number(elevationGainM) || 0);
+  if (!(distance > 0) || !(elevation > 0)) return false;
+  return elevation / distance > MAX_PLAUSIBLE_ELEV_PER_KM * tolerance;
 }
 
 function parseTimestampSec(raw) {
@@ -137,7 +175,13 @@ function validHistoryPoints(history = [], activityType, excludeId = null) {
     const speed = distance / (duration / 60);
     if (speed < loSpd || speed > hiSpd) continue;
     const ele = Math.max(0, Number(row.elevation_gain_m) || 0);
-    const flatMin = flatEquivalentDuration(duration, distance, ele, activityType);
+    // An impossible climb-per-km makes the flat-equivalent pace meaningless.
+    // Keep the session, drop the claim: treat it as flat so a corrupted
+    // elevation cannot move the athlete's reference curve.
+    // 2x tolerance: only reject climbs that are impossible, not merely extreme.
+    // A real 80 m/km mountain route stays in the fit; a GPS artefact does not.
+    const believable = !isImplausibleElevation(distance, ele, { tolerance: 2 });
+    const flatMin = flatEquivalentDuration(duration, distance, believable ? ele : 0, activityType);
     pts.push({
       distance,
       duration,
