@@ -12,7 +12,7 @@
   import { onMount } from 'svelte';
   import { LoaderCircle, Pencil, Plus, Trash2, Check, X, TriangleAlert } from 'lucide-svelte';
   import Card from '../common/Card.svelte';
-  import { notify, unitSystem } from '../../stores/index.js';
+  import { baselineSessions, notify, unitSystem } from '../../stores/index.js';
   import { api } from '../../services/client.js';
   import { distanceUnit } from '../../lib/units.js';
   import {
@@ -53,6 +53,9 @@
     try {
       const res = await api.baselineActivities.list();
       saved = res?.data ?? [];
+      // Publish to the shared store so the plan preview recomputes from the
+      // corrected sessions instead of keeping the generic pace.
+      baselineSessions.set(saved);
     } catch (e) {
       error = e?.message || 'Could not load your past sessions.';
     } finally {

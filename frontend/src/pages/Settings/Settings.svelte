@@ -31,7 +31,7 @@
   import CityRegionInput from '../../components/common/CityRegionInput.svelte';
   import ProgressBar from '../../components/common/ProgressBar.svelte';
   import PastSessions from '../../components/settings/PastSessions.svelte';
-  import { profile, session, logout, notify, modelCard, activities, gearList, loadGear, unitSystem } from '../../stores/index.js';
+  import { profile, session, logout, notify, modelCard, activities, baselineSessions as savedSessions, gearList, loadGear, unitSystem } from '../../stores/index.js';
   import { api } from '../../services/client.js';
   import { energyApi, importBatch, parseCsv, CSV_COLUMNS } from '../../services/energyService.js';
   import { buildHrZones } from '../../lib/analytics/heartRate.js';
@@ -230,14 +230,13 @@
    * confusion this loader exists to remove: the card must report what the
    * model can use, not what the database happens to store.
    */
-  let savedSessions = $state([]);
-
   async function loadSavedSessions() {
     try {
       const res = await api.baselineActivities.list();
-      savedSessions = Array.isArray(res?.data) ? res.data : [];
+      const rows = Array.isArray(res?.data) ? res.data : [];
+      savedSessions.set(rows);
     } catch {
-      savedSessions = [];
+      savedSessions.set([]);
     }
   }
 
@@ -245,14 +244,14 @@
   const usableBySport = $derived.by(() => {
     const out = {};
     for (const type of ['run', 'ride', 'walk', 'hike']) {
-      const rows = savedSessions.filter((row) => row.activity_type === type);
+      const rows = $savedSessions.filter((row) => row.activity_type === type);
       out[type] = sessionUsability(rows, type).usableCount;
     }
     return out;
   });
 
   const usableTotal = $derived(Object.values(usableBySport).reduce((sum, n) => sum + n, 0));
-  const unusableTotal = $derived(savedSessions.length - usableTotal);
+  const unusableTotal = $derived($savedSessions.length - usableTotal);
 
   async function importMeasurements() {
     if (importing) return;

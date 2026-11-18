@@ -1,6 +1,6 @@
 <script>
   import { User, Target, Droplets, Footprints, Timer, ArrowRight, LoaderCircle, Check, MapPin, Sparkles, Plus, Trash2 } from 'lucide-svelte';
-  import { profile, goals, notify, session } from '../../stores/index.js';
+  import { profile, goals, notify, session, baselineSessions } from '../../stores/index.js';
   import { api } from '../../services/client.js';
   import { link, navigate } from '../../lib/router.js';
   import { mascotTour } from '../../lib/mascotTour.svelte.js';
@@ -248,6 +248,10 @@
           saved += 1;
         }
       }
+      // Push the saved sessions into the shared store so the very first plan
+      // is estimated from the athlete's own pace, not a population average.
+      const refreshed = await api.baselineActivities.list().catch(() => null);
+      if (Array.isArray(refreshed?.data)) baselineSessions.set(refreshed.data);
     } catch (error) {
       baselineError = error.message || 'Could not save your past sessions.';
       throw error;

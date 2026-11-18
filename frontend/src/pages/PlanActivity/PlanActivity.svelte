@@ -35,6 +35,7 @@
   import Segmented from '../../components/common/Segmented.svelte';
   import {
     activities,
+    baselineSessions,
     goals,
     profile,
     plans,
@@ -336,7 +337,22 @@
           sweat_profile: form.sweat_profile,
           daily_carb_goal_g: $goals?.carb_target_g ?? $profile?.daily_carb_goal_g,
         },
-        activities: $activities,
+        // The model fits its pace curve from the athlete's own sessions. Those
+        // come from two places: logged activities, and the past sessions typed
+        // in onboarding/Settings (`is_baseline`). The activities endpoint
+        // hides the latter so the activity list never invents workouts, which
+        // meant the preview used to ignore them and fall back to a generic
+        // pace even when the athlete had entered their own. Same-sport rows
+        // are what change the estimate; the model filters the rest itself.
+        activities: [
+          ...$activities,
+          ...$baselineSessions.map((session) => ({
+            ...session,
+            // Baseline rows expose `performed_on` rather than a timestamp;
+            // recency weighting only needs a comparable date.
+            started_at: session.started_at ?? session.performed_on ?? null,
+          })),
+        ],
         fuelItems: $fuelItems,
         acwr: $trainingLoad?.acwr ?? null,
         carbLoading: Boolean($activeRacePrep?.prep?.inCarbLoadWindow),
@@ -363,6 +379,9 @@
     void routing;
     void routeMode;
     void $activities.length;
+    // Adding or fixing a past session changes the athlete's own pace curve, so
+    // the estimate must recompute without a reload.
+    void $baselineSessions.length;
 
     clearTimeout(timer);
     if (loadedFromSaved) return;
