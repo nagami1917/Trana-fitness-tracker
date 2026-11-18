@@ -235,7 +235,12 @@ try {
   assert.ok(document.body.textContent.includes('How do you remember it?'), 'pace/time mode dropdown present');
   // Running is pace-first, so the pace box is what shows by default. Cycling
   // is speed-first — covered in baseline-sessions-smoke.mjs.
-  assert.ok(document.body.textContent.includes('Pace (min/km)'), 'running defaults to pace entry');
+  // The label now states the unit explicitly ("Minutes per km") because a bare
+  // "Pace" box was read as total time. Accept either wording.
+  assert.ok(
+    /Minutes per km|Pace \(min\/km\)/.test(document.body.textContent),
+    'running defaults to pace entry',
+  );
   assert.ok(
     [...document.querySelectorAll('select')].some((sel) => [...sel.options].some((o) => o.value === 'speed')),
     'a speed option exists, so a cyclist is never forced into a pace box',
@@ -257,8 +262,11 @@ try {
   // the bounds in force are the run ones (2.5-30 km/h): 5 km at 1:00/km is
   // 60 km/h, far outside them. Bounds are per sport, which is why the same
   // numbers would be legal for a ride.
-  const distanceInput = [...document.querySelectorAll('input[type=number]')].find((i) => i.placeholder === '5.0');
-  const paceInput = [...document.querySelectorAll('input[type=number]')].find((i) => i.placeholder === '6.0');
+  // Placeholders are per-sport now, so find the fields by their input contract
+  // instead of by the old hardcoded example values.
+  const numberInputs = [...document.querySelectorAll('input[type=number]')];
+  const distanceInput = numberInputs.find((i) => Number(i.getAttribute('min')) === 0.1);
+  const paceInput = numberInputs.find((i) => Number(i.getAttribute('min')) === 0.5);
   distanceInput.value = '5';
   distanceInput.dispatchEvent(new window.Event('input'));
   paceInput.value = '1'; // 5 km at 1:00/km = 60 km/h

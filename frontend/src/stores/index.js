@@ -16,6 +16,16 @@ import { buildRacePrepPlan } from '../lib/analytics/racePlanner.js';
 export const session = writable(null);
 export const profile = writable(null);
 export const activities = writable([]);
+// The onboarding/Settings past sessions (`is_baseline` rows).
+//
+// These are NOT in `activities`: ActivityController::index filters them out so
+// the activity list never invents workouts. But they are exactly the rows the
+// duration model fits the athlete's own pace curve from, so the browser
+// preview must receive them or it silently falls back to a generic pace. The
+// server-side path already includes them (ActivityService::history has no
+// is_baseline filter), so keeping this separate store is what makes the
+// preview agree with the saved prediction.
+export const baselineSessions = writable([]);
 export const plans = writable([]);
 export const goals = writable(null);
 export const fuelItems = writable([]);
@@ -101,6 +111,7 @@ function clearUserData() {
   session.set(null);
   profile.set(null);
   activities.set([]);
+  baselineSessions.set([]);
   plans.set([]);
   goals.set(null);
   fuelItems.set([]);
@@ -159,17 +170,35 @@ export async function bootstrap() {
 }
 
 export async function refresh() {
-  const [p, a, pl, g] = await Promise.all([
+  const [p, a, pl, g, b] = await Promise.all([
     api.profile.get(),
     api.activities.list(),
     api.predictions.list(),
     api.goals.get(),
+    // Past sessions live in their own endpoint because the activity list
+    // deliberately hides them. The model still needs them, so they are
+    // fetched here for the in-browser preview to use as history.
+    api.baselineActivities.list().catch(() => ({ data: [] })),
   ]);
   profile.set(p);
   activities.set(a);
   plans.set(pl);
   goals.set(g);
+  baselineSessions.set(Array.isArray(b?.data) ? b.data : []);
   if (get(session)?.id) writeBootCache();
+}
+
+/** Reload the athlete's past sessions (onboarding/Settings baselines). */
+export async function loadBaselineSessions() {
+  if (!api.auth.hasToken()) return [];
+  try {
+    const res = await api.baselineActivities.list();
+    const rows = Array.isArray(res?.data) ? res.data : [];
+    baselineSessions.set(rows);
+    return rows;
+  } catch {
+    return get(baselineSessions);
+  }
 }
 
 export async function loadFuelItems() {

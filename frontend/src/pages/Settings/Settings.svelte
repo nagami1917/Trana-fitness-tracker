@@ -31,10 +31,11 @@
   import CityRegionInput from '../../components/common/CityRegionInput.svelte';
   import ProgressBar from '../../components/common/ProgressBar.svelte';
   import PastSessions from '../../components/settings/PastSessions.svelte';
-  import { profile, session, logout, notify, modelCard, activities, gearList, loadGear, unitSystem } from '../../stores/index.js';
+  import { profile, session, logout, notify, modelCard, activities, baselineSessions as savedSessions, gearList, loadGear, unitSystem } from '../../stores/index.js';
   import { api } from '../../services/client.js';
   import { energyApi, importBatch, parseCsv, CSV_COLUMNS } from '../../services/energyService.js';
   import { buildHrZones } from '../../lib/analytics/heartRate.js';
+  import { sessionUsability } from '../../lib/baselineSession.js';
   import { buildPushSubscriptionPayload, notificationSupport, showLocalFuelingNotification } from '../../lib/pushNotifications.js';
   import { theme, setTheme } from '../../lib/theme.js';
   import {
@@ -113,6 +114,7 @@
     void loadCalibration();
     void loadGear();
     void loadPushStatus();
+    void loadSavedSessions();
   });
 
   async function loadPushStatus() {
@@ -218,6 +220,38 @@
       calibration = null;
     }
   }
+
+  /**
+   * Saved past sessions, as the model sees them.
+   *
+   * `$profile.total_activities` counts every activity row, which includes rows
+   * the duration model silently discards (a pace outside SPEED_BOUNDS_KMH).
+   * Showing that count next to a prediction built from none is the exact
+   * confusion this loader exists to remove: the card must report what the
+   * model can use, not what the database happens to store.
+   */
+  async function loadSavedSessions() {
+    try {
+      const res = await api.baselineActivities.list();
+      const rows = Array.isArray(res?.data) ? res.data : [];
+      savedSessions.set(rows);
+    } catch {
+      savedSessions.set([]);
+    }
+  }
+
+  // Sessions are grouped per sport because a ride curve can never use walks.
+  const usableBySport = $derived.by(() => {
+    const out = {};
+    for (const type of ['run', 'ride', 'walk', 'hike']) {
+      const rows = $savedSessions.filter((row) => row.activity_type === type);
+      out[type] = sessionUsability(rows, type).usableCount;
+    }
+    return out;
+  });
+
+  const usableTotal = $derived(Object.values(usableBySport).reduce((sum, n) => sum + n, 0));
+  const unusableTotal = $derived($savedSessions.length - usableTotal);
 
   async function importMeasurements() {
     if (importing) return;
@@ -439,8 +473,8 @@
         <div class="grid w-full grid-cols-3 gap-2">
           <div class="rounded-2xl border border-brand-100 bg-white/80 px-2 py-2.5">
             <Footprints size={14} class="mx-auto text-brand-500" />
-            <p class="num-tabular mt-1 text-base font-extrabold leading-none text-ink-900">{$profile?.total_activities ?? 0}</p>
-            <p class="mt-1 text-[11px] font-bold text-ink-400">sessions</p>
+            <p class="num-tabular mt-1 text-base font-extrabold leading-none text-ink-900">{usableTotal}</p>
+            <p class="mt-1 text-[11px] font-bold text-ink-400">usable sessions</p>
           </div>
           <div class="rounded-2xl border border-brand-100 bg-white/80 px-2 py-2.5">
             <Flame size={14} class="mx-auto text-brand-500" />
@@ -453,6 +487,27 @@
             <p class="mt-1 text-[11px] font-bold text-ink-400">level</p>
           </div>
         </div>
+
+        {#if unusableTotal > 0}
+          <!-- The card above counts what the model can use. This explains the
+               gap when rows exist but were discarded, so "0 usable" is never
+               mistaken for "nothing was saved". -->
+          <div class="w-full rounded-xl border border-amber-200 bg-amber-50 px-2.5 py-2 text-left">
+            <p class="text-[11px] font-semibold leading-relaxed text-amber-900">
+              {unusableTotal} saved session{unusableTotal === 1 ? '' : 's'} can't be used by the model.
+              {#if usableTotal === 0}
+                Estimates stay generic until {unusableTotal === 1 ? 'it is' : 'they are'} fixed.
+              {/if}
+            </p>
+            <button
+              type="button"
+              class="mt-1 text-[11px] font-extrabold text-amber-800 underline underline-offset-2"
+              onclick={() => (activeTab = 'sessions')}
+            >
+              Review past sessions
+            </button>
+          </div>
+        {/if}
       </Card>
 
       <div class="space-y-4">

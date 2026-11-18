@@ -109,7 +109,12 @@ export async function predictPlan({
     route: activity.route ?? null,
     duration,
     fueling,
-    history_used: history.filter((h) => h.activity_type === activity.activity_type).length,
+    // What the model actually fitted from — NOT how many rows matched the
+    // sport. duration.historyCount is the count of rows that survived
+    // validHistoryPoints(), so a row outside SPEED_BOUNDS_KMH is excluded
+    // here exactly as it is excluded from the curve. Counting raw rows would
+    // let this claim personalisation the estimate does not have.
+    history_used: Number(duration.historyCount ?? 0),
     model: {
       name: card?.name ?? 'TRANA duration model',
       version: card?.version ?? 'offline-fallback',

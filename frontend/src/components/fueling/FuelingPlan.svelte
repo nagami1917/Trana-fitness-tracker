@@ -1,5 +1,5 @@
 <script>
-  import { Flame, Salad, Droplets, Waves, Clock, Gauge, Utensils, Candy, CupSoda, Check, Sparkles, Info, Package } from 'lucide-svelte';
+  import { Flame, Salad, Droplets, Waves, Clock, Gauge, Utensils, Candy, CupSoda, Check, Sparkles, Info, Package, User, TriangleAlert } from 'lucide-svelte';
   import { duration as fmtDuration, pace, speed, kcal, nf, ml } from '../../lib/format.js';
   import { INTENSITY_COPY } from '../../lib/ml/fueling.js';
   import { unitSystem } from '../../stores/index.js';
@@ -26,6 +26,16 @@
     if (count === 1) return `Based on 1 past ${sport} session`;
     return `Generic ${sport} pace — add past sessions to personalise`;
   });
+
+  /**
+   * The same fact, but as a badge the athlete cannot miss.
+   *
+   * The old version put this in 11px translucent text under the duration,
+   * where "Generic ride pace" was easy to read as decoration. The source of an
+   * estimate is the single most decision-relevant thing on this card, so it
+   * gets a solid pill: personal (white on brand) vs generic (amber warning).
+   */
+  const basisTone = $derived(Number(d.historyCount ?? 0) >= 2 ? 'personal' : 'generic');
 
   const tiles = $derived([
     {
@@ -84,7 +94,18 @@
         <p class="num-tabular font-display text-[40px] font-extrabold leading-none">{fmtDuration(d.minutes)}</p>
         <p class="num-tabular pb-1 text-sm font-bold text-white/90">{Math.round(d.low)}–{Math.round(d.high)} min range</p>
       </div>
-      <p class="mt-2 text-[11px] font-semibold text-white/85">{basisLine}</p>
+      {#if basisTone === 'personal'}
+        <p class="num-tabular mt-2 inline-flex items-center gap-1.5 rounded-full bg-white/25 px-2.5 py-1 text-[11px] font-extrabold text-white backdrop-blur">
+          <User size={11} /> {basisLine}
+        </p>
+      {:else}
+        <p
+          class="num-tabular mt-2 inline-flex items-center gap-1.5 rounded-full bg-amber-300 px-2.5 py-1 text-[11px] font-extrabold text-amber-950"
+          title="This sport has no usable past sessions yet, so TRANA falls back to a typical pace for your fitness level"
+        >
+          <TriangleAlert size={11} /> {basisLine}
+        </p>
+      {/if}
       <div class="num-tabular mt-3 flex flex-wrap items-center gap-2 text-[11px] font-bold text-white/95">
         <span class="inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-1">
           <Gauge size={12} /> {d.paceMinPerKm ? pace(d.paceMinPerKm, $unitSystem) : speed(d.speedKmh, $unitSystem)}
@@ -197,10 +218,12 @@
           </li>
         {/each}
       </ul>
-      {#if plan.history_used !== undefined}
+      {#if d.referenceSpeedKmh}
+        <!-- The source of the estimate is stated once, in the hero badge. This
+             line only carries the number that badge cannot fit. It no longer
+             repeats a count, so it cannot disagree with the badge above. -->
         <p class="mt-3 border-t border-brand-100 pt-2 text-[11px] font-bold uppercase tracking-wide text-ink-400">
-          Personalised from {plan.history_used} past {plan.activity_type} session{plan.history_used === 1 ? '' : 's'}
-          {#if d.referenceSpeedKmh}· base pace {speed(d.referenceSpeedKmh, $unitSystem)}{/if}
+          Base pace {speed(d.referenceSpeedKmh, $unitSystem)} · {Number(d.historyCount ?? 0) > 0 ? 'your own' : 'typical for your level'}
         </p>
       {/if}
     </div>

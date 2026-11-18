@@ -321,6 +321,11 @@ export function predictDuration({
     speedKmh: Math.round(speedKmh * 100) / 100,
     confidence: Math.round(confidence * 100) / 100,
     referenceSpeedKmh: Math.round(referenceSpeed(history, activityType) * 100) / 100,
+    // How many of this athlete's sessions of THIS sport actually reached the
+    // curve. The API returns the same field; without it here the UI read
+    // undefined and reported "Generic pace" even when the estimate was fitted
+    // from the athlete's own sessions.
+    historyCount,
     curve,
     basis,
   };
