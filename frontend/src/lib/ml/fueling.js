@@ -314,3 +314,78 @@ function buildTimeline({ weightKg, durationMin, carbPerHour, fluidPerHour, recov
   });
   return items;
 }
+
+/**
+ * Compare what TRANA recommended against what the athlete actually consumed.
+ *
+ * The fueling plan is built from duration, weight, sweat profile and
+ * temperature — all formulas. Track records real intake (structured
+ * `fluid_ml` / `carbs_g`, added alongside the human-readable note), so the next
+ * plan can say "last time you took 55 g/h and the plan asked for 85" instead of
+ * giving identical advice forever.
+ *
+ * Only sessions that actually recorded intake are considered. A row with null
+ * intake means "not logged", which is different from "ate nothing" — treating
+ * the two the same would tell an athlete who simply didn't track their gels
+ * that they under-fuelled.
+ *
+ * @param {Array} history   ML-shaped history (includes fluid_ml/carbs_g per row)
+ * @param {string} activityType
+ * @returns {null | {
+ *   sessions:number, carbPerHourG:number, fluidPerHourMl:number,
+ *   basis:'measured'|'logged', minutes:number,
+ *   comparedTo:number|null, shortfallPerHourG:number|null,
+ *   note:string
+ * }}
+ */
+export function intakeHistory(history = [], activityType) {
+  const rows = (Array.isArray(history) ? history : []).filter((row) => {
+    if (row?.activity_type !== activityType) return false;
+    const minutes = Number(row?.duration_min) || 0;
+    const km = Number(row?.distance_km) || 0;
+    if (!(minutes > 0) || !(km > 0)) return false;
+    // At least one intake figure must be recorded to compare against.
+    return Number(row?.carbs_g) > 0 || Number(row?.fluid_ml) > 0;
+  });
+
+  if (!rows.length) return null;
+
+  const totalCarbs = rows.reduce((sum, row) => sum + (Number(row.carbs_g) || 0), 0);
+  const totalFluid = rows.reduce((sum, row) => sum + (Number(row.fluid_ml) || 0), 0);
+  const totalHours = rows.reduce((sum, row) => sum + (Number(row.duration_min) || 0) / 60, 0);
+  const totalMinutes = rows.reduce((sum, row) => sum + (Number(row.duration_min) || 0), 0);
+
+  return {
+    sessions: rows.length,
+    carbPerHourG: totalHours > 0 ? totalCarbs / totalHours : 0,
+    fluidPerHourMl: totalHours > 0 ? totalFluid / totalHours : 0,
+    minutes: totalMinutes,
+    basis: 'logged',
+  };
+}
+
+/**
+ * Turn a measured-intake history plus this plan's target into one coach note.
+ *
+ * Returns '' when there is nothing honest to say — no intake logged, or the
+ * athlete is already within 10% of the target, in which case repeating the
+ * target as a note adds noise rather than value.
+ */
+export function intakeComparisonNote(measured, planCarbsPerHour) {
+  if (!measured || !(measured.carbPerHourG > 0)) return '';
+
+  const target = Number(planCarbsPerHour) || 0;
+  if (!(target > 0)) return '';
+
+  const gap = target - measured.carbPerHourG;
+  const ratio = gap / target;
+  const recorded = `Last ${measured.sessions === 1 ? 'session' : `${measured.sessions} sessions`} you logged ${Math.round(measured.carbPerHourG)} g carbs/h and ${Math.round(measured.fluidPerHourMl)} ml fluid/h.`;
+
+  if (ratio > 0.1) {
+    return `${recorded} This plan asks for ${Math.round(target)} g/h — about ${Math.round(gap)} g/h more. Practise the higher rate on training days before relying on it.`;
+  }
+  if (ratio < -0.1) {
+    return `${recorded} This plan asks for ${Math.round(target)} g/h, which is below what you have managed before — you have headroom here.`;
+  }
+  return `${recorded} That matches this plan's target of ${Math.round(target)} g/h.`;
+}

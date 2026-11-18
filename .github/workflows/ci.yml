@@ -28,6 +28,25 @@ jobs:
       - run: npx svelte-check --output human
       - run: npm run build
       - run: npm run smoke
+      # Real-browser mobile check. The other smoke scripts run without a layout
+      # engine, so nothing above can tell whether a card overflows a phone. This
+      # downloads Chromium (allowed on GitHub runners) and measures real
+      # geometry at 390/360/375px. `--with-deps` needs root, which runners have.
+      - name: Install Chromium for the mobile layout check
+        run: npx playwright install --with-deps chromium
+      - name: Mobile layout (real browser, 3 phone viewports)
+        run: npm run smoke:mobile 2>&1 | tee /tmp/mobile-layout.log
+      # The job log needs blob-storage access to read; the summary does not, and
+      # it is what a reviewer actually looks at. Put the measurements there.
+      - name: Mobile layout summary
+        if: ${{ !cancelled() }}
+        run: |
+          {
+            echo '### Mobile layout (Chromium, 390 / 360 / 375 px)'
+            echo '```'
+            tail -40 /tmp/mobile-layout.log 2>/dev/null || echo 'no output captured'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   ml:
     name: ML (FastAPI + scikit-learn)

@@ -53,6 +53,9 @@ class ActivityController extends Controller
                 'average_pace',
                 'route',
                 'notes',
+                'fluid_ml',
+                'carbs_g',
+                'sodium_mg',
                 'source',
             ])
             ->when($validated['type'] ?? null, fn ($query, $type) => $query->where('activity_type', $type))

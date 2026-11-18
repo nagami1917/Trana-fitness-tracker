@@ -888,7 +888,8 @@ async function stopActivity({ currentTodaySession = null, allowStationary = fals
     const intakeParts = [];
     if (isManual) intakeParts.push('Distance entered manually');
     else if (allowStationary && distanceKm < MIN_ACTIVITY_DISTANCE_KM) intakeParts.push('Indoor / stationary session');
-    if (fluidLoggedMl > 0 || carbsLoggedG > 0) {
+    const hasIntake = fluidLoggedMl > 0 || carbsLoggedG > 0;
+    if (hasIntake) {
       intakeParts.push(`Intake during session: ${fluidLoggedMl} ml fluid, ${carbsLoggedG} g carbs`);
     }
 
@@ -905,6 +906,11 @@ async function stopActivity({ currentTodaySession = null, allowStationary = fals
       route: isManual ? null : routeCoords.length >= 2 ? routeCoords : null,
       route_geojson: isManual ? null : routeGeojson,
       notes: intakeParts.length ? intakeParts.join(' · ') : null,
+      // The same figures as numbers, so the next plan can compare what TRANA
+      // recommended against what was actually consumed. The sentence above
+      // stays for humans; these are what the model can read.
+      fluid_ml: fluidLoggedMl > 0 ? Math.round(fluidLoggedMl) : null,
+      carbs_g: carbsLoggedG > 0 ? Math.round(carbsLoggedG) : null,
       gear_id: gearId || null,
       source: isManual || (allowStationary && distanceKm < MIN_ACTIVITY_DISTANCE_KM) ? 'manual' : 'gps',
     };

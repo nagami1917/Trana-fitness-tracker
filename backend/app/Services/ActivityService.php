@@ -25,7 +25,11 @@ class ActivityService
         return $user->activities()
             ->orderByDesc('started_at')
             ->limit($limit ?: (int) config('ml.history_limit', 300))
-            ->get(['id', 'activity_type', 'distance_km', 'duration_min', 'elevation_gain_m', 'calories', 'started_at'])
+            ->get([
+                'id', 'activity_type', 'distance_km', 'duration_min',
+                'elevation_gain_m', 'calories', 'started_at',
+                'fluid_ml', 'carbs_g', 'sodium_mg',
+            ])
             ->map(fn (Activity $activity) => [
                 'activity_type' => $activity->activity_type,
                 'distance_km' => (float) $activity->distance_km,
@@ -33,6 +37,11 @@ class ActivityService
                 'elevation_gain_m' => (int) $activity->elevation_gain_m,
                 'calories' => $activity->calories,
                 'started_at' => $activity->started_at?->toIso8601String(),
+                // What the athlete actually consumed, when they logged it.
+                // Null means "not recorded", which is different from zero.
+                'fluid_ml' => $activity->fluid_ml,
+                'carbs_g' => $activity->carbs_g,
+                'sodium_mg' => $activity->sodium_mg,
             ])
             ->all();
     }
@@ -72,6 +81,9 @@ class ActivityService
             'route' => $validated['route'] ?? null,
             'route_geojson' => $validated['route_geojson'] ?? null,
             'notes' => $validated['notes'] ?? null,
+            'fluid_ml' => $validated['fluid_ml'] ?? null,
+            'carbs_g' => $validated['carbs_g'] ?? null,
+            'sodium_mg' => $validated['sodium_mg'] ?? null,
             'source' => $validated['source'] ?? 'manual',
             'is_baseline' => (bool) ($validated['is_baseline'] ?? false),
         ]);

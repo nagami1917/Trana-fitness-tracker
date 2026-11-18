@@ -23,6 +23,8 @@ ml/data/external/endomondo_*.csv
 ml/.pytest_cache/
 frontend/.vite/
 frontend/.svelte-kit/
+# mobile-layout-smoke: rendered fixtures + failure screenshots are rebuilt each run
+frontend/scripts/.mobile-fixtures/
 
 # OS / editor
 .DS_Store

@@ -28,6 +28,10 @@ class ActivityResource extends JsonResource
             ),
             'gear_id' => $this->gear_id,
             'notes' => $this->notes,
+            // Structured intake, null when the athlete did not log any.
+            'fluid_ml' => $this->fluid_ml,
+            'carbs_g' => $this->carbs_g,
+            'sodium_mg' => $this->sodium_mg,
             'source' => $this->source,
         ];
     }
