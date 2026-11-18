@@ -62,6 +62,7 @@ const {
   fromApiRow,
   modeOptions,
   derivedReadout,
+  convertRows,
 } = logic;
 
 // 1. Each sport is asked for in the unit it is actually thought about in.
@@ -132,6 +133,38 @@ assert.ok(Math.abs(imperialPayload.duration_min - 60) < 0.1,
   `~60 min expected, got ${imperialPayload.duration_min}`);
 // The derived readout must speak the athlete's unit back to them.
 assert.match(derivedReadout(imperialRow, 'imperial'), /mi/);
+
+// 7. Switching units converts what was typed instead of reinterpreting it.
+//    A 5 km run must stay 5 km when shown in miles (3.1), not become 5 miles.
+const kmRun = { ...blankRow('run'), mode: 'pace', distance: '5', pace: '6' };
+const beforeKm = toPayload(kmRun, 'metric');
+const miles = convertRows([kmRun], 'metric', 'imperial')[0];
+assert.ok(Math.abs(Number(miles.distance) - 3.11) < 0.05,
+  `5 km is ~3.11 mi, got ${miles.distance}`);
+// Pace in minutes per mile is longer than per km (1 mi = 1.609 km).
+assert.ok(Math.abs(Number(miles.pace) - 6 * 1.609344) < 0.02,
+  `6:00/km is ~9:39/mi, got ${miles.pace}`);
+const afterKm = toPayload(miles, 'imperial');
+assert.ok(Math.abs(afterKm.distance_km - beforeKm.distance_km) < 0.01,
+  `the same session must survive the round trip: ${beforeKm.distance_km} -> ${afterKm.distance_km}`);
+assert.ok(Math.abs(afterKm.duration_min - beforeKm.duration_min) < 0.1,
+  `duration must not drift: ${beforeKm.duration_min} -> ${afterKm.duration_min}`);
+
+// Speed scales like distance (mph = km/h x 0.621), not like pace.
+const rideSpeed = { ...blankRow('ride'), mode: 'speed', distance: '32', speed: '20.2' };
+const rideMiles = convertRows([rideSpeed], 'metric', 'imperial')[0];
+assert.ok(Math.abs(Number(rideMiles.speed) - 12.6) < 0.1, `20.2 km/h is 12.6 mph, got ${rideMiles.speed}`);
+assert.ok(Math.abs(toPayload(rideMiles, 'imperial').distance_km - 32) < 0.2,
+  'the ride still saves as 32 km');
+
+// Time mode has no unit-dependent field beyond distance.
+const timed = { ...blankRow('run'), mode: 'time', distance: '10', duration_min: '50' };
+const timedMiles = convertRows([timed], 'metric', 'imperial')[0];
+assert.equal(timedMiles.duration_min, '50', 'duration is unit-independent');
+assert.ok(Math.abs(toPayload(timedMiles, 'imperial').distance_km - 10) < 0.2);
+
+// Same-unit conversion is a no-op.
+assert.deepEqual(convertRows([kmRun], 'metric', 'metric'), [kmRun]);
 
 // ── 2. The Settings editor actually mounts and loads ──
 const bundle = await build({

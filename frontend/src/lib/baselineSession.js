@@ -266,6 +266,52 @@ export function modeOptions(type) {
 }
 
 /**
+ * Convert every baseline row from one display unit to another.
+ *
+ * Rows store raw numbers in whatever unit was on screen when they were typed,
+ * alongside a `mode` that says what the number *means*. Changing the unit
+ * without converting leaves a 5 km session reading "5 mi" — a 61% distance
+ * error that the model would accept. Weight, height and temperature convert on
+ * the fly in onboarding for the same reason.
+ *
+ * Returns new row objects; never mutates.
+ */
+export function convertRows(rows, fromUnits, toUnits) {
+  const from = fromUnits === 'imperial' ? 'imperial' : 'metric';
+  const to = toUnits === 'imperial' ? 'imperial' : 'metric';
+  if (from === to) return rows;
+
+  const round = (n, places) => Math.round(n * 10 ** places) / 10 ** places;
+
+  return rows.map((row) => {
+    const distance = Number(row.distance);
+    // Distance is in display units, so it scales by the unit factor.
+    const nextDistance = distance > 0
+      ? round(to === 'imperial' ? distance * MILES_PER_KM : distance * KM_PER_MILE, 2)
+      : row.distance;
+
+    const next = { ...row, distance: nextDistance };
+
+    if (row.mode === 'speed') {
+      // Speed is distance per hour, so it scales the same way as distance.
+      const speed = Number(row.speed);
+      next.speed = speed > 0
+        ? round(to === 'imperial' ? speed * MILES_PER_KM : speed * KM_PER_MILE, 1)
+        : row.speed;
+    } else if (row.mode === 'pace') {
+      // Pace is minutes per unit — the reciprocal, so it scales the other way.
+      const pace = Number(row.pace);
+      next.pace = pace > 0
+        ? round(to === 'imperial' ? pace * KM_PER_MILE : pace * MILES_PER_KM, 2)
+        : row.pace;
+    }
+    // mode === 'time': duration and elevation are unit-independent.
+
+    return next;
+  });
+}
+
+/**
  * The API payload for one row: always kilometres and minutes, so the server
  * never has to interpret a unit.
  */

@@ -25,6 +25,7 @@
     PERIODS,
     activityLabel,
     blankRow,
+    convertRows,
     derivedReadout,
     hardError,
     modeOptions,
@@ -119,6 +120,20 @@
   let baselineRows = $state(
     Object.fromEntries(ACTIVITY_TYPES.map((type) => [type.id, [blankBaselineRow(type.id), blankBaselineRow(type.id)]])),
   );
+
+  /**
+   * Changing the unit reinterprets every typed number, so convert them.
+   * Otherwise a 5 km session silently becomes a 5 mile session.
+   */
+  function setUnits(next) {
+    if (next === form.units) return;
+    const converted = {};
+    for (const type of ACTIVITY_TYPES.map((t) => t.id)) {
+      converted[type] = convertRows(baselineRows[type] ?? [], form.units, next);
+    }
+    baselineRows = converted;
+    form.units = next;
+  }
   let baselineSaving = $state(false);
   let baselineError = $state('');
 
@@ -309,7 +324,7 @@
               { id: 'imperial', label: 'Imperial (mi, lb)' },
             ]}
             value={form.units}
-            onSelect={(v) => (form.units = v)}
+            onSelect={setUnits}
           />
         </div>
 
@@ -551,7 +566,7 @@
                       {/if}
                     </div>
 
-                    <div class="grid grid-cols-2 gap-2">
+                    <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
                       <label class="col-span-2 block">
                         <span class="label">How do you remember it?</span>
                         <select class="input" bind:value={row.mode}>
