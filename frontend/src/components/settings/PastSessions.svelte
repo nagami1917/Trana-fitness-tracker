@@ -177,7 +177,7 @@
 
         {#if editing && editing.type === sport.id}
           <div class="rounded-xl border border-brand-200 bg-brand-50/60 p-2.5">
-            <div class="grid grid-cols-2 gap-2">
+            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <label class="col-span-2 block">
                 <span class="label">How do you remember it?</span>
                 <select class="input" bind:value={editing.row.mode}>
