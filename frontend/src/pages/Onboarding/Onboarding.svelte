@@ -27,6 +27,7 @@
     blankRow,
     convertRows,
     derivedReadout,
+    exampleFor,
     hardError,
     modeOptions,
     normaliseRow,
@@ -66,6 +67,18 @@
 
   function validBaseline(row) {
     return validRow(row, form.units);
+  }
+
+  /**
+   * A row the model will actually use: complete AND inside its speed bounds.
+   *
+   * `validRow` only answers "did you fill it in?". Counting that made a sport
+   * show "2 of 2 ✓" while both sessions sat outside the model's accepted pace
+   * and were therefore discarded — the tick claimed personalisation that the
+   * estimate did not have. This is the count that may be shown as complete.
+   */
+  function usableBaseline(row) {
+    return validRow(row, form.units) && !hardError(row, form.units);
   }
 
   /** Pace/speed/time options, cyclist-first for rides. */
@@ -146,7 +159,7 @@
   const filledBySport = $derived.by(() => {
     const filled = {};
     for (const type of baselineSports) {
-      const rows = (baselineRows[type] ?? []).filter(validBaseline);
+      const rows = (baselineRows[type] ?? []).filter(usableBaseline);
       if (rows.length > 0) filled[type] = rows;
     }
     return filled;
@@ -547,12 +560,12 @@
               <div class="mb-2 flex items-center justify-between gap-2">
                 <span class="flex items-center gap-1.5 text-sm font-bold text-ink-700">
                   {activityLabel(sport)}
-                  {#if rows.filter(validBaseline).length >= 2}
+                  {#if rows.filter(usableBaseline).length >= 2}
                     <Check size={14} class="text-emerald-600" />
                   {/if}
                 </span>
                 <span class="text-[11px] font-semibold text-ink-400">
-                  {rows.filter(validBaseline).length} of 2
+                  {rows.filter(usableBaseline).length} of 2 usable
                 </span>
               </div>
 
@@ -562,7 +575,18 @@
                     <div class="mb-1.5 flex items-center justify-between gap-2">
                       <span class="text-[10px] font-bold uppercase tracking-wide text-ink-400">Session {index + 1}</span>
                       {#if rowReadout(row)}
-                        <span class="pill num-tabular" title="What this session works out to">{rowReadout(row)}</span>
+                        <!-- The derived line is the earliest possible warning: it
+                             converts whatever was typed into the unit the model
+                             thinks in, so a speed typed into a pace box reads
+                             back as an impossible number before submission. -->
+                        <span
+                          class="pill num-tabular {rowHardError(row)
+                            ? '!border-rose-300 !bg-rose-50 !text-rose-700'
+                            : rowSoftWarning(row)
+                              ? '!border-amber-300 !bg-amber-50 !text-amber-800'
+                              : ''}"
+                          title="What this session works out to"
+                        >{rowReadout(row)}</span>
                       {/if}
                     </div>
 
@@ -578,23 +602,51 @@
 
                       <label class="block">
                         <span class="label">Distance ({distanceUnit(form.units)})</span>
-                        <input class="input num-tabular" type="number" min="0.1" step="0.1" placeholder="5.0" bind:value={row.distance} />
+                        <input
+                          class="input num-tabular"
+                          type="number"
+                          min="0.1"
+                          step="0.1"
+                          placeholder={exampleFor(row.activity_type, 'distance')}
+                          bind:value={row.distance}
+                        />
                       </label>
 
                       {#if row.mode === 'pace'}
                         <label class="block">
-                          <span class="label">Pace (min/{distanceUnit(form.units)})</span>
-                          <input class="input num-tabular" type="number" min="0.5" step="0.1" placeholder="6.0" bind:value={row.pace} />
+                          <span class="label">Minutes per {distanceUnit(form.units)}</span>
+                          <input
+                            class="input num-tabular"
+                            type="number"
+                            min="0.5"
+                            step="0.1"
+                            placeholder={exampleFor(row.activity_type, 'pace')}
+                            bind:value={row.pace}
+                          />
                         </label>
                       {:else if row.mode === 'speed'}
                         <label class="block">
                           <span class="label">Speed ({distanceUnit(form.units)}/h)</span>
-                          <input class="input num-tabular" type="number" min="1" step="0.1" placeholder="20" bind:value={row.speed} />
+                          <input
+                            class="input num-tabular"
+                            type="number"
+                            min="1"
+                            step="0.1"
+                            placeholder={exampleFor(row.activity_type, 'speed')}
+                            bind:value={row.speed}
+                          />
                         </label>
                       {:else}
                         <label class="block">
                           <span class="label">Time (minutes)</span>
-                          <input class="input num-tabular" type="number" min="1" step="1" placeholder="28" bind:value={row.duration_min} />
+                          <input
+                            class="input num-tabular"
+                            type="number"
+                            min="1"
+                            step="1"
+                            placeholder={exampleFor(row.activity_type, 'duration_min')}
+                            bind:value={row.duration_min}
+                          />
                         </label>
                       {/if}
 

@@ -22,9 +22,12 @@
     activityLabel,
     blankRow,
     derivedReadout,
+    exampleFor,
     fromApiRow,
     hardError,
     modeOptions,
+    rowUsable,
+    sessionUsability,
     softWarning,
     toPayload,
     validRow,
@@ -108,11 +111,25 @@
   }
 
   /** Why this sport's rows matter, in the athlete's terms. */
+  /**
+   * What the model actually does with this sport's saved rows.
+   *
+   * Counted with sessionUsability, not rows.length: a saved row whose pace
+   * falls outside SPEED_BOUNDS_KMH is discarded before the curve is fitted,
+   * so two unusable rows must never read as "your own pace is used".
+   */
   function provenance(type) {
-    const count = byType[type]?.length ?? 0;
-    if (count >= 2) return 'Your own pace is used for this sport.';
-    if (count === 1) return 'One more session and this sport gets your own pace.';
+    const rows = byType[type] ?? [];
+    const { usableCount, rejectedCount, note } = sessionUsability(rows, type);
+    if (usableCount >= 2) return 'Your own pace is used for this sport.';
+    if (usableCount === 1) return 'One more usable session and this sport gets your own pace.';
+    if (rejectedCount > 0) return note;
     return 'Generic average — add a session to personalise this sport.';
+  }
+
+  /** Per-sport usable count, so the tick and the "x of 2" agree with the model. */
+  function usableCount(type) {
+    return sessionUsability(byType[type] ?? [], type).usableCount;
   }
 </script>
 
@@ -143,11 +160,11 @@
         <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
           <span class="flex items-center gap-1.5 text-sm font-bold text-ink-700">
             {sport.label}
-            {#if rows.length >= MAX_ROWS_PER_SPORT}
+            {#if usableCount(sport.id) >= MAX_ROWS_PER_SPORT}
               <Check size={14} class="text-emerald-600" />
             {/if}
           </span>
-          <span class="text-[11px] font-semibold text-ink-400">{rows.length} of {MAX_ROWS_PER_SPORT}</span>
+          <span class="text-[11px] font-semibold text-ink-400">{usableCount(sport.id)} of {MAX_ROWS_PER_SPORT} usable</span>
         </div>
 
         <p class="mb-2 text-[11px] font-semibold text-ink-400">{provenance(sport.id)}</p>
@@ -155,12 +172,23 @@
         {#if rows.length > 0}
           <div class="mb-2 space-y-1.5">
             {#each rows as row (row.id)}
-              <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-brand-100 bg-brand-50/40 px-2.5 py-1.5">
+              {@const rowUsableNow = rowUsable(
+                { activity_type: row.activity_type, distance: row.distance_km, duration_min: row.duration_min, elevation_gain_m: row.elevation_gain_m, mode: 'time' },
+                'metric',
+              )}
+              <div
+                class="flex flex-wrap items-center justify-between gap-2 rounded-xl border px-2.5 py-1.5 {rowUsableNow
+                  ? 'border-brand-100 bg-brand-50/40'
+                  : 'border-rose-200 bg-rose-50'}"
+              >
                 <span class="num-tabular text-[11px] font-bold text-ink-700">
                   {row.distance_km} {distanceUnit($unitSystem)} · {Math.round(row.duration_min)} min
-                  <span class="font-semibold text-ink-400">
+                  <span class="font-semibold {rowUsableNow ? 'text-ink-400' : 'text-rose-600'}">
                     ({row.speed_kmh} km/h{row.elevation_gain_m ? ` · ${row.elevation_gain_m} m` : ''})
                   </span>
+                  {#if !rowUsableNow}
+                    <span class="ml-1 rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-extrabold uppercase text-white">ignored by model</span>
+                  {/if}
                 </span>
                 <span class="flex items-center gap-1">
                   <button type="button" class="btn-chip text-[11px]" onclick={() => startEdit(row)}>
@@ -189,23 +217,23 @@
 
               <label class="block">
                 <span class="label">Distance ({distanceUnit($unitSystem)})</span>
-                <input class="input num-tabular" type="number" min="0.1" step="0.1" placeholder="5.0" bind:value={editing.row.distance} />
+                <input class="input num-tabular" type="number" min="0.1" step="0.1" placeholder={exampleFor(sport.id, 'distance')} bind:value={editing.row.distance} />
               </label>
 
               {#if editing.row.mode === 'pace'}
                 <label class="block">
-                  <span class="label">Pace (min/{distanceUnit($unitSystem)})</span>
-                  <input class="input num-tabular" type="number" min="0.5" step="0.1" placeholder="6.0" bind:value={editing.row.pace} />
+                  <span class="label">Minutes per {distanceUnit($unitSystem)}</span>
+                  <input class="input num-tabular" type="number" min="0.5" step="0.1" placeholder={exampleFor(sport.id, 'pace')} bind:value={editing.row.pace} />
                 </label>
               {:else if editing.row.mode === 'speed'}
                 <label class="block">
                   <span class="label">Speed ({distanceUnit($unitSystem)}/h)</span>
-                  <input class="input num-tabular" type="number" min="1" step="0.1" placeholder="20" bind:value={editing.row.speed} />
+                  <input class="input num-tabular" type="number" min="1" step="0.1" placeholder={exampleFor(sport.id, 'speed')} bind:value={editing.row.speed} />
                 </label>
               {:else}
                 <label class="block">
                   <span class="label">Time (minutes)</span>
-                  <input class="input num-tabular" type="number" min="1" step="1" placeholder="28" bind:value={editing.row.duration_min} />
+                  <input class="input num-tabular" type="number" min="1" step="1" placeholder={exampleFor(sport.id, 'duration_min')} bind:value={editing.row.duration_min} />
                 </label>
               {/if}
 

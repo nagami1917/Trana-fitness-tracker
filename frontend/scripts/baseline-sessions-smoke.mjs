@@ -63,7 +63,72 @@ const {
   modeOptions,
   derivedReadout,
   convertRows,
+  exampleFor,
+  rowUsable,
+  unusableReason,
+  sessionUsability,
 } = logic;
+
+// 0. Placeholders must not contradict the form's own rules.
+// The old form showed pace 6.0 for every sport, which is 10 km/h — outside
+// walking's typical 3-8 band, so following the hint produced a rejected row.
+for (const sport of ['run', 'ride', 'walk', 'hike']) {
+  const [lo, hi] = TYPICAL_SPEED_KMH[sport];
+  const distance = Number(exampleFor(sport, 'distance'));
+  assert.ok(distance > 0, `${sport}: a distance example exists`);
+
+  // Build the example row in whichever mode that sport defaults to.
+  const mode = DEFAULT_ENTRY_UNIT[sport];
+  const example = {
+    ...blankRow(sport),
+    distance: String(distance),
+    [mode === 'speed' ? 'speed' : 'pace']: exampleFor(sport, mode === 'speed' ? 'speed' : 'pace'),
+  };
+  const speed = rowSpeedKmh(example, 'metric');
+  assert.ok(speed >= lo && speed <= hi,
+    `${sport}: the placeholder must sit inside its own typical band ${lo}-${hi} km/h, got ${speed.toFixed(1)}`);
+  assert.equal(hardError(example, 'metric'), '', `${sport}: following the placeholder must never be blocked`);
+}
+
+// 0b. "2 of 2" must mean USABLE, not merely filled in.
+// This is the screenshot case: two complete rows that the model discards.
+const unusableWalks = [
+  { activity_type: 'walk', distance_km: 10, duration_min: 15, elevation_gain_m: 20 },
+  { activity_type: 'walk', distance_km: 6, duration_min: 11.4, elevation_gain_m: 10 },
+];
+const walkUsage = sessionUsability(unusableWalks, 'walk');
+assert.equal(walkUsage.usableCount, 0, 'both walks are outside the model bounds');
+assert.equal(walkUsage.rejectedCount, 2, 'both are reported as rejected, not as usable');
+assert.match(walkUsage.note, /not usable/, 'the athlete is told they cannot be used');
+assert.match(walkUsage.note, /Past sessions/, 'and where to fix them');
+
+// The same rows while planning a ride: real data, wrong sport.
+const rideUsage = sessionUsability(unusableWalks, 'ride');
+assert.equal(rideUsage.usableCount, 0, 'a walk can never inform a ride');
+assert.equal(rideUsage.otherSportCount, 2);
+assert.match(rideUsage.note, /none for cycling/, 'the reason is the sport, not the pace');
+
+// Two valid rides must report complete and produce no note.
+const goodRides = [
+  { activity_type: 'ride', distance_km: 60, duration_min: 180, elevation_gain_m: 200 },
+  { activity_type: 'ride', distance_km: 40, duration_min: 120, elevation_gain_m: 100 },
+];
+const good = sessionUsability(goodRides, 'ride');
+assert.equal(good.usableCount, 2, 'two normal rides are usable');
+assert.equal(good.note, '', 'nothing to warn about when the model has enough data');
+
+// One usable session is not enough to fit a curve.
+const one = sessionUsability([goodRides[0]], 'ride');
+assert.equal(one.usableCount, 1);
+assert.match(one.note, /needs 2/, 'one session is still blended with a generic pace');
+
+// 0c. rowUsable mirrors the model's own filter, per sport.
+assert.equal(rowUsable({ activity_type: 'walk', distance: 10, duration_min: 15, mode: 'time' }, 'metric'), false,
+  '40 km/h walk is discarded by the model');
+assert.equal(rowUsable({ activity_type: 'walk', distance: 10, duration_min: 90, mode: 'time' }, 'metric'), true,
+  '6.7 km/h walk is kept');
+assert.match(unusableReason({ activity_type: 'walk', distance: 10, duration_min: 15, mode: 'time' }, 'metric'),
+  /outside what the model accepts for walking/);
 
 // 1. Each sport is asked for in the unit it is actually thought about in.
 assert.equal(DEFAULT_ENTRY_UNIT.ride, 'speed', 'cycling should be speed-first');

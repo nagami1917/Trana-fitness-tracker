@@ -168,7 +168,12 @@ try {
 
   // ---- 5. Behaviour: an unusable row blocks, a legal one saves ----
   const firstDistance = distanceInputs[0];
-  const firstPace = [...document.querySelectorAll('input[type=number]')].find((i) => i.placeholder === '6.0');
+  // Placeholders are per-sport now (walking ≠ running), so locate the pace
+  // input by its inputmode/step shape rather than a hardcoded value. The pace
+  // box is the number input with step 0.1 that is not the distance field.
+  const firstPace = [...document.querySelectorAll('input[type=number]')].find(
+    (i) => i !== firstDistance && i.getAttribute('step') === '0.1' && Number(i.getAttribute('min')) === 0.5,
+  );
   assert.ok(firstDistance && firstPace, 'running defaults to pace entry on mobile too');
 
   firstDistance.value = '5';
@@ -178,6 +183,16 @@ try {
   await waitFor(() => text().includes("model can't use"), 'hard error on an unusable row');
   const startBtn = [...document.querySelectorAll('button')].find((b) => b.textContent.includes('Start planning'));
   assert.equal(startBtn.disabled, true, 'an unusable row must block completion');
+
+  // The screenshot bug: two complete-but-unusable rows showed "2 of 2" with a
+  // green tick, so the sport looked done while the model had nothing to use.
+  // A filled row must never be counted as usable.
+  const sportHeader = [...document.querySelectorAll('span')]
+    .map((el) => el.textContent.trim())
+    .find((t) => /^\d+ of 2 usable$/.test(t));
+  assert.ok(sportHeader, 'the sport counter states usable rows explicitly');
+  assert.ok(sportHeader.startsWith('0 of 2'),
+    `a row outside the model bounds must not count as usable, got "${sportHeader}"`);
 
   firstPace.value = '6';
   firstPace.dispatchEvent(new window.Event('input', { bubbles: true }));

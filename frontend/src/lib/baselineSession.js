@@ -354,3 +354,143 @@ export function fromApiRow(saved, units) {
   row.duration_min = minutes ? String(Math.round(minutes * 10) / 10) : '';
   return row;
 }
+
+/**
+ * Would the duration model actually *use* this saved session?
+ *
+ * `validRow` only answers "is this row complete?". A saved row can be complete
+ * and still be discarded, and then the UI shows a session the model ignores —
+ * which is exactly how an athlete ends up reading "2 sessions" next to an
+ * estimate built from none. The two ways a complete row is still unusable:
+ *
+ * 1. its speed falls outside SPEED_BOUNDS_KMH for its sport, so
+ *    validHistoryPoints() drops it before the curve is fitted;
+ * 2. it belongs to a different sport than the one being planned — the curve
+ *    is fitted per activity type, so two walks can never inform a ride.
+ *
+ * The bounds below mirror ml/duration_model/preprocess.py::SPEED_BOUNDS_KMH
+ * via the same constant the entry form enforces, so all three layers agree.
+ */
+export function rowUsable(row, units) {
+  const km = rowDistanceKm(row, units);
+  const minutes = rowMinutes(row);
+  if (!(km > 0) || !(minutes > 0)) return false;
+  const speed = km / (minutes / 60);
+  const [min, max] = SPEED_BOUNDS_KMH[row.activity_type] ?? [0.5, 60];
+  return speed >= min && speed <= max;
+}
+
+/** Why a saved session cannot be used, in the athlete's words. '' when it can. */
+export function unusableReason(row, units) {
+  if (rowUsable(row, units)) return '';
+  const km = rowDistanceKm(row, units);
+  const minutes = rowMinutes(row);
+  if (!(km > 0) || !(minutes > 0)) {
+    return 'This session has no usable distance or time.';
+  }
+  const speed = km / (minutes / 60);
+  const [min, max] = SPEED_BOUNDS_KMH[row.activity_type] ?? [0.5, 60];
+  const label = activityLabel(row.activity_type).toLowerCase();
+  return `${speed.toFixed(1)} km/h is outside what the model accepts for ${label} (${min}–${max} km/h).`;
+}
+
+/**
+ * Split the athlete's saved sessions into what the model counts and what it
+ * does not, for one planned sport.
+ *
+ * `savedSessions` are API rows: { activity_type, distance_km, duration_min,
+ * elevation_gain_m }. They are already metric, so they are adapted to the row
+ * shape rather than being re-entered in a display unit.
+ *
+ * Returns counts plus the reason text the UI should show, so the number on
+ * screen and the number the model used can never drift apart.
+ */
+export function sessionUsability(savedSessions = [], plannedType) {
+  const ofType = [];
+  const otherSports = [];
+
+  for (const saved of savedSessions) {
+    const row = {
+      activity_type: saved.activity_type,
+      distance: Number(saved.distance_km) || 0,
+      duration_min: Number(saved.duration_min) || 0,
+      elevation_gain_m: saved.elevation_gain_m ?? 0,
+      mode: 'time',
+    };
+    if (saved.activity_type !== plannedType) {
+      otherSports.push(saved);
+      continue;
+    }
+    ofType.push({ saved, usable: rowUsable(row, 'metric'), reason: unusableReason(row, 'metric') });
+  }
+
+  const usable = ofType.filter((entry) => entry.usable);
+  const rejected = ofType.filter((entry) => !entry.usable);
+
+  return {
+    /** Sessions of the planned sport the model can fit a curve from. */
+    usableCount: usable.length,
+    /** Sessions of the planned sport that exist but were discarded by the model. */
+    rejectedCount: rejected.length,
+    /** Sessions of other sports — real data, but irrelevant to this sport's curve. */
+    otherSportCount: otherSports.length,
+    /** One human sentence covering whichever case applies. '' when usable >= 2. */
+    note: usabilityNote({
+      usableCount: usable.length,
+      rejectedCount: rejected.length,
+      otherSportCount: otherSports.length,
+      plannedType,
+    }),
+  };
+}
+
+function usabilityNote({ usableCount, rejectedCount, otherSportCount, plannedType }) {
+  const sport = activityLabel(plannedType).toLowerCase();
+
+  if (usableCount >= 2) return '';
+
+  if (usableCount === 1) {
+    return `Only 1 usable ${sport} session — the model needs 2 to fit your pace, so this estimate is blended with a generic pace.`;
+  }
+
+  // usableCount === 0
+  if (rejectedCount > 0) {
+    const one = rejectedCount === 1;
+    const headline = one
+      ? `Your 1 ${sport} session is saved but not usable`
+      : `Your ${rejectedCount} ${sport} sessions are saved but not usable`;
+    const reason = one
+      ? 'it falls outside the pace'
+      : 'they fall outside the pace';
+    return `${headline} — ${reason} the model accepts, so this estimate uses a generic pace. Fix ${one ? 'it' : 'them'} in Settings → Past sessions.`;
+  }
+  if (otherSportCount > 0) {
+    return `You have ${otherSportCount} saved session${otherSportCount === 1 ? '' : 's'}, but none for ${sport} — each sport learns its own pace, so this estimate is generic.`;
+  }
+  return '';
+}
+
+/**
+ * A realistic example for each sport, in the unit that sport is entered in.
+ *
+ * These are placeholders, so they are also the strongest hint the form gives:
+ * an athlete who has no idea what to type will copy them. Showing `6.0` for
+ * walking (10 km/h) pointed at a pace outside walking's own 3–8 km/h band, so
+ * following the placeholder produced a row the model rejects. Each value here
+ * sits inside TYPICAL_SPEED_KMH for its sport, expressed the way it is typed:
+ * pace sports get min/unit, cycling gets km/h.
+ */
+export const EXAMPLE_ENTRY = {
+  run: { pace: 5.5, speed: 10.9, distance: 5, duration_min: 28 },
+  ride: { pace: 2.9, speed: 21, distance: 25, duration_min: 71 },
+  walk: { pace: 9.5, speed: 6.3, distance: 4, duration_min: 38 },
+  hike: { pace: 15, speed: 4.0, distance: 8, duration_min: 120 },
+};
+
+/** The placeholder for one input, or '' when the sport has no example. */
+export function exampleFor(type, field) {
+  const entry = EXAMPLE_ENTRY[type];
+  if (!entry) return '';
+  const value = entry[field];
+  return value === undefined || value === '' ? '' : String(value);
+}
