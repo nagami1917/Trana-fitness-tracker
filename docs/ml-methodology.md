@@ -262,6 +262,74 @@ representative consented cohort before any deployment decision. GeoLife has no
 elevation, its run sample is too small for conclusions, and elapsed GPS
 durations include stops.
 
+### Does training on real data help? Held-out user study
+
+The shipped model is trained on a corpus that `data/generate_dataset.py`
+*generates* from formulas, then evaluated on real GeoLife activities. That
+evaluation is the honest one — 23.8% median error, and an 80% interval that
+covers the truth 17% of the time — but it cannot separate two explanations:
+
+1. synthetic training data does not transfer to reality, or
+2. predicting human duration from distance is simply this hard.
+
+`evaluation/retrain_study.py` separates them. It splits the 51 GeoLife users
+**by person** (36 train / 15 holdout, no overlap), trains a fresh model on the
+training users' real activities with the shipped trainer, and scores both models
+on the holdout users with the same per-user chronological protocol used in the
+published report.
+
+```bash
+cd ml && python -m evaluation.retrain_study --json evaluation/reports/retrain_study.json
+```
+
+**Result: real training data did not improve the point estimate, but transformed
+the uncertainty — and the two facts point in opposite directions.**
+
+| Holdout (seed 7, n=1,085) | MAE | MdAPE | 80% interval coverage | R² |
+| --- | ---: | ---: | ---: | ---: |
+| Shipped (synthetic-trained) | 6.17 min | 26.7% | **15.9%** | 0.489 |
+| Retrained on 36 GeoLife users | 6.11 min | 24.4% | **67.8%** | 0.466 |
+
+Paired bootstrap, 2,000 draws: MAE delta **+0.061 min, 95% CI [−0.071, +0.184]**.
+The interval straddles zero, so the accuracy improvement is not measurable.
+
+**Read the two columns separately, because they say different things.**
+
+*Accuracy* did not move. Three seeds agree: MAE deltas of +0.061, +0.128 and
++0.137 min, every interval straddling zero. Median error improved slightly and
+consistently (26.7→24.4, 19.9→18.9, 25.4→23.9) but never enough to claim.
+Training on real data does not fix the point estimate, which supports
+explanation (2): **this problem is hard, and the synthetic corpus was an
+adequate teacher of the shape of the answer.**
+
+*Uncertainty* moved enormously and consistently: **15.9% → 67.8%** coverage, and
+67.8/76.7/70.4% across seeds. That is the difference between an interval that is
+almost never right and one that is roughly honest. By mode, walks go
+15.2→66.4% and rides 17.4→70.6% — the gain is not one sport carrying the number.
+
+The mechanism is a learned offset. The shipped model never saw real durations,
+so its quantile spread is fitted to synthetic noise (σ ≈ 5.5%) and is roughly
+4× too narrow for the real world. A model trained on the real distribution
+learns the spread that actually occurs. **Accuracy is set by the reference
+curve; the ± band is set by the training distribution.**
+
+Two consequences:
+
+- The interval shortfall documented in the GeoLife report is **a training-data
+  artefact, not a modelling limit.** It is fixable, and this study shows it.
+- But fixing it by retraining on GeoLife is not shippable as-is: GeoLife is
+  walks and rides only (2 runs, no hikes, no elevation), so a model trained
+  solely on it cannot serve half the product. The right move is a consented
+  local corpus in the shipped CSV format — `duration_model.train --source csv`
+  already accepts one. **This study is the argument for collecting that data,
+  and an experiment, not a deployment.**
+
+It also sharpens the ablation result. The learned correction was shown to be
+inert as a *pace* adjustment (`exp(GBM)` spans 0.88–1.02). It is not inert as a
+*spread* adjustment — the retrained model's real contribution is the band, not
+the median.
+
+
 ### Ablation: does the learned correction earn its place?
 
 The duration model does not predict minutes directly. It predicts
