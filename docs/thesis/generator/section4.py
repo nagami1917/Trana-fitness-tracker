@@ -469,6 +469,155 @@ def build_section_4(doc: Doc) -> None:
         "its way out of.",
     )
 
+
+    # -------------------------------------------------------------- 4.3.3
+    doc.h3("4.3.3 Corpus scaling study \u2014 does 11\u00d7 more training data help?")
+
+    doc.p(
+        "The retraining study above changes the source of the training data: synthetic becomes real. "
+        "It does not change the quantity. A reasonable reviewer will therefore ask the obvious "
+        "follow-up question: if the synthetic corpus were simply much larger, would the model "
+        "improve? The corpus is produced by a generator under the project\u2019s control, so this is "
+        "one of the few experiments in the project whose answer can be established rather than "
+        "argued. The shipped model was trained on 8,845 activities from 240 simulated athletes. "
+        "The same generator, the same seed, and the same trainer were run at 2,784 athletes, "
+        "producing a corpus of 100,042 activities \u2014 11.31 times the shipped row count. "
+        "Nothing else was altered. The identical hyperparameters were reused (320 trees, learning "
+        "rate 0.06, maximum depth 3, minimum leaf size 12, subsample 0.9, quantile alphas of "
+        "0.10/0.50/0.90), and the identical user-disjoint 80/20 grouped split was applied.",
+        align="justify",
+    )
+
+    doc.table(
+        ["Property", "Shipped model", "Scaled candidate", "Ratio"],
+        [
+            ["Model version", "20261113.1328", "20261119.1433", "\u2014"],
+            ["Corpus rows", "8,845", "100,042", "11.31\u00d7"],
+            ["Simulated athletes", "240", "2,784", "11.60\u00d7"],
+            ["Training rows", "7,011", "80,153", "11.43\u00d7"],
+            ["Holdout rows", "1,834", "19,889", "10.84\u00d7"],
+            ["Holdout athletes", "48", "557", "11.60\u00d7"],
+            ["Wall-clock training time", "9.0 s", "98.7 s", "11.0\u00d7"],
+            ["Serialised model size (JSON)", "341 KB", "358 KB", "1.05\u00d7"],
+        ],
+        caption="Corpus scaling study. Only the number of simulated athletes changed; every other training and split parameter is identical.",
+        widths=[2.0, 1.5, 1.5, 1.0],
+        align_numeric=False,
+        font_size=8.5,
+    )
+
+    doc.p(
+        "The two models were then scored on exactly the same external benchmark: 4,362 real GPS "
+        "activities from 51 unseen GeoLife volunteers, evaluated with the same per-user "
+        "chronological walk-forward protocol used everywhere else in this document. Because the "
+        "evaluation rows are identical, the comparison is paired at the level of individual "
+        "activities and no difference in the protocol can explain the outcome.",
+        align="justify",
+    )
+
+    doc.table(
+        ["Metric on 4,362 GeoLife activities", "Shipped (8,845 rows)", "Scaled (100,042 rows)", "Change"],
+        [
+            ["MAE (minutes)", "5.84", "5.83", "\u22120.01"],
+            ["MdAPE", "23.84%", "23.80%", "\u22120.04 pts"],
+            ["MAPE", "35.87%", "35.97%", "+0.10 pts"],
+            ["Within 15% band", "33.43%", "33.93%", "+0.50 pts"],
+            ["Within 20% band", "43.81%", "44.20%", "+0.39 pts"],
+            ["R\u00b2", "0.414", "0.411", "\u22120.003"],
+            ["Interval coverage (nominal 80%)", "16.96%", "18.91%", "+1.95 pts"],
+            ["MAE vs. population prior", "\u221217.8%", "\u221217.9%", "\u2014"],
+            ["MAE vs. reference curve", "\u22120.1%", "+0.02%", "\u2014"],
+        ],
+        caption="External accuracy of the shipped model and the 11\u00d7 scaled candidate, on identical evaluation rows. Every accuracy difference is two orders of magnitude smaller than the error being measured.",
+        widths=[2.5, 1.4, 1.4, 0.95],
+        align_numeric=False,
+        font_size=8.5,
+    )
+
+    doc.p(
+        "The result is unambiguous and it is not the result one might expect. Increasing the "
+        "training corpus by a factor of eleven changed the external median absolute percentage "
+        "error from 23.84% to 23.80%. That is four hundredths of a percentage point \u2014 "
+        "0.17% of the quantity being measured, and far below the sampling noise of a 4,362-row "
+        "benchmark. Mean absolute error moved by one hundredth of a minute, which is six tenths "
+        "of a second. The \u00b115% hit rate improved by half a percentage point and the \u00b120% "
+        "hit rate by four tenths \u2014 both in the right direction, both negligible. Coverage, the "
+        "one metric with a real gap to close, improved from 16.96% to 18.91%: better, but still "
+        "barely a quarter of the way to the nominal 80% target. Mean absolute percentage error "
+        "actually moved the wrong way, from 35.87% to 35.97%, which on this benchmark means "
+        "nothing at all \u2014 and that is rather the point.",
+        align="justify",
+    )
+
+    doc.quote(
+        "The finding, stated precisely",
+        "The model is not data-limited. It was already trained to the ceiling that this generator "
+        "and this feature set allow, and the ceiling is determined by which variables the model "
+        "receives \u2014 distance, climb, experience, prior history, and modality \u2014 not by how "
+        "many rows it sees. The remaining 23.8% error on real data comes from information that is "
+        "absent from those nine features: wind, heat, surface, fatigue on the day, and the "
+        "elapsed-time definition mismatch described in Section 4.2.3. A larger corpus generated "
+        "by the same simulator cannot supply information the simulator does not model.",
+    )
+
+    doc.p(
+        "This is worth dwelling on, because \u201cmore data\u201d is the reflexive answer to almost "
+        "every machine-learning shortfall, and the study was run specifically to test whether that "
+        "reflex held here. It does not. The corpus grew by 91,197 rows and the model learned "
+        "essentially nothing new, because the new rows were drawn from the same distribution and "
+        "expressed the same nine-variable relationship. Duplicating the information content of a "
+        "dataset is not the same as enriching it. The experiment therefore closes off a line of "
+        "enquiry rather than opening one: no further synthetic data collection is warranted, and "
+        "engineering effort would be better spent on new input signals than on a larger simulator "
+        "run.",
+        align="justify",
+    )
+
+    doc.p(
+        "Two secondary observations are worth recording. First, the scaled model consumed eleven "
+        "times the training time and produced a model file only 5% larger, because a "
+        "gradient-boosted tree ensemble has a fixed number of trees and leaves. The extra data "
+        "refined the split thresholds marginally rather than enlarging the hypothesis space. "
+        "Second, the internal holdout metrics moved in opposite directions \u2014 MAE improved from "
+        "5.76 to 5.68 minutes while R\u00b2 fell from 0.9924 to 0.9906 \u2014 which is itself the "
+        "point: on synthetic data these figures shift by amounts that carry no meaning, and the "
+        "documentation accordingly attributes no significance to either direction. The tautology "
+        "warning of Section 4.2.1 applies to both rows of that comparison equally.",
+        align="justify",
+    )
+
+    doc.table(
+        ["Question", "Study that answers it", "Answer"],
+        [
+            ["Does the algorithm fit the simulator?",
+             "Internal holdout (4.2.1)", "Yes, but tautologically"],
+            ["How accurate is it on real people?",
+             "GeoLife external validation (4.2.2)", "23.8% median error"],
+            ["Does the learned correction help?",
+             "Ablation with paired bootstrap (4.3.1)", "No \u2014 indistinguishable from 1.0"],
+            ["Is real training data better than synthetic?",
+             "Held-out user retraining (4.3.2)", "Not for accuracy; yes for calibration"],
+            ["Would more synthetic data help?",
+             "Corpus scaling study (4.3.3)", "No \u2014 11\u00d7 rows, no gain"],
+        ],
+        caption="The four studies form a closed argument: each rules out one explanation for the accuracy gap, and the set of ruled-out explanations is what justifies the conclusions in Section 4.4.",
+        widths=[2.3, 2.3, 1.9],
+        align_numeric=False,
+        font_size=8.5,
+    )
+
+    doc.p(
+        "Taken with the preceding two studies, the picture is now complete enough to act on. The "
+        "error is not caused by a defective algorithm, because the same architecture trained on "
+        "real data behaves correctly. It is not caused by too little synthetic data, because "
+        "eleven times as much synthetic data changes nothing. It is not caused by the learned "
+        "correction, because removing that correction does not hurt. What remains is the feature "
+        "set and the definition of the target \u2014 which is why Section 4.5 identifies new input "
+        "signals, rather than more rows, as the condition under which these conclusions would "
+        "change.",
+        align="justify",
+    )
+
     # -------------------------------------------------------------- 4.4
     doc.h2("4.4 Results Interpretation")
 

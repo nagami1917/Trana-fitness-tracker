@@ -123,7 +123,10 @@ def build_front_matter(doc: Doc) -> None:
         "accuracy figure this documentation treats as honest; the 5.51% MAPE on the "
         "synthetic in-distribution test split is reported only as a sanity check, because "
         "the synthetic generator constructs the target variable from distance and speed "
-        "algebraically and therefore makes that metric partly tautological.",
+        "algebraically and therefore makes that metric partly tautological. A scaling study "
+        "that retrained the same architecture on 100,042 generated activities confirmed that "
+        "this error is not a shortage of training data: the external figure moved by less "
+        "than one tenth of a percentage point.",
         align="justify",
     )
     doc.p(
