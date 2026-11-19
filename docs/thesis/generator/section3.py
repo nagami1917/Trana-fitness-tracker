@@ -226,7 +226,7 @@ def build_section_3(doc: Doc) -> None:
          "source, and the calibration state."),
     ]
     for i, (lead, text) in enumerate(pipeline, start=1):
-        doc.numbered(text, bold_lead=f"Step {i} \u2014 {lead}")
+        doc.numbered(text, bold_lead=f"Step {i} \u2014 {lead}", marker="")
 
     doc.p(
         "Two details in that pipeline are worth calling out because they are the kind of thing "

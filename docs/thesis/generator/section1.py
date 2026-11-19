@@ -92,7 +92,7 @@ def build_section_1(doc: Doc) -> None:
          "selected by duration band and intensity."),
     ]
     for i, (lead, text) in enumerate(steps, start=1):
-        doc.numbered(text, bold_lead=f"Step {i} \u2014 {lead}")
+        doc.numbered(text, bold_lead=f"Step {i} \u2014 {lead}", marker="")
 
     doc.p(
         "One architectural detail matters for the credibility of the whole system: the same "

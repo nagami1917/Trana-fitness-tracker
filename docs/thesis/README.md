@@ -1,17 +1,22 @@
 # CSST 102 Final Project Documentation — TRANA
 
-The deliverable for the course is `TRANA-CSST102-Final-Project-Documentation.docx`,
-built to the structure of the professor's template
-(`CSST 102(IS) - Documentation Template.docx`, found in the Google Drive
-`Documentation` folder).
+The deliverable for the course is `TRANA-CSST102-Final-Project-Documentation.pdf`
+(with `.docx` alongside as the editable source), built to the structure of the
+professor's template (`CSST 102(IS) - Documentation Template.docx`, found in the
+Google Drive `Documentation` folder).
 
 ## What is here
 
 | File | Purpose |
 | --- | --- |
-| `TRANA-CSST102-Final-Project-Documentation.docx` | **The deliverable.** Submit this. |
+| `TRANA-CSST102-Final-Project-Documentation.docx` | Editable deliverable — use this one if you still need to add names/screenshots |
+| `TRANA-CSST102-Final-Project-Documentation.pdf` | **Submission-ready PDF**, 46 pages, fixed layout, page numbers |
 | `TRANA-CSST102-Final-Project-Documentation.md` | Same content in markdown, for review and diffing without Word |
-| `generator/` | Generator scripts that produce the `.docx` |
+| `generator/` | Scripts that produce the `.docx` and `.pdf` from one source |
+
+All three are the same content. `generator/` builds the `.docx` and `.pdf` in a
+single pass — the `.pdf` renderer replays an event log recorded while the
+`.docx` is written, so the two cannot drift apart.
 
 ## Template compliance
 
@@ -52,22 +57,39 @@ Three things cannot be generated and must be added by hand:
 After inserting screenshots: select all (`Ctrl+A`) and press `F9` to refresh any
 field codes, then update the table of contents if Word prompts.
 
-## Regenerating the .docx
+## Regenerating both files
 
-The generator needs `python-docx`:
+The generator needs `python-docx` and `reportlab`:
 
 ```bash
 python3 -m venv .venv-docx
-.venv-docx/bin/pip install python-docx
+.venv-docx/bin/pip install python-docx reportlab
 .venv-docx/bin/python docs/thesis/generator/build_documentation.py
 ```
 
-This writes `docs/thesis/TRANA-CSST102-Final-Project-Documentation.docx`.
+That writes both `TRANA-CSST102-Final-Project-Documentation.docx` and
+`TRANA-CSST102-Final-Project-Documentation.pdf`.
+
+Single format, if you only need one:
+
+```bash
+.venv-docx/bin/python docs/thesis/generator/build_documentation.py --only pdf
+.venv-docx/bin/python docs/thesis/generator/build_documentation.py --only docx
+```
 
 **Editing advice.** Once the group starts adding screenshots and names, the
-`.docx` becomes the source of truth — edit it directly in Word rather than
-editing the scripts and rebuilding, or the hand-added content will be lost.
-Regenerate only if you need to reset the text wholesale.
+`.docx` becomes the source of truth — edit it directly in Word, then export a
+fresh PDF from Word (`File → Save As → PDF`) rather than rebuilding, or the
+hand-added content will be lost. Rebuilding from the generator resets the text
+to its current state and produces PDF placeholders in place of screenshots.
+
+## PDF notes
+
+The PDF is produced with reportlab and embeds DejaVu Sans, which covers every
+glyph the document uses (→ ≤ ≥ × ± − ² ·). It has real page numbers in the
+footer, repeating table headers on multi-page tables, and "Table N continued"
+markers. Bookmarks/section structure are not included — the static Table of
+Contents at the front lists every section and subsection.
 
 ## Where the numbers come from
 

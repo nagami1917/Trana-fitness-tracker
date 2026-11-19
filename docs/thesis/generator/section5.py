@@ -100,7 +100,7 @@ def build_section_5(doc: Doc) -> None:
          "reproducible after the fact."),
     ]
     for i, (lead, text) in enumerate(flow, start=1):
-        doc.numbered(text, bold_lead=f"Step {i} \u2014 {lead}")
+        doc.numbered(text, bold_lead=f"Step {i} \u2014 {lead}", marker="")
 
     doc.p(
         "Step 1 and step 5 deserve a note on consistency. The browser computes a preview from "

@@ -18,6 +18,11 @@ ACCENT = RGBColor(0x1F, 0x4E, 0x79)
 ACCENT_LIGHT = RGBColor(0x2E, 0x75, 0xB6)
 GREY = RGBColor(0x59, 0x59, 0x59)
 
+# Hex mirrors, so the PDF renderer can replay the same colours.
+ACCENT_HEX = "1F4E79"
+ACCENT_LIGHT_HEX = "2E75B6"
+GREY_HEX = "595959"
+
 
 def _shade(cell, hex_fill: str) -> None:
     tc_pr = cell._tc.get_or_add_tcPr()
@@ -47,8 +52,16 @@ class Doc:
         self.d = Document()
         self.table_no = 0
         self.figure_no = 0
+        # Ordered event log so a second renderer (PDF) can replay the exact same
+        # document instead of re-implementing 18,000 words of content.
+        self.events: list[dict] = []
         self._setup_styles()
         self._setup_page()
+
+    # ------------------------------------------------------------ recording
+    def _rec(self, kind: str, **payload) -> None:
+        payload["kind"] = kind
+        self.events.append(payload)
 
     # ---------------------------------------------------------------- setup
     def _setup_page(self) -> None:
@@ -87,19 +100,24 @@ class Doc:
     def h1(self, text: str, page_break: bool = True):
         if page_break:
             self.page_break()
+        self._rec("heading", level=1, text=text)
         return self.d.add_heading(text, level=1)
 
     def h2(self, text: str):
+        self._rec("heading", level=2, text=text)
         return self.d.add_heading(text, level=2)
 
     def h3(self, text: str):
+        self._rec("heading", level=3, text=text)
         return self.d.add_heading(text, level=3)
 
     def h4(self, text: str):
+        self._rec("heading", level=4, text=text)
         return self.d.add_heading(text, level=4)
 
     def p(self, text: str = "", *, bold: bool = False, italic: bool = False,
           size: float | None = None, align: str | None = None, space_after: float | None = None):
+        self._rec("p", text=text, bold=bold, italic=italic, size=size, align=align)
         para = self.d.add_paragraph()
         run = para.add_run(text)
         run.bold = bold
@@ -118,6 +136,7 @@ class Doc:
 
     def rich(self, parts: list[tuple[str, str]], align: str = "justify"):
         """Paragraph from (text, style) pairs; style in {'', 'b', 'i', 'bi', 'code'}."""
+        self._rec("rich", parts=parts, align=align)
         para = self.d.add_paragraph()
         for text, style in parts:
             run = para.add_run(text)
@@ -133,7 +152,12 @@ class Doc:
 
     def bullet(self, text: str, level: int = 0, *, bold_lead: str | None = None):
         style = "List Bullet" if level == 0 else "List Bullet 2"
-        para = self.d.add_paragraph(style=style)
+        self._rec("bullet", text=text, level=level, bold_lead=bold_lead)
+        para = self.d.add_paragraph()
+        para.paragraph_format.left_indent = Inches(0.28 if level == 0 else 0.55)
+        para.paragraph_format.first_line_indent = Inches(-0.18)
+        mark = "\u2022  " if level == 0 else "\u2013  "
+        run = para.add_run(mark)
         if bold_lead:
             run = para.add_run(bold_lead)
             run.bold = True
@@ -141,8 +165,17 @@ class Doc:
         para.paragraph_format.space_after = Pt(3)
         return para
 
-    def numbered(self, text: str, *, bold_lead: str | None = None):
-        para = self.d.add_paragraph(style="List Number")
+    def numbered(self, text: str, *, bold_lead: str | None = None,
+                 marker: str | None = None):
+        """Explicit marker avoids Word auto-numbering (which restarts unpredictably
+        and duplicated the "Step N" the callers already write into bold_lead)."""
+        self._rec("numbered", text=text, bold_lead=bold_lead, marker=marker)
+        para = self.d.add_paragraph()
+        para.paragraph_format.left_indent = Inches(0.28)
+        para.paragraph_format.first_line_indent = Inches(-0.28)
+        if marker:
+            run = para.add_run(marker + "  ")
+            run.bold = True
         if bold_lead:
             run = para.add_run(bold_lead)
             run.bold = True
@@ -151,6 +184,7 @@ class Doc:
         return para
 
     def code(self, text: str, caption: str | None = None):
+        self._rec("code", text=text, caption=caption)
         if caption:
             cap = self.d.add_paragraph()
             run = cap.add_run(caption)
@@ -179,6 +213,7 @@ class Doc:
 
     def quote(self, label: str, text: str):
         """Highlighted callout for key findings."""
+        self._rec("quote", label=label, text=text)
         table = self.d.add_table(rows=1, cols=1)
         table.alignment = WD_TABLE_ALIGNMENT.CENTER
         cell = table.cell(0, 0)
@@ -214,6 +249,9 @@ class Doc:
               caption: str | None = None, widths: list[float] | None = None,
               align_numeric: bool = True, font_size: float = 9.0,
               header_fill: str = "1F4E79"):
+        self._rec("table", header=list(header), rows=[list(r) for r in rows],
+                  caption=caption, widths=widths, align_numeric=align_numeric,
+                  font_size=font_size)
         if caption:
             self.table_no += 1
             cap = self.d.add_paragraph()
@@ -265,8 +303,44 @@ class Doc:
         self.d.add_paragraph().paragraph_format.space_after = Pt(2)
         return table
 
+    def toc(self, entries: list[tuple[str, int]]):
+        """Static table-of-contents listing: [(text, level), ...]."""
+        self._rec("toc", entries=list(entries))
+        for text, level in entries:
+            para = self.d.add_paragraph()
+            para.paragraph_format.space_after = Pt(2)
+            if level == 2:
+                para.paragraph_format.left_indent = Inches(0.35)
+            run = para.add_run(text)
+            run.font.size = Pt(10.5 if level == 1 else 9.5)
+            run.bold = level == 1
+            if level == 1:
+                run.font.color.rgb = ACCENT
+
+    def kv_block(self, rows: list[tuple[str, str]], *, label_width: float = 1.85,
+                 value_width: float = 4.5, size: float = 11.0):
+        """Borderless two-column label/value block (cover page header)."""
+        self._rec("kv", rows=list(rows), label_width=label_width,
+                  value_width=value_width, size=size)
+        table = self.d.add_table(rows=0, cols=2)
+        table.autofit = False
+        for label, value in rows:
+            cells = table.add_row().cells
+            cells[0].width = Inches(label_width)
+            cells[1].width = Inches(value_width)
+            cells[0].text = ""
+            cells[1].text = ""
+            if label:
+                run = cells[0].paragraphs[0].add_run(label)
+                run.bold = True
+                run.font.size = Pt(size)
+            run = cells[1].paragraphs[0].add_run(value)
+            run.font.size = Pt(size)
+        return table
+
     def figure_placeholder(self, caption: str, instruction: str, height: float = 2.2):
         self.figure_no += 1
+        self._rec("figure", caption=caption, instruction=instruction, number=self.figure_no)
         table = self.d.add_table(rows=1, cols=1)
         table.alignment = WD_TABLE_ALIGNMENT.CENTER
         cell = table.cell(0, 0)
@@ -296,9 +370,11 @@ class Doc:
 
     # -------------------------------------------------------------- controls
     def page_break(self) -> None:
+        self._rec("page_break")
         self.d.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
 
     def spacer(self, points: float = 12) -> None:
+        self._rec("spacer", points=points)
         para = self.d.add_paragraph()
         para.paragraph_format.space_after = Pt(points)
 
