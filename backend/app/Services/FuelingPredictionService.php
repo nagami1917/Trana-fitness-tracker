@@ -28,6 +28,16 @@ class FuelingPredictionService
                 'total' => (int) Arr::get($fueling, 'calories.total', 0),
                 'perHour' => (int) Arr::get($fueling, 'calories.per_hour', 0),
                 'fromCarbsPct' => (int) Arr::get($fueling, 'calories.from_carbs_pct', 50),
+                // Grams oxidised during the session. Distinct from any intake
+                // figure; the client shows it as a burn.
+                'carbsBurnedG' => (int) Arr::get($fueling, 'calories.carbs_burned_g', 0),
+            ],
+            'recovery' => [
+                'carbsG' => (int) Arr::get($fueling, 'recovery.carbs_g', 0),
+                'proteinG' => (int) Arr::get($fueling, 'recovery.protein_g', 0),
+                'window' => (string) Arr::get($fueling, 'recovery.window', 'Within 30 min after'),
+                'elevatedLoad' => (bool) Arr::get($fueling, 'recovery.elevated_load', false),
+                'note' => (string) Arr::get($fueling, 'recovery.note', ''),
             ],
             'carbs' => [
                 'perHourG' => (int) Arr::get($fueling, 'carbs.per_hour_g', 0),

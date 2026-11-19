@@ -1,7 +1,7 @@
 <script>
   import { Flame, Salad, Droplets, Waves, Clock, Gauge, Utensils, Candy, CupSoda, Check, Sparkles, Info, Package, User, TriangleAlert, History } from 'lucide-svelte';
   import { duration as fmtDuration, pace, speed, kcal, nf, ml } from '../../lib/format.js';
-  import { INTENSITY_COPY } from '../../lib/ml/fueling.js';
+  import { INTENSITY_COPY, KCAL_PER_G_CARB, KCAL_PER_G_PROTEIN } from '../../lib/ml/fueling.js';
   import { unitSystem } from '../../stores/index.js';
   import { fluidUnit, toDisplayFluid } from '../../lib/units.js';
 
@@ -55,17 +55,38 @@
       : 'Model quantile range',
   );
 
-  const tiles = $derived([
+  /**
+   * Two separate questions, deliberately not in one row.
+   *
+   * The old layout put "Calories" first in a row of intake numbers, with no
+   * qualifier anywhere. Read left-to-right that says "eat 1,560 kcal" - the
+   * classic eat-back-your-burn trap, and the exact question this screen kept
+   * raising. Burn is a cost; the other three are a shopping list. They now sit
+   * under their own headings so the difference is stated rather than inferred
+   * from the unit (kcal vs g vs mg), which nothing explained.
+   */
+  const burnedDetail = $derived.by(() => {
+    const carbsBurned = Number(f.calories?.carbsBurnedG ?? 0);
+    if (!carbsBurned) return null;
+    return `incl. ~${nf(carbsBurned)} g carbs burned`;
+  });
+
+  const burnTile = $derived({
+    label: 'Calories burned',
+    value: kcal(f.calories.total),
+    unit: 'kcal',
+    sub: `~${f.calories.perHour} /h`,
+    // Grams of carbohydrate actually oxidised, not the amount to eat. Saying
+    // both numbers here is what makes the intake cards below legible as a
+    // different quantity rather than a contradiction.
+    detail: burnedDetail,
+    Icon: Flame,
+    tone: 'from-rose-100 to-rose-200/60 text-rose-500',
+  });
+
+  const intakeTiles = $derived([
     {
-      label: 'Calories',
-      value: kcal(f.calories.total),
-      unit: 'kcal',
-      sub: `${f.calories.perHour} /h`,
-      Icon: Flame,
-      tone: 'from-rose-100 to-rose-200/60 text-rose-500',
-    },
-    {
-      label: 'Carbs',
+      label: 'Carbs to eat',
       value: `${nf(f.carbs.totalG)}`,
       unit: 'g',
       sub: `${f.carbs.perHourG} g/h`,
@@ -94,6 +115,30 @@
       tone: 'from-cyan-100 to-cyan-200/60 text-cyan-600',
     },
   ]);
+
+  /**
+   * What to eat after the session.
+   *
+   * Read from the API's structured `recovery` block rather than re-deriving the
+   * 0.4/0.25 g/kg rule in the component: that rule already exists in two
+   * places (ml/fueling_model and lib/ml/fueling.js) and a third copy here is
+   * how the numbers on one screen start disagreeing with each other. Falls back
+   * to null on older responses that predate the field.
+   */
+  const recovery = $derived.by(() => {
+    const r = f.recovery;
+    if (!r || !Number(r.carbsG)) return null;
+    return {
+      carbsG: Number(r.carbsG),
+      proteinG: Number(r.proteinG ?? 0),
+      window: r.window ?? 'Within 30 min after',
+      elevatedLoad: Boolean(r.elevatedLoad),
+      note: r.note ?? '',
+      // Energy the recovery meal actually supplies, so it can be compared with
+      // the burn above instead of being mistaken for it.
+      kcal: Math.round(Number(r.carbsG) * KCAL_PER_G_CARB + Number(r.proteinG ?? 0) * KCAL_PER_G_PROTEIN),
+    };
+  });
 </script>
 
 <div class="space-y-4">
@@ -158,21 +203,82 @@
     </div>
   </div>
 
-  <!-- numbers -->
-  <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-    {#each tiles as tile (tile.label)}
-      <div class="card-flat p-3">
-        <span class="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br shadow-inset {tile.tone}">
-          <tile.Icon size={17} />
+  <!-- what the session COSTS you -->
+  <div>
+    <p class="mb-1.5 flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400">
+      <Flame size={12} class="text-rose-400" /> Calories burned — this session costs
+    </p>
+    <div class="card-flat flex flex-wrap items-center gap-x-4 gap-y-1 p-3">
+      <div class="flex items-center gap-2.5">
+        <span class="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br shadow-inset {burnTile.tone}">
+          <burnTile.Icon size={17} />
         </span>
-        <p class="mt-2 text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400">{tile.label}</p>
-        <p class="num-tabular font-display text-lg font-extrabold leading-tight text-ink-900">
-          {tile.value}<span class="ml-0.5 text-[11px] font-bold text-ink-400">{tile.unit}</span>
+        <p class="num-tabular font-display text-xl font-extrabold leading-tight text-ink-900">
+          {burnTile.value}<span class="ml-0.5 text-[11px] font-bold text-ink-400">{burnTile.unit}</span>
         </p>
-        <p class="num-tabular text-[11px] font-bold text-brand-700">{tile.sub}</p>
       </div>
-    {/each}
+      <p class="num-tabular text-[11px] font-bold text-brand-700">{burnTile.sub}</p>
+      {#if burnTile.detail}
+        <p class="num-tabular text-[11px] font-bold text-ink-400">{burnTile.detail}</p>
+      {/if}
+      <!-- The number is a gross cost, and most of it would have been spent
+           anyway. Said explicitly so it never reads as a budget to eat back. -->
+      <p class="w-full text-[11px] font-semibold leading-relaxed text-ink-400">
+        Energy your body spends. Not a target to eat back — the fueling plan below is what to take in.
+      </p>
+    </div>
   </div>
+
+  <!-- what to TAKE IN during the session -->
+  <div>
+    <p class="mb-1.5 flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400">
+      <Salad size={12} class="text-amber-500" /> Take this in during the session
+    </p>
+    <div class="grid grid-cols-3 gap-2.5">
+      {#each intakeTiles as tile (tile.label)}
+        <div class="card-flat p-3">
+          <span class="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br shadow-inset {tile.tone}">
+            <tile.Icon size={17} />
+          </span>
+          <p class="mt-2 text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-400">{tile.label}</p>
+          <p class="num-tabular font-display text-lg font-extrabold leading-tight text-ink-900">
+            {tile.value}<span class="ml-0.5 text-[11px] font-bold text-ink-400">{tile.unit}</span>
+          </p>
+          <p class="num-tabular text-[11px] font-bold text-brand-700">{tile.sub}</p>
+        </div>
+      {/each}
+    </div>
+  </div>
+
+  <!-- what to EAT AFTER the session -->
+  {#if recovery}
+    <div class="rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50/70 to-white p-4">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h3 class="flex items-center gap-1.5 text-sm">
+          <Utensils size={15} class="text-emerald-600" /> Eat after
+        </h3>
+        <span class="pill num-tabular">{recovery.window}</span>
+      </div>
+      <div class="mt-2.5 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <p class="num-tabular font-display text-xl font-extrabold leading-tight text-ink-900">
+          {recovery.carbsG} g carbs
+        </p>
+        <p class="num-tabular font-display text-xl font-extrabold leading-tight text-ink-900">
+          {recovery.proteinG} g protein
+        </p>
+        <p class="num-tabular text-[11px] font-bold text-emerald-700">≈ {nf(recovery.kcal)} kcal</p>
+        {#if recovery.elevatedLoad}
+          <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-amber-700">
+            Training load high
+          </span>
+        {/if}
+      </div>
+      <p class="mt-1.5 text-[11px] font-semibold leading-relaxed text-ink-500">
+        {recovery.note} This is ~{recovery.kcal} kcal — far less than the {burnTile.value} kcal the
+        session cost, and it is not meant to match it.
+      </p>
+    </div>
+  {/if}
 
   {#if !compact}
     {#if f.kit?.items?.length}

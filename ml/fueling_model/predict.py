@@ -25,6 +25,10 @@ SWEAT_PROFILES = {
     "high": (800, 900),
 }
 
+# Energy density of carbohydrate. Used to state how many grams a session
+# oxidises, so the athlete can see burn and intake as different quantities.
+KCAL_PER_G_CARB = 4.0
+
 INTENSITY_BY_MET = (
     (5.0, "light"),
     (8.0, "moderate"),
@@ -226,6 +230,9 @@ def recommend(inp: FuelingInput) -> dict:
     cal_factor = min(2.0, max(0.5, float(inp.energy_calibration_factor or 1.0)))
     calories_total = met * inp.weight_kg * duration_h * cal_factor
     intensity = intensity_label(met)
+    # Harder efforts run on a higher share of carbohydrate. Stated once here so
+    # the calorie tile and the recovery card cannot disagree about it.
+    carb_share_pct = 60 if met >= 9 else 45
 
     # --- carbohydrates ----------------------------------------------------
     carb_per_h = _carb_rate_g_per_h(inp.duration_min, met)
@@ -278,13 +285,39 @@ def recommend(inp: FuelingInput) -> dict:
         "calories": {
             "total": int(round(calories_total)),
             "per_hour": int(round(met * inp.weight_kg * cal_factor)),
-            "from_carbs_pct": 60 if met >= 9 else 45,
+            "from_carbs_pct": carb_share_pct,
+            # Grams of carbohydrate actually oxidised during the session. This is
+            # a *burn*, not an intake target: it is what the effort costs, and it
+            # is deliberately larger than what we ask the athlete to eat. Showing
+            # it next to the fueling numbers is what makes the two readable as
+            # different things.
+            "carbs_burned_g": int(round(calories_total * carb_share_pct / 100.0 / KCAL_PER_G_CARB)),
         },
         "carbs": {
             "per_hour_g": int(carb_per_h),
             "total_g": int(round(carbs_total)),
             "daily_target_g": int(daily_target),
             "pre_session_g": int(round(inp.weight_kg * 1.0)),
+        },
+        # --- what to eat afterwards ---------------------------------------------
+        # The recovery step already exists inside `timeline`, but only as a
+        # formatted string. Lifting the numbers out lets the UI present recovery
+        # as its own recommendation - which is what an athlete actually acts on
+        # after the session - without re-deriving the 0.4/0.25 g/kg rule in yet
+        # another place and drifting from these values.
+        "recovery": {
+            "carbs_g": int(round(inp.weight_kg * 0.4 * recovery_multiplier)),
+            "protein_g": int(round(inp.weight_kg * (0.30 if recovery_multiplier > 1.0 else 0.25))),
+            "window": "Within 30 min after",
+            "elevated_load": recovery_multiplier > 1.0,
+            # Not a replacement for the session's energy cost. Recovery feeds the
+            # next session; eating back today's burn is not the goal and the
+            # number is intentionally much smaller than `calories.total`.
+            "note": (
+                "Recovery covers the next session, not this one's energy cost."
+                if recovery_multiplier <= 1.0
+                else "Elevated training load: recovery carbs raised 20%."
+            ),
         },
         "sodium": {"per_hour_mg": int(round(sodium_per_h)), "total_mg": int(round(sodium_total))},
         "fluid": {"per_hour_ml": int(round(fluid_per_h)), "total_ml": int(round(fluid_total))},

@@ -8,6 +8,9 @@
  *   fluid/h  = f(sweat profile, heat)
  */
 
+export const KCAL_PER_G_CARB = 4;
+export const KCAL_PER_G_PROTEIN = 4;
+
 export const SWEAT_PROFILES = {
   low: { sodium: 350, fluid: 450 },
   normal: { sodium: 550, fluid: 650 },
@@ -214,6 +217,9 @@ export function recommendFueling({
   const calFactor = Math.min(2.0, Math.max(0.5, Number(energyCalibrationFactor) || 1.0));
   const caloriesTotal = met * weightKg * hours * calFactor;
   const intensity = intensityLabel(met);
+  // Harder efforts run on a higher share of carbohydrate. Mirrors the Python
+  // model's carb_share_pct so the two implementations cannot disagree.
+  const carbSharePct = met >= 9 ? 60 : 45;
 
   const carbPerHour = carbRatePerHour(durationMin, met);
   const carbsTotal = carbPerHour * hours;
@@ -258,13 +264,29 @@ export function recommendFueling({
     calories: {
       total: Math.round(caloriesTotal),
       perHour: Math.round(met * weightKg * calFactor),
-      fromCarbsPct: met >= 9 ? 60 : 45,
+      fromCarbsPct: carbSharePct,
+      // Grams of carbohydrate oxidised during the session. A burn, not an
+      // intake target - deliberately larger than what we ask them to eat.
+      carbsBurnedG: Math.round((caloriesTotal * carbSharePct) / 100 / KCAL_PER_G_CARB),
     },
     carbs: {
       perHourG: carbPerHour,
       totalG: Math.round(carbsTotal),
       dailyTargetG: Math.round(dailyTarget),
       preSessionG: Math.round(weightKg * 1.0),
+    },
+    // Lifted out of the timeline so recovery can be shown as its own
+    // recommendation. Same 0.4/0.25 g/kg rule as buildTimeline - both read
+    // weightKg and recoveryMultiplier, so they cannot drift apart.
+    recovery: {
+      carbsG: Math.round(weightKg * 0.4 * recoveryMultiplier),
+      proteinG: Math.round(weightKg * (recoveryMultiplier > 1 ? 0.3 : 0.25)),
+      window: 'Within 30 min after',
+      elevatedLoad: recoveryMultiplier > 1,
+      note:
+        recoveryMultiplier <= 1
+          ? "Recovery covers the next session, not this one's energy cost."
+          : 'Elevated training load: recovery carbs raised 20%.',
     },
     sodium: { perHourMg: Math.round(sodiumPerHour), totalMg: Math.round(sodiumTotal) },
     fluid: { perHourMl: Math.round(fluidPerHour), totalMl: Math.round(fluidTotal) },

@@ -194,7 +194,7 @@
       <Card flat class="p-4">
         <Flame size={18} class="text-brand-500" />
         <p class="num-tabular mt-2 text-xl font-extrabold text-ink-900">{plan.calories.total}</p>
-        <p class="text-[11px] font-bold uppercase tracking-wider text-ink-400">kcal total</p>
+        <p class="text-[11px] font-bold uppercase tracking-wider text-ink-400">kcal burned</p>
       </Card>
       <Card flat class="p-4">
         <Wheat size={18} class="text-amber-500" />
