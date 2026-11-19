@@ -1,0 +1,262 @@
+{
+  "name": "TRANA held-out retraining study",
+  "generated_at": "2026-11-19T08:22:40.711372+00:00",
+  "question": "Does training on real GPS data beat training on the synthetic corpus, measured on people neither model has seen?",
+  "protocol": {
+    "split": "by user \u2014 no person appears in both training and holdout",
+    "holdout_user_fraction": 0.3,
+    "seed": 7,
+    "bootstrap_draws": 2000,
+    "evaluation": "per-user chronological walk-forward, identical to evaluation.geolife_validation, so the shipped-model arm reproduces the published report",
+    "elevation": "absent from GeoLife \u2014 zeroed for both models"
+  },
+  "dataset": {
+    "rows": 4362,
+    "users": 51,
+    "train_users": 36,
+    "holdout_users": 15,
+    "holdout_rows": 1085,
+    "holdout_mode_mix": {
+      "walk": 723,
+      "ride": 361,
+      "run": 1
+    }
+  },
+  "candidate_card": {
+    "version": "20261119.0822",
+    "training_source": "csv",
+    "corpus_rows": 3235,
+    "trainer_holdout_metrics": {
+      "n": 602,
+      "mae_min": 6.04,
+      "rmse_min": 14.34,
+      "r2": 0.2959,
+      "mape_pct": 36.86,
+      "within_15_pct": 33.06,
+      "interval_coverage_pct": 66.94,
+      "anchor_mae_min": 6.1,
+      "mae_improvement_vs_anchor_pct": 1.04,
+      "train_rows": 2633,
+      "test_rows": 602
+    }
+  },
+  "holdout_scores": {
+    "synthetic": {
+      "n": 1085,
+      "mae_min": 6.17,
+      "mdape_pct": 26.68,
+      "mape_pct": 36.74,
+      "within_20_pct": 38.71,
+      "r2": 0.489,
+      "interval_coverage_pct": 15.94,
+      "anchor_base_mae_min": 6.15,
+      "_by_mode": {
+        "ride": {
+          "n": 361,
+          "mae_min": 5.29,
+          "mape_pct": 28.22,
+          "mdape_pct": 23.94,
+          "within_15_pct": 31.86,
+          "within_20_pct": 42.38,
+          "r2": 0.417,
+          "interval_coverage_pct": 17.45,
+          "baseline_pop_prior_mae_min": 8.37,
+          "baseline_anchor_base_mae_min": 5.21,
+          "mae_improvement_vs_pop_prior_pct": 36.8,
+          "mae_improvement_vs_anchor_base_pct": -1.6
+        },
+        "run": {
+          "n": 1,
+          "mae_min": 1.3,
+          "mape_pct": 12.38,
+          "mdape_pct": 12.38,
+          "within_15_pct": 100.0,
+          "within_20_pct": 100.0,
+          "r2": null,
+          "interval_coverage_pct": 0.0,
+          "baseline_pop_prior_mae_min": 2.16,
+          "baseline_anchor_base_mae_min": 0.33,
+          "mae_improvement_vs_pop_prior_pct": 39.8,
+          "mae_improvement_vs_anchor_base_pct": -294.1
+        },
+        "walk": {
+          "n": 723,
+          "mae_min": 6.62,
+          "mape_pct": 41.03,
+          "mdape_pct": 28.26,
+          "within_15_pct": 28.91,
+          "within_20_pct": 36.79,
+          "r2": 0.501,
+          "interval_coverage_pct": 15.21,
+          "baseline_pop_prior_mae_min": 6.4,
+          "baseline_anchor_base_mae_min": 6.63,
+          "mae_improvement_vs_pop_prior_pct": -3.4,
+          "mae_improvement_vs_anchor_base_pct": 0.2
+        }
+      },
+      "_by_history": {
+        "cold_start": {
+          "n": 22,
+          "mae_min": 13.27,
+          "mape_pct": 45.9,
+          "mdape_pct": 46.13,
+          "within_15_pct": 22.73,
+          "within_20_pct": 27.27,
+          "r2": 0.052,
+          "interval_coverage_pct": 13.64,
+          "baseline_pop_prior_mae_min": 13.9,
+          "baseline_anchor_base_mae_min": 12.78,
+          "mae_improvement_vs_pop_prior_pct": 4.5,
+          "mae_improvement_vs_anchor_base_pct": -3.8
+        },
+        "thin_history_1": {
+          "n": 19,
+          "mae_min": 16.4,
+          "mape_pct": 69.42,
+          "mdape_pct": 22.91,
+          "within_15_pct": 31.58,
+          "within_20_pct": 47.37,
+          "r2": -0.167,
+          "interval_coverage_pct": 15.79,
+          "baseline_pop_prior_mae_min": 11.95,
+          "baseline_anchor_base_mae_min": 16.37,
+          "mae_improvement_vs_pop_prior_pct": -37.3,
+          "mae_improvement_vs_anchor_base_pct": -0.1
+        },
+        "personalized_2plus": {
+          "n": 1044,
+          "mae_min": 5.84,
+          "mape_pct": 35.95,
+          "mdape_pct": 26.56,
+          "within_15_pct": 30.08,
+          "within_20_pct": 38.79,
+          "r2": 0.521,
+          "interval_coverage_pct": 16.0,
+          "baseline_pop_prior_mae_min": 6.82,
+          "baseline_anchor_base_mae_min": 5.83,
+          "mae_improvement_vs_pop_prior_pct": 14.4,
+          "mae_improvement_vs_anchor_base_pct": -0.2
+        }
+      }
+    },
+    "retrained": {
+      "n": 1085,
+      "mae_min": 6.11,
+      "mdape_pct": 24.42,
+      "mape_pct": 35.26,
+      "within_20_pct": 42.49,
+      "r2": 0.466,
+      "interval_coverage_pct": 67.83,
+      "anchor_base_mae_min": 6.15,
+      "_by_mode": {
+        "ride": {
+          "n": 361,
+          "mae_min": 5.09,
+          "mape_pct": 25.59,
+          "mdape_pct": 19.21,
+          "within_15_pct": 42.38,
+          "within_20_pct": 51.52,
+          "r2": 0.421,
+          "interval_coverage_pct": 70.64,
+          "baseline_pop_prior_mae_min": 8.37,
+          "baseline_anchor_base_mae_min": 5.21,
+          "mae_improvement_vs_pop_prior_pct": 39.3,
+          "mae_improvement_vs_anchor_base_pct": 2.4
+        },
+        "run": {
+          "n": 1,
+          "mae_min": 1.3,
+          "mape_pct": 12.38,
+          "mdape_pct": 12.38,
+          "within_15_pct": 100.0,
+          "within_20_pct": 100.0,
+          "r2": null,
+          "interval_coverage_pct": 100.0,
+          "baseline_pop_prior_mae_min": 2.16,
+          "baseline_anchor_base_mae_min": 0.33,
+          "mae_improvement_vs_pop_prior_pct": 39.8,
+          "mae_improvement_vs_anchor_base_pct": -294.1
+        },
+        "walk": {
+          "n": 723,
+          "mae_min": 6.63,
+          "mape_pct": 40.12,
+          "mdape_pct": 28.51,
+          "within_15_pct": 28.77,
+          "within_20_pct": 37.9,
+          "r2": 0.473,
+          "interval_coverage_pct": 66.39,
+          "baseline_pop_prior_mae_min": 6.4,
+          "baseline_anchor_base_mae_min": 6.63,
+          "mae_improvement_vs_pop_prior_pct": -3.5,
+          "mae_improvement_vs_anchor_base_pct": 0.0
+        }
+      },
+      "_by_history": {
+        "cold_start": {
+          "n": 22,
+          "mae_min": 11.11,
+          "mape_pct": 38.72,
+          "mdape_pct": 38.78,
+          "within_15_pct": 31.82,
+          "within_20_pct": 31.82,
+          "r2": 0.259,
+          "interval_coverage_pct": 72.73,
+          "baseline_pop_prior_mae_min": 13.9,
+          "baseline_anchor_base_mae_min": 12.78,
+          "mae_improvement_vs_pop_prior_pct": 20.0,
+          "mae_improvement_vs_anchor_base_pct": 13.1
+        },
+        "thin_history_1": {
+          "n": 19,
+          "mae_min": 15.0,
+          "mape_pct": 66.16,
+          "mdape_pct": 21.69,
+          "within_15_pct": 36.84,
+          "within_20_pct": 47.37,
+          "r2": 0.018,
+          "interval_coverage_pct": 63.16,
+          "baseline_pop_prior_mae_min": 11.95,
+          "baseline_anchor_base_mae_min": 16.37,
+          "mae_improvement_vs_pop_prior_pct": -25.6,
+          "mae_improvement_vs_anchor_base_pct": 8.4
+        },
+        "personalized_2plus": {
+          "n": 1044,
+          "mae_min": 5.84,
+          "mape_pct": 34.62,
+          "mdape_pct": 24.22,
+          "within_15_pct": 33.33,
+          "within_20_pct": 42.62,
+          "r2": 0.483,
+          "interval_coverage_pct": 67.82,
+          "baseline_pop_prior_mae_min": 6.82,
+          "baseline_anchor_base_mae_min": 5.83,
+          "mae_improvement_vs_pop_prior_pct": 14.3,
+          "mae_improvement_vs_anchor_base_pct": -0.3
+        }
+      }
+    }
+  },
+  "paired_bootstrap": {
+    "draws": 2000,
+    "mae_delta_min": 0.061,
+    "ci95_low_min": -0.071,
+    "ci95_high_min": 0.184,
+    "share_draws_a_better_pct": 16.9,
+    "excludes_zero": false,
+    "a": "synthetic",
+    "b": "retrained",
+    "note": "MAE(synthetic) - MAE(retrained); negative means synthetic has the lower error"
+  },
+  "verdict": {
+    "recommendation": "no measurable difference \u2014 retraining did not change accuracy",
+    "reason": "The 95% CI on the MAE difference straddles zero ([-0.071, 0.184] min). Retraining on real data moved interval coverage from 15.94% to 67.83%, which may still be worth reporting."
+  },
+  "limitations": [
+    "GeoLife is walks and rides (2 runs); a model trained only on it cannot serve runs or hikes.",
+    "Elevation is absent, so both models are compared without the shipped model's strongest feature.",
+    "Train and holdout users are disjoint, but all come from one city and one decade of GPS logging.",
+    "The candidate is evaluated as an experiment and is not deployed by this script."
+  ]
+}
