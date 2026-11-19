@@ -1,0 +1,246 @@
+"""Front matter: cover page, table of contents stub, and abstract.
+
+Follows the CSST 102 template header block exactly (PROJECT NAME / PROPONENTS /
+YEAR AND SECTION) before the seven numbered sections begin.
+"""
+
+from __future__ import annotations
+
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Pt, RGBColor
+
+from docx_engine import ACCENT, GREY, Doc
+
+PROJECT_NAME = "TRANA"
+PROJECT_SUBTITLE = (
+    "A Predictive Machine-Learning Web Application for Activity Duration "
+    "Forecasting and Race-Day Fueling"
+)
+COURSE = "CSST 102 \u2013 BASIC MACHINE LEARNING"
+DOC_KIND = "FINAL PROJECT DOCUMENTATION"
+MODEL_VERSION = "20261113.1328"
+STUDY_VERSION = "20261119.0822"
+DOC_DATE = "November 2026"
+
+
+def build_front_matter(doc: Doc) -> None:
+    d = doc.d
+
+    # ------------------------------------------------------------- cover
+    for _ in range(3):
+        doc.spacer(6)
+
+    title = d.add_paragraph()
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = title.add_run(COURSE)
+    run.bold = True
+    run.font.size = Pt(20)
+    run.font.color.rgb = ACCENT
+
+    sub = d.add_paragraph()
+    sub.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = sub.add_run(DOC_KIND)
+    run.bold = True
+    run.font.size = Pt(14)
+    run.font.color.rgb = GREY
+
+    doc.spacer(30)
+
+    name = d.add_paragraph()
+    name.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = name.add_run(PROJECT_NAME)
+    run.bold = True
+    run.font.size = Pt(48)
+    run.font.color.rgb = ACCENT
+
+    tagline = d.add_paragraph()
+    tagline.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = tagline.add_run(PROJECT_SUBTITLE)
+    run.italic = True
+    run.font.size = Pt(12)
+    run.font.color.rgb = GREY
+
+    doc.spacer(40)
+
+    # ------------------------------------------------- template header block
+    rows = [
+        ("PROJECT NAME:", PROJECT_NAME + " \u2014 Predictive Activity Duration & Fueling System"),
+        ("PROPONENTS:", "[SURNAME, First Name]"),
+        ("", "[SURNAME, First Name]"),
+        ("", "[SURNAME, First Name]"),
+        ("YEAR AND SECTION:", "[Year and Section]"),
+    ]
+    table = d.add_table(rows=0, cols=2)
+    table.autofit = False
+    for label, value in rows:
+        cells = table.add_row().cells
+        cells[0].width = __import__("docx").shared.Inches(1.85)
+        cells[1].width = __import__("docx").shared.Inches(4.5)
+        cells[0].text = ""
+        cells[1].text = ""
+        if label:
+            run = cells[0].paragraphs[0].add_run(label)
+            run.bold = True
+            run.font.size = Pt(11)
+        run = cells[1].paragraphs[0].add_run(value)
+        run.font.size = Pt(11)
+
+    doc.spacer(24)
+
+    facts = [
+        ("Machine-learning model", f"Gradient-boosted quantile regression (scikit-learn), version {MODEL_VERSION}"),
+        ("Honest external accuracy", "\u00b123.8% median absolute percentage error on 4,362 real GPS activities"),
+        ("Held-out retraining study", f"Version {STUDY_VERSION}, 51 users split 36/15 by user"),
+        ("Deployed application", "Svelte 5 PWA + Laravel 12 API + FastAPI inference service"),
+    ]
+    for label, value in facts:
+        para = d.add_paragraph()
+        para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = para.add_run(f"{label}: ")
+        run.bold = True
+        run.font.size = Pt(9.5)
+        run.font.color.rgb = GREY
+        run = para.add_run(value)
+        run.font.size = Pt(9.5)
+        run.font.color.rgb = GREY
+
+    doc.spacer(30)
+    para = d.add_paragraph()
+    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = para.add_run(DOC_DATE)
+    run.font.size = Pt(10)
+    run.font.color.rgb = GREY
+
+    # -------------------------------------------------------------- TOC
+    doc.h1("TABLE OF CONTENTS")
+    toc_entries = [
+        ("1. PROJECT OVERVIEW", 1),
+        ("1.1 Project Description", 2),
+        ("1.2 Project Objectives", 2),
+        ("1.3 Problem Definition", 2),
+        ("2. DATASET AND DATA PREPROCESSING", 1),
+        ("2.1 Dataset Description", 2),
+        ("2.2 Dataset Attributes", 2),
+        ("2.3 Data Preprocessing", 2),
+        ("2.4 Data Splitting and Validation", 2),
+        ("3. MACHINE LEARNING MODEL DEVELOPMENT", 1),
+        ("3.1 Model Selection", 2),
+        ("3.2 Model Training and Implementation", 2),
+        ("3.3 Model Comparison", 2),
+        ("3.4 Final Model Selection", 2),
+        ("4. MODEL EVALUATION AND INTERPRETATION", 1),
+        ("4.1 Evaluation Metrics", 2),
+        ("4.2 Model Evaluation Results", 2),
+        ("4.3 Model Comparison Results", 2),
+        ("4.4 Results Interpretation", 2),
+        ("4.5 Model Limitations", 2),
+        ("5. WEB APPLICATION DEVELOPMENT AND OUTPUT", 1),
+        ("6. GROUP CONTRIBUTIONS", 1),
+        ("7. CONCLUSION", 1),
+        ("Appendix A. Reproducing the Results", 1),
+        ("Appendix B. Complete Metric Tables", 1),
+        ("Appendix C. Glossary", 1),
+    ]
+    for text, level in toc_entries:
+        para = d.add_paragraph()
+        para.paragraph_format.space_after = Pt(2)
+        if level == 2:
+            para.paragraph_format.left_indent = __import__("docx").shared.Inches(0.35)
+        run = para.add_run(text)
+        run.font.size = Pt(10.5 if level == 1 else 9.5)
+        run.bold = level == 1
+        if level == 1:
+            run.font.color.rgb = ACCENT
+
+    doc.p(
+        "Page numbers are generated by Word. After inserting screenshots, press "
+        "Ctrl+A then F9 to refresh any field codes and page numbering.",
+        italic=True, size=8.5,
+    )
+
+    # --------------------------------------------------------- abstract
+    doc.h1("ABSTRACT")
+    doc.p(
+        "TRANA is a predictive web application that answers a single practical question "
+        "for an endurance athlete before a session: how long will this activity take, and "
+        "what should I eat and drink to complete it? The system takes four inputs the "
+        "athlete already knows \u2014 activity type, planned distance, planned elevation gain, "
+        "and their own past session log \u2014 and returns a duration estimate in minutes with "
+        "an uncertainty interval, together with a per-hour carbohydrate, sodium, and fluid "
+        "plan derived from ACSM metabolic equations.",
+        align="justify",
+    )
+    doc.p(
+        "The prediction target is elapsed activity duration. The machine-learning "
+        "component is a gradient-boosted quantile regressor that learns a multiplicative "
+        "pace-factor correction on top of a personalised Riegel reference curve fitted "
+        "chronologically from the athlete\u2019s own history. Three models (q10, q50, q90) "
+        "produce the lower bound, median, and upper bound, which lets the application "
+        "state an honest range instead of a single false-precision number.",
+        align="justify",
+    )
+    doc.p(
+        "The model was trained on an 8,845-row corpus and then evaluated on an independent "
+        "external dataset it had never seen: 4,362 real GPS trajectories from 51 volunteers "
+        "in the Microsoft Research GeoLife dataset. Against those real activities the model "
+        "achieves a median absolute percentage error of 23.84%, with 43.81% of predictions "
+        "falling within 20% of the true duration and an R\u00b2 of 0.414. That is the "
+        "accuracy figure this documentation treats as honest; the 5.51% MAPE on the "
+        "synthetic in-distribution test split is reported only as a sanity check, because "
+        "the synthetic generator constructs the target variable from distance and speed "
+        "algebraically and therefore makes that metric partly tautological.",
+        align="justify",
+    )
+    doc.p(
+        "The study goes further than reporting a number. A paired ablation over the same "
+        "4,362 activities shows that the learned correction is statistically "
+        "indistinguishable from the reference curve it multiplies (MAE improvement "
+        "\u22120.009 min, 95% CI [\u22120.019, +0.002]). Rather than hide that, the work "
+        "diagnoses the underlying cause \u2014 the predictive intervals cover only 16.96% of "
+        "outcomes against an 80% nominal target, a 4.7\u00d7 shortfall driven by the "
+        "synthetic training distribution \u2014 and then measures a fix: retraining on real "
+        "GeoLife data with a strict user-disjoint 70/30 split moves interval coverage from "
+        "15.94% to 67.83% with no measurable change in accuracy. The conclusion is that "
+        "the model\u2019s accuracy is data-limited, not model-limited, and the application "
+        "ships a truthful \u00b124% error figure in its interface rather than the flattering "
+        "synthetic one.",
+        align="justify",
+    )
+    doc.p(
+        "The application itself is a production system: a Svelte 5 progressive web app, a "
+        "Laravel 12 API, a FastAPI inference service with the exported tree ensemble also "
+        "running client-side in the browser, and a PostgreSQL/Supabase data layer. It is "
+        "deployed and publicly reachable.",
+        align="justify",
+    )
+    doc.rich([
+        ("Keywords: ", "b"),
+        ("activity duration prediction, gradient boosting, quantile regression, "
+         "personalised reference curve, external validation, calibration, "
+         "prediction intervals, progressive web application", "i"),
+    ])
+
+    doc.h1("DOCUMENT CONVENTIONS")
+    doc.p("Four conventions are used throughout this document.", align="justify")
+    doc.bullet(
+        "Every reported number is traceable to a file in the repository or to a named "
+        "report under ml/evaluation/reports/. Where a number could be misread as better "
+        "than it is, the raw JSON path is given alongside it.",
+        bold_lead="Traceability. ",
+    )
+    doc.bullet(
+        "Metrics that are tautological by construction are labelled as such at the point "
+        "of first use, not quietly omitted. The synthetic R\u00b2 of 0.9924 appears in this "
+        "document only inside a table whose caption says it is not a real-world measure.",
+        bold_lead="Honesty over flattery. ",
+    )
+    doc.bullet(
+        "Negative results are reported as findings. The ablation that shows the learned "
+        "correction does not beat the curve is Section 4.3, not a footnote.",
+        bold_lead="Negative results are results. ",
+    )
+    doc.bullet(
+        "Code appears as excerpts with the file and line range named, so a reader can open "
+        "the repository and read the surrounding context.",
+        bold_lead="Code is quoted, not paraphrased. ",
+    )
