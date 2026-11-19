@@ -78,6 +78,21 @@ class DurationPrediction(BaseModel):
     basis: str
 
 
+class RecoveryRecommendation(BaseModel):
+    """What to eat after the session, as numbers rather than prose.
+
+    Separate from `timeline` (where the same step appears as a formatted string)
+    so clients can present recovery as its own card without re-deriving the
+    0.4/0.25 g/kg rule and drifting from the server's values.
+    """
+
+    carbs_g: int
+    protein_g: int
+    window: str
+    elevated_load: bool
+    note: str
+
+
 class FuelingPrediction(BaseModel):
     intensity: str
     met: float
@@ -86,6 +101,8 @@ class FuelingPrediction(BaseModel):
     sodium: dict
     fluid: dict
     timeline: list[dict]
+    # Optional so a response from an older model process still validates.
+    recovery: RecoveryRecommendation | None = None
     kit: dict | None = None
     notes: list[str]
 

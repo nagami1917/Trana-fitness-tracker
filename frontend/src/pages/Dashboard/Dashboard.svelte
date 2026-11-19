@@ -474,7 +474,7 @@
                   {fmtDuration(prediction.d.minutes)}
                 </p>
                 <p class="num-tabular text-sm font-bold text-ink-400">
-                  ≈ <span class="text-brand-700">{kcal(prediction.f.calories.total)} kcal</span>
+                  ≈ <span class="text-brand-700">{kcal(prediction.f.calories.total)} kcal burned</span>
                 </p>
               </div>
               <p class="num-tabular mt-1 text-[11px] font-semibold text-ink-400">

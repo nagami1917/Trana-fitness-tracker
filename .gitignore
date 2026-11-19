@@ -37,3 +37,6 @@ frontend/scripts/.mobile-fixtures/
 
 # model binaries (kept out of git; artifacts live in ml/duration_model/)
 *.pkl
+
+# transient SSR bundle written by scripts/burn-intake-smoke.mjs
+frontend/scripts/.burn-intake-bundle.mjs

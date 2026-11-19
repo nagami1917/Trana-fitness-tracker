@@ -196,3 +196,75 @@ def test_fueling_kit_hr_intensity_and_carb_loading():
     assert fueling["kit"]["items"]
     assert fueling["kit"]["cadence"]["sip_every_min"] > 0
 
+
+
+# --- burn vs intake must stay distinguishable ------------------------------
+#
+# The fueling payload carries two kinds of number: what the session COSTS
+# (calories, and the carbohydrate it oxidises) and what to TAKE IN (carbs,
+# sodium, fluid, recovery). They are easy to conflate - a 1,560 kcal burn sitting
+# in a row of intake tiles reads as "eat 1,560 kcal". These tests pin the facts
+# that keep them apart, so a future refactor cannot quietly merge them.
+
+
+def test_calories_report_burned_carbs_separately_from_intake():
+    body = client.post("/predict", json=payload(distance_km=52, elevation_gain_m=250)).json()
+    calories = body["fueling"]["calories"]
+
+    assert calories["total"] > 0
+    assert calories["from_carbs_pct"] in (45, 60)
+    # Grams oxidised, derived from the burn - must be positive and consistent.
+    assert calories["carbs_burned_g"] > 0
+
+    expected = round(calories["total"] * calories["from_carbs_pct"] / 100 / 4)
+    assert abs(calories["carbs_burned_g"] - expected) <= 1
+
+
+def test_carbs_burned_exceeds_carbs_to_eat():
+    """You cannot and should not replace a session's carbohydrate burn.
+
+    If this ever flips, the plan is telling athletes to eat everything they
+    burn - which is the exact misconception the split UI exists to prevent.
+    """
+    body = client.post("/predict", json=payload(distance_km=52, elevation_gain_m=250)).json()
+    fueling = body["fueling"]
+    assert fueling["calories"]["carbs_burned_g"] > fueling["carbs"]["total_g"]
+
+
+def test_recovery_is_reported_as_its_own_structured_block():
+    body = client.post("/predict", json=payload(distance_km=52, elevation_gain_m=250)).json()
+    recovery = body["fueling"]["recovery"]
+
+    assert recovery["carbs_g"] > 0
+    assert recovery["protein_g"] > 0
+    assert recovery["window"] == "Within 30 min after"
+    assert recovery["elevated_load"] in (True, False)
+    assert recovery["note"]
+
+
+def test_recovery_matches_its_timeline_step():
+    """One rule, two presentations - they must not drift apart."""
+    body = client.post("/predict", json=payload(distance_km=52, elevation_gain_m=250)).json()
+    fueling = body["fueling"]
+    step = next(s for s in fueling["timeline"] if s["icon"] == "recovery")
+
+    assert fueling["recovery"]["carbs_g"] == step["carbs_g"]
+    assert f"{fueling['recovery']['carbs_g']} g carbs" in step["detail"]
+    assert f"{fueling['recovery']['protein_g']} g protein" in step["detail"]
+
+
+def test_recovery_is_far_smaller_than_the_burn():
+    """Recovery feeds the next session; it is not a refund of this one."""
+    body = client.post("/predict", json=payload(distance_km=52, elevation_gain_m=250)).json()
+    fueling = body["fueling"]
+    recovery_kcal = fueling["recovery"]["carbs_g"] * 4 + fueling["recovery"]["protein_g"] * 4
+    assert recovery_kcal < fueling["calories"]["total"] / 2
+
+
+def test_elevated_load_raises_recovery_carbs():
+    calm = client.post("/predict", json=payload(distance_km=20, acwr=1.0)).json()["fueling"]
+    loaded = client.post("/predict", json=payload(distance_km=20, acwr=1.5)).json()["fueling"]
+
+    assert calm["recovery"]["elevated_load"] is False
+    assert loaded["recovery"]["elevated_load"] is True
+    assert loaded["recovery"]["carbs_g"] > calm["recovery"]["carbs_g"]
