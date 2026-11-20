@@ -40,3 +40,6 @@ frontend/scripts/.mobile-fixtures/
 
 # transient SSR bundle written by scripts/burn-intake-smoke.mjs
 frontend/scripts/.burn-intake-bundle.mjs
+
+# Downloaded dataset working copies (Arena Drive pulls) — never commit data
+google_drive/
