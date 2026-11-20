@@ -36,7 +36,7 @@ def build_section_4(doc: Doc) -> None:
 
     doc.p(
         "Six metrics are reported, and each one is included because it answers a question the "
-        "others cannot. Reporting only R\u00b2, or only MAPE, would have hidden the most "
+        "others cannot [12]. Reporting only R\u00b2, or only MAPE, would have hidden the most "
         "interesting findings in this project.",
         align="justify",
     )
@@ -495,7 +495,7 @@ def build_section_4(doc: Doc) -> None:
     )
 
     doc.p(
-        "The Endomondo/FitRec corpus makes this test possible for the first time, because it is "
+        "The Endomondo/FitRec corpus [2] makes this test possible for the first time, because it is "
         "the only dataset available to the project that carries a genuine per-athlete key "
         "alongside enough activities per athlete to build a history. It supplies 219 distinct "
         "athletes with a median of 150 activities each, against GeoLife\u2019s 51 users with a "

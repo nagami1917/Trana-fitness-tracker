@@ -365,8 +365,8 @@ def build_section_5(doc: Doc) -> None:
     )
     doc.p(
         "The fuelling engine is deterministic because the relationship it encodes is already "
-        "known. Energy expenditure follows MET \u00d7 mass \u00d7 hours. Carbohydrate oxidation "
-        "during exercise follows well-established duration and intensity bands. Sweat sodium "
+        "known. Energy expenditure follows MET \u00d7 mass \u00d7 hours [8]. Carbohydrate oxidation "
+        "during exercise follows well-established duration and intensity bands [9], [10]. Sweat sodium "
         "loss correlates with measurable sweat rate and concentration. These are published "
         "physiological relationships with derivations, not empirical patterns waiting to be "
         "discovered. Wrapping them in a learned model would add opacity, add a training data "

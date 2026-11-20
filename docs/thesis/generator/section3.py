@@ -12,7 +12,7 @@ def build_section_3(doc: Doc) -> None:
     doc.h2("3.1 Model Selection")
 
     doc.p(
-        "The final model is a gradient-boosted quantile regressor from scikit-learn: three "
+        "The final model is a gradient-boosted quantile regressor from scikit-learn [13]: three "
         "GradientBoostingRegressor instances fitted with loss=\"quantile\" at alpha 0.10, 0.50, "
         "and 0.90. Each one learns the log pace factor described in Section 2.3.5. The "
         "architecture, stated as an equation, is:",
@@ -50,7 +50,7 @@ def build_section_3(doc: Doc) -> None:
              "Universal approximator; can in principle learn everything",
              "8,845 rows and 9 features do not justify the parameter count; no interpretable "
              "feature importance; slow to train and awkward to export to a browser evaluator"],
-            ["Physics-only formula (Riegel + Naismith)",
+            ["Physics-only formula (Riegel [3] + Naismith [4])",
              "Zero training cost, fully explainable, deterministic",
              "Cannot personalise beyond a single fitted exponent, and cannot learn the interaction "
              "between terrain grade and modality \u2014 retained as the baseline in Section 3.3"],
@@ -71,7 +71,7 @@ def build_section_3(doc: Doc) -> None:
         align="justify",
     )
     doc.bullet(
-        "GradientBoostingRegressor accepts loss=\"quantile\" with an alpha parameter. Training three "
+        "GradientBoostingRegressor accepts loss=\"quantile\" with an alpha parameter [5], [6]. Training three "
         "instances gives a median and two bounds from one pipeline, with no distributional assumption "
         "about the residuals. This is what makes an honest uncertainty interval possible at all.",
         bold_lead="Native quantile loss. ",

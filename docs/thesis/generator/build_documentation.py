@@ -38,6 +38,7 @@ from section4 import build_section_4  # noqa: E402
 from section5 import build_section_5  # noqa: E402
 from section6 import build_section_6  # noqa: E402
 from section7 import build_section_7  # noqa: E402
+from section8 import build_section_8  # noqa: E402
 
 THESIS_DIR = Path(__file__).resolve().parents[1]
 DEFAULT_DOCX = THESIS_DIR / "TRANA-CSST102-Final-Project-Documentation.docx"
@@ -56,6 +57,7 @@ def build_docx(out: Path) -> tuple[int, int, list[dict]]:
     build_section_5(doc)
     build_section_6(doc)
     build_section_7(doc)
+    build_section_8(doc)
     doc.footer(FOOTER)
 
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -98,6 +100,7 @@ def main() -> None:
         build_section_5(events)
         build_section_6(events)
         build_section_7(events)
+        build_section_8(events)
         events = events.events
 
     if args.only in (None, "pdf"):
