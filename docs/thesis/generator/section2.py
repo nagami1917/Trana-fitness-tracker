@@ -89,7 +89,7 @@ def build_section_2(doc: Doc) -> None:
     doc.h3("2.1.2 External evaluation corpus \u2014 GeoLife GPS Trajectories")
 
     doc.p(
-        "Microsoft Research released the GeoLife GPS Trajectories dataset (version 1.3) in "
+        "Microsoft Research released the GeoLife GPS Trajectories dataset (version 1.3) [1] in "
         "2008 for research on trajectory mining. 182 volunteers in Beijing recorded their "
         "movement continuously over roughly five years. The raw data is a set of .plt files "
         "containing latitude, longitude, and timestamp at one sample every 1\u20135 seconds. "
@@ -344,8 +344,8 @@ def build_section_2(doc: Doc) -> None:
 
     doc.p(
         "The reference curve is base_minutes = exp(a + b\u00b7ln d), which is Riegel\u2019s formula "
-        "time \u221d distance^b in log-linear form. The exponent b is fitted by weighted Ridge "
-        "regression, shrunk toward a sport-specific prior and then hard-bounded:",
+        "time \u221d distance^b [3] in log-linear form. The exponent b is fitted by weighted Ridge "
+        "regression [7], shrunk toward a sport-specific prior and then hard-bounded:",
         align="justify",
     )
     doc.code(

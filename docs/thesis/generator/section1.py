@@ -87,7 +87,7 @@ def build_section_1(doc: Doc) -> None:
          "Curve \u00d7 multiplier yields the median estimate; the q10 and q90 branches yield the "
          "bounds. The bounds are forced non-crossing and floored at one minute."),
         ("Handoff to the fuelling engine. ",
-         "The predicted duration drives the ACSM metabolic calculation: "
+         "The predicted duration drives the ACSM metabolic calculation [8], [11]: "
          "kcal = MET \u00d7 mass \u00d7 hours, and carbohydrate/sodium/fluid targets are "
          "selected by duration band and intensity."),
     ]
@@ -269,7 +269,7 @@ def build_section_1(doc: Doc) -> None:
          "Duration is recorded to the minute in every activity log. There is no proxy, no "
          "human labelling, and no ambiguity: the target is measured, not inferred."),
         ("The relationship is non-linear and interacting. ",
-         "Duration scales super-linearly with distance (Riegel\u2019s exponent is >1), grows "
+         "Duration scales super-linearly with distance (Riegel\u2019s exponent is >1 [3]), grows "
          "with elevation gain per kilometre, and the penalty for climbing depends on the "
          "modality. Trees capture those interactions without hand-specifying them."),
         ("There is per-user signal worth personalising. ",

@@ -82,6 +82,7 @@ def build_front_matter(doc: Doc) -> None:
         ("5. WEB APPLICATION DEVELOPMENT AND OUTPUT", 1),
         ("6. GROUP CONTRIBUTIONS", 1),
         ("7. CONCLUSION", 1),
+        ("8. REFERENCES", 1),
         ("Appendix A. Reproducing the Results", 1),
         ("Appendix B. Complete Metric Tables", 1),
         ("Appendix C. Glossary", 1),
