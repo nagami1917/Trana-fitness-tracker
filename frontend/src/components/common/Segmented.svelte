@@ -8,7 +8,7 @@
       type="button"
       class="flex-1 whitespace-nowrap rounded-xl font-bold transition sm:flex-initial sm:rounded-full {size === 'sm' ? 'px-3 py-1.5 text-[11px]' : 'px-4 py-2 text-xs'}"
       class:bg-brand-gradient={value === option.id}
-      class:text-white={value === option.id}
+      class:text-navy={value === option.id}
       class:shadow-glow={value === option.id}
       class:text-ink-500={value !== option.id}
       onclick={() => onSelect(option.id)}

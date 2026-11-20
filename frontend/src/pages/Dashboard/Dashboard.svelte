@@ -499,7 +499,7 @@
                 <button
                   class="rounded-full px-3 py-1.5 text-[11px] font-bold transition"
                   class:bg-brand-gradient={metric === m.id}
-                  class:text-white={metric === m.id}
+                  class:text-navy={metric === m.id}
                   class:shadow-glow={metric === m.id}
                   class:text-ink-500={metric !== m.id}
                   onclick={() => (metric = m.id)}
@@ -567,23 +567,23 @@
       </Card>
 
       <!-- ml insight -->
-      <div class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-600 via-brand-600 to-brand-700 p-5 text-white shadow-card">
-        <div class="absolute -right-6 -top-6 h-28 w-28 rounded-full bg-white/10"></div>
-        <div class="absolute -bottom-10 left-10 h-24 w-24 rounded-full bg-white/5"></div>
+      <div class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-600 via-brand-600 to-brand-700 p-5 text-navy shadow-card">
+        <div class="absolute -right-6 -top-6 h-28 w-28 rounded-full bg-navy/10"></div>
+        <div class="absolute -bottom-10 left-10 h-24 w-24 rounded-full bg-navy/5"></div>
         <div class="relative">
           <div class="flex items-center gap-2">
-            <span class="grid h-8 w-8 place-items-center rounded-xl bg-white/20"><Brain size={16} /></span>
-            <p class="text-[11px] font-extrabold uppercase tracking-[0.12em] text-white/80">Your model</p>
+            <span class="grid h-8 w-8 place-items-center rounded-xl bg-navy/20"><Brain size={16} /></span>
+            <p class="text-[11px] font-extrabold uppercase tracking-[0.12em] text-navy/80">Your model</p>
           </div>
           <p class="mt-3 font-display text-xl font-extrabold leading-tight">Estimates based on your history</p>
-          <p class="mt-1 text-xs font-semibold text-white/80">
+          <p class="mt-1 text-xs font-semibold text-navy/80">
             {#if $modelCard?.training_source === 'synthetic'}
               The bundled model was trained on synthetic activities. Real-world accuracy is not validated.
             {:else}
               Results are estimates and may differ from your actual performance.
             {/if}
           </p>
-          <button class="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-white/15 px-3 py-1.5 text-[11px] font-extrabold backdrop-blur transition hover:bg-white/25" onclick={() => navigate('/analytics')}>
+          <button class="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-navy/20 px-3 py-1.5 text-[11px] font-extrabold backdrop-blur transition hover:bg-navy/25" onclick={() => navigate('/analytics')}>
             See how it works <ArrowRight size={13} />
           </button>
         </div>

@@ -300,7 +300,7 @@
                 <Flag size={13} class="shrink-0" />
                 <div class="min-w-0 flex-1 leading-tight">
                   <p class="truncate text-[11px] font-extrabold">{race.title || race.name}</p>
-                  <p class="num-tabular truncate text-[10px] font-bold text-white/90">
+                  <p class="num-tabular truncate text-[10px] font-bold text-navy/80">
                     {formatDistance(race.distance_km, $unitSystem)} {distanceUnit($unitSystem)} Race Day
                   </p>
                 </div>

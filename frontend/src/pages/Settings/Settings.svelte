@@ -765,20 +765,20 @@ garmin,run,5.2,32.5,158,68,420,2026-11-09T08:00:00+08:00"
           {#if importError}<p class="mt-2 text-[11px] font-semibold text-rose-500">{importError}</p>{/if}
         </Card>
 
-        <Card class="bg-gradient-to-br from-brand-600 to-brand-700 text-white">
+        <Card class="bg-gradient-to-br from-brand-600 to-brand-700 text-navy">
           <div class="flex items-center gap-2">
             <Brain size={18} />
-            <h2 class="text-lg text-white">Prediction engine</h2>
+            <h2 class="text-lg text-navy">Prediction engine</h2>
           </div>
-          <div class="num-tabular mt-3 space-y-1.5 text-xs font-semibold text-white/85">
-            <p class="flex justify-between"><span class="text-white/60">Model version</span><span>{$modelCard?.version ?? 'local'}</span></p>
-            <p class="flex justify-between"><span class="text-white/60">Algorithm</span><span class="text-right">{($modelCard?.algorithm ?? 'Gradient boosting').replace('GradientBoostingRegressor', 'Gradient boosting')}</span></p>
-            <p class="flex justify-between"><span class="text-white/60">Test error</span><span>{$modelCard?.metrics ? `±${Math.round($modelCard.metrics.mape_pct)}%` : '—'}</span></p>
-            <p class="flex justify-between"><span class="text-white/60">Training rows</span><span>{nf($modelCard?.corpus_rows ?? 0)}</span></p>
-            <p class="flex justify-between"><span class="text-white/60">Your sessions</span><span>{$activities.length}</span></p>
-            <p class="flex justify-between"><span class="text-white/60">Storage</span><span>TRANA API</span></p>
+          <div class="num-tabular mt-3 space-y-1.5 text-xs font-semibold text-navy/85">
+            <p class="flex justify-between"><span class="text-navy/80">Model version</span><span>{$modelCard?.version ?? 'local'}</span></p>
+            <p class="flex justify-between"><span class="text-navy/80">Algorithm</span><span class="text-right">{($modelCard?.algorithm ?? 'Gradient boosting').replace('GradientBoostingRegressor', 'Gradient boosting')}</span></p>
+            <p class="flex justify-between"><span class="text-navy/80">Test error</span><span>{$modelCard?.metrics ? `±${Math.round($modelCard.metrics.mape_pct)}%` : '—'}</span></p>
+            <p class="flex justify-between"><span class="text-navy/80">Training rows</span><span>{nf($modelCard?.corpus_rows ?? 0)}</span></p>
+            <p class="flex justify-between"><span class="text-navy/80">Your sessions</span><span>{$activities.length}</span></p>
+            <p class="flex justify-between"><span class="text-navy/80">Storage</span><span>TRANA API</span></p>
           </div>
-          <p class="mt-3 text-[11px] font-semibold leading-relaxed text-white/75">
+          <p class="mt-3 text-[11px] font-semibold leading-relaxed text-navy/80">
             {#if $modelCard?.training_source === 'synthetic'}
               The bundled model was trained and tested on synthetic activities; its real-world accuracy is not validated.
             {:else}
