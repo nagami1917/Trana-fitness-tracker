@@ -313,16 +313,16 @@
         </div>
       </Card>
 
-      <Card class="bg-gradient-to-br from-brand-600 to-brand-700 text-white">
+      <Card class="bg-gradient-to-br from-brand-600 to-brand-700 text-navy">
         <div class="flex items-start gap-3">
-          <span class="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white/20"><Check size={18} /></span>
+          <span class="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-navy/20"><Check size={18} /></span>
           <div>
             <p class="text-sm font-extrabold">Daily carbs target: {nf(form.daily_calories ? Math.round(($profile?.weight_kg ?? 60) * 6) : 0)} g</p>
-            <p class="mt-1 text-[11px] font-semibold leading-relaxed text-white/80">
+            <p class="mt-1 text-[11px] font-semibold leading-relaxed text-navy/80">
               Based on {Math.round(toDisplayWeight($profile?.weight_kg ?? 60, $unitSystem))} {weightUnit($unitSystem)} body mass and 6 g/kg for your training load. TRANA splits this into
               pre-, during- and post-session fuel on every plan.
             </p>
-            <p class="mt-2 text-[11px] font-bold text-white/70">
+            <p class="mt-2 text-[11px] font-bold text-navy/80">
               This week: {kcal($weekStats.calories)} kcal · {fmtDuration($weekStats.minutes)} · {nf(toDisplayDistance($weekStats.distance, $unitSystem), 1)} {distanceUnit($unitSystem)}
             </p>
           </div>

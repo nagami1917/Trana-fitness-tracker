@@ -143,27 +143,27 @@
 
 <div class="space-y-4">
   <!-- hero -->
-  <div class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-600 via-brand-700 to-brand-800 p-5 text-white shadow-card">
-    <div class="absolute -right-8 -top-10 h-36 w-36 rounded-full bg-white/10"></div>
-    <div class="absolute -bottom-12 left-1/4 h-32 w-32 rounded-full bg-white/5"></div>
+  <div class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-600 via-brand-700 to-brand-800 p-5 text-navy shadow-card">
+    <div class="absolute -right-8 -top-10 h-36 w-36 rounded-full bg-navy/10"></div>
+    <div class="absolute -bottom-12 left-1/4 h-32 w-32 rounded-full bg-navy/5"></div>
     <div class="relative">
       <div class="flex items-center justify-between gap-3">
-        <p class="text-[11px] font-extrabold uppercase tracking-[0.14em] text-white/90">Predicted duration</p>
-        <span class="rounded-full bg-white/20 px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide backdrop-blur">
+        <p class="text-[11px] font-extrabold uppercase tracking-[0.14em] text-navy/90">Predicted duration</p>
+        <span class="rounded-full bg-navy/20 px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide backdrop-blur">
           {INTENSITY_COPY[f.intensity]?.label ?? f.intensity}
         </span>
       </div>
       <div class="mt-1 flex flex-wrap items-end gap-x-3 gap-y-1">
         <p class="num-tabular font-display text-[40px] font-extrabold leading-none">{fmtDuration(d.minutes)}</p>
         <p
-          class="num-tabular pb-1 text-sm font-bold text-white/90"
+          class="num-tabular pb-1 text-sm font-bold text-navy/90"
           title={rangeTitle}
         >
           typically {Math.round(displayLow)}–{Math.round(displayHigh)} min
         </p>
       </div>
       {#if basisTone === 'personal'}
-        <p class="num-tabular mt-2 inline-flex items-center gap-1.5 rounded-full bg-white/25 px-2.5 py-1 text-[11px] font-extrabold text-white backdrop-blur">
+        <p class="num-tabular mt-2 inline-flex items-center gap-1.5 rounded-full bg-navy/25 px-2.5 py-1 text-[11px] font-extrabold text-navy backdrop-blur">
           <User size={11} /> {basisLine}
         </p>
       {:else}
@@ -174,8 +174,8 @@
           <TriangleAlert size={11} /> {basisLine}
         </p>
       {/if}
-      <div class="num-tabular mt-3 flex flex-wrap items-center gap-2 text-[11px] font-bold text-white/95">
-        <span class="inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-1">
+      <div class="num-tabular mt-3 flex flex-wrap items-center gap-2 text-[11px] font-bold text-navy/95">
+        <span class="inline-flex items-center gap-1 rounded-full bg-navy/20 px-2.5 py-1">
           <Gauge size={12} /> {d.paceMinPerKm ? pace(d.paceMinPerKm, $unitSystem) : speed(d.speedKmh, $unitSystem)}
         </span>
         <!-- Labeled "model" confidence, not confidence: the score weights the
@@ -183,7 +183,7 @@
              much the model trusts itself, not how often it was right. Real-world
              accuracy is the validated ± figure shown next to the range. -->
         <span
-          class="inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-1"
+          class="inline-flex items-center gap-1 rounded-full bg-navy/20 px-2.5 py-1"
           title={d.validatedErrorPct
             ? `Model self-confidence (${Math.round(Number(d.confidence ?? 0) * 100)}%). Measured real-world error for this sport is ±${d.validatedErrorPct}%.`
             : 'Model self-confidence based on how much history this sport has'}
@@ -192,11 +192,11 @@
         </span>
         {#if Number(plan.elevation_gain_m) > 0}
           {@const perKm = Math.round(Number(plan.elevation_gain_m) / Math.max(0.1, Number(plan.distance_km)))}
-          <span class="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1" title="This activity's climb and how steep that is per km">
+          <span class="inline-flex items-center gap-1 rounded-full bg-navy/20 px-2.5 py-1" title="This activity's climb and how steep that is per km">
             ↑ {nf(plan.elevation_gain_m)} m · {perKm} m/km
           </span>
         {/if}
-        <span class="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1">
+        <span class="inline-flex items-center gap-1 rounded-full bg-navy/20 px-2.5 py-1">
           <Sparkles size={12} /> MET {f.met}
         </span>
       </div>

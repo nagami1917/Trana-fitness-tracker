@@ -846,7 +846,7 @@
             >
               <ActivityIcon type={type.id} size="sm" tone={form.activity_type === type.id ? 'solid' : 'brand'} />
               <span class="text-sm font-extrabold">{type.label}</span>
-              <span class="text-[11px] font-semibold leading-tight {form.activity_type === type.id ? 'text-white/80' : 'text-ink-400'}">
+              <span class="text-[11px] font-semibold leading-tight {form.activity_type === type.id ? 'text-navy/80' : 'text-ink-400'}">
                 {type.hint}
               </span>
             </button>
