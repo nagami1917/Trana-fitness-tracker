@@ -551,7 +551,7 @@
       <div class="mt-3">
         <BarChart
           labels={$trainingLoad.series.map((d) => d.label)}
-          series={[{ label: 'Acute 7d', data: $trainingLoad.series.map((d) => d.acute7), colors: $trainingLoad.series.map(() => '#ff85b8') }]}
+          series={[{ label: 'Acute 7d', data: $trainingLoad.series.map((d) => d.acute7), colors: $trainingLoad.series.map(() => '#b7f34a') }]}
           height={175}
           tooltipLabel={(ctx) => `${Math.round(ctx.parsed.y)} acute load`}
         />

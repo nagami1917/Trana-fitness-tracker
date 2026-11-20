@@ -66,27 +66,27 @@ export const MAP_API_KEY = import.meta.env?.VITE_MAP_API_KEY ?? '';
 
 export const TRANA_THEME = {
   // Dark, fitness-focused map appearance (applied on top of the base style).
-  surface: '#0b111a',        // map background / chrome
-  water: '#121b26',
-  land: '#161c25',
-  park: '#1e2a22',
-  building: '#1e293b',
-  roadMajor: '#334155',
-  roadMajorCasing: '#475569',
-  roadMinor: '#262f3d',
-  path: '#374151',
-  label: '#94a3b8',
+  surface: '#101b2d',        // map background / chrome
+  water: '#13243c',
+  land: '#152337',
+  park: '#1a3326',
+  building: '#1d2d44',
+  roadMajor: '#2f4463',
+  roadMajorCasing: '#3c5474',
+  roadMinor: '#22344c',
+  path: '#33506b',
+  label: '#a6b3c2',
   labelOpacity: 0.55,
   halo: 'rgba(0,0,0,0.6)',
 
   // Brand accents used for markers and controls.
   brand: '#b7f34a',
-  brandOnWhite: '#b7f34a',
+  brandOnWhite: '#b7f34a',   // retained: lime reads on both light and dark chrome
 
   // Control surfaces.
-  controlBg: 'rgba(255, 255, 255, 0.9)',
-  controlBorder: '#e2e8f0',
-  controlText: '#3f2333',
+  controlBg: 'rgba(26, 41, 64, 0.92)',
+  controlBorder: '#26374f',
+  controlText: '#ffffff',
 };
 
 /* -------------------------------------------------------- route appearance */
@@ -105,9 +105,9 @@ export const PLANNED_ROUTE_DASH = [3, 2];
 export const SLOW_SPEED_KMH = 8;
 export const MODERATE_SPEED_KMH = 13;
 
-export const SLOW_ROUTE_COLOR = '#b7f34a';    // brand pink — easy effort
-export const MODERATE_ROUTE_COLOR = '#f59e0b'; // amber — tempo
-export const FAST_ROUTE_COLOR = '#45c78a';    // emerald — fast
+export const SLOW_ROUTE_COLOR = '#b7f34a';    // electric lime — easy effort
+export const MODERATE_ROUTE_COLOR = '#ffb547'; // alert orange — tempo
+export const FAST_ROUTE_COLOR = '#5fd4e8';    // cyan — fast
 
 export const SPEED_COLOR_RAMP = [
   'interpolate',
@@ -128,10 +128,10 @@ export const MARKER_SIZE = 28;
 export const CURRENT_LOCATION_PULSE = true;
 
 export const MARKER_COLORS = {
-  start: '#22c55e',      // green
+  start: '#45c78a',      // success green
   current: TRANA_THEME.brand,
-  finish: '#0f172a',     // near-black, high contrast
-  nutrition: '#f59e0b',
+  finish: '#ffffff',     // pure white, high contrast on a dark basemap
+  nutrition: '#ffb547',
 };
 
 /* ----------------------------------------------------- nutrition checkpoints */

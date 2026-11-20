@@ -1139,7 +1139,7 @@
             >
               <Sparkles size={13} /> From Plan Activity
               {#if plansWithRoutes.length}
-                <span class="num-tabular rounded-full px-1.5 py-0.5 text-[11px] leading-none {pathSource === 'plan' ? 'bg-white/25 text-white' : 'bg-brand-100 text-brand-700'}">
+                <span class="num-tabular rounded-full px-1.5 py-0.5 text-[11px] leading-none {pathSource === 'plan' ? 'bg-navy/20 text-navy' : 'bg-brand-100 text-brand-700'}">
                   {plansWithRoutes.length}
                 </span>
               {/if}

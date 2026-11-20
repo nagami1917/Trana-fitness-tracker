@@ -108,8 +108,8 @@
       el.style.width = '24px';
       el.style.height = '24px';
       el.style.borderRadius = '6px';
-      el.style.background = 'conic-gradient(#3f2333 0 25%, #ffffff 0 50%, #3f2333 0 75%, #ffffff 0)';
-      el.style.border = '2.5px solid #ffffff';
+      el.style.background = 'conic-gradient(#101b2d 0 25%, #ffffff 0 50%, #101b2d 0 75%, #ffffff 0)';
+      el.style.border = '2.5px solid #b7f34a';
       el.style.boxShadow = '0 4px 12px rgba(183, 243, 74, 0.45)';
     } else {
       el.style.width = '20px';

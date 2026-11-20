@@ -67,7 +67,7 @@
   const finishIcon = () =>
     L.divIcon({
       className: '',
-      html: '<span style="display:grid;place-items:center;width:22px;height:22px;border-radius:6px;background:conic-gradient(#3f2333 0 25%, #fff 0 50%, #3f2333 0 75%, #fff 0);border:2.5px solid #fff;box-shadow:0 4px 12px rgba(219,39,119,.45)"></span>',
+      html: '<span style="display:grid;place-items:center;width:22px;height:22px;border-radius:6px;background:conic-gradient(#101b2d 0 25%, #ffffff 0 50%, #101b2d 0 75%, #ffffff 0);border:2.5px solid #b7f34a;box-shadow:0 4px 12px rgba(183,243,74,.45)"></span>',
       iconSize: [22, 22],
       iconAnchor: [11, 11],
     });

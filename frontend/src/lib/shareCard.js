@@ -20,11 +20,11 @@ export function renderActivityShareCard({
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
 
-  // Background gradient (high-contrast berry pink -> deep plum)
+  // Background gradient (midnight navy -> deep slate -> electric lime)
   const bg = ctx.createLinearGradient(0, 0, 1080, 1080);
-  bg.addColorStop(0, '#3f2333');
-  bg.addColorStop(0.55, '#6b1d45');
-  bg.addColorStop(1, '#8fd32c');
+  bg.addColorStop(0, '#101b2d');
+  bg.addColorStop(0.55, '#1d2d44');
+  bg.addColorStop(1, '#b7f34a');
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, 1080, 1080);
 
@@ -100,7 +100,7 @@ export function renderActivityShareCard({
     roundRect(ctx, x, y, cardW, 152, 24);
     ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
     ctx.fill();
-    ctx.fillStyle = '#fbcfe8';
+    ctx.fillStyle = '#b7f34a';
     ctx.font = '800 17px Inter, sans-serif';
     ctx.fillText(m.label, x + 22, y + 46);
     ctx.fillStyle = '#ffffff';
@@ -165,14 +165,14 @@ function drawRouteTrace(ctx, route, x, y, w, h) {
   });
   ctx.stroke();
 
-  ctx.strokeStyle = '#ff85b8';
+  ctx.strokeStyle = '#b7f34a';
   ctx.lineWidth = 6;
   ctx.stroke();
 
   // Start & end dots
   const startPx = offsetX + (route[0][1] - minLng) * scale;
   const startPy = offsetY + (maxLat - route[0][0]) * scale;
-  ctx.fillStyle = '#22c55e';
+  ctx.fillStyle = '#45c78a';
   ctx.beginPath();
   ctx.arc(startPx, startPy, 10, 0, Math.PI * 2);
   ctx.fill();
