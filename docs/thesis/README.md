@@ -1,124 +1,118 @@
 # CSST 102 Final Project Documentation — TRANA
 
-The deliverable for the course is `TRANA-CSST102-Final-Project-Documentation.pdf`
-(with `.docx` alongside as the editable source), built to the structure of the
-professor's template (`CSST 102(IS) - Documentation Template.docx`, found in the
-Google Drive `Documentation` folder).
+Two builds exist, and **the template-format build is the one to submit.**
+
+| Build | Files | What it is |
+| --- | --- | --- |
+| **Template format** (submit this) | `TRANA-CSST102-Template-Format.{docx,pdf,md}` | Follows the professor's template literally: same seven sections, same sub-headings, same six tables, same closing line. Built by cloning the official template, so the **LSPU seal in the page header** and the A4 geometry are inherited exactly. 22 pages. |
+| Extended long-form | `TRANA-CSST102-Final-Project-Documentation.{docx,pdf,md}` | The original 50-page build with appendices, IEEE references and the full metric tables. Richer, but it does **not** carry the seal header and its headings are not the template's. Useful as a source document, not as the submission. |
+
+The professor's template is `CSST 102(IS) - Documentation Template.docx`, kept in
+the Google Drive `Documentation` folder. A copy must be present at
+`google_drive/` for the template-format build to inherit the seal; without it the
+generator falls back to assembling an equivalent page from the committed seal
+image and warns you on stdout.
 
 ## What is here
 
 | File | Purpose |
 | --- | --- |
-| `TRANA-CSST102-Final-Project-Documentation.docx` | Editable deliverable — use this one if you still need to add names/screenshots |
-| `TRANA-CSST102-Final-Project-Documentation.pdf` | **Submission-ready PDF**, 46 pages, fixed layout, page numbers |
-| `TRANA-CSST102-Final-Project-Documentation.md` | Same content in markdown, for review and diffing without Word |
-| `generator/` | Scripts that produce the `.docx` and `.pdf` from one source |
+| `TRANA-CSST102-Template-Format.docx` | **Editable submission file** — fill in names and screenshots here |
+| `TRANA-CSST102-Template-Format.pdf` | Fixed-layout preview of the same content, 22 pages |
+| `TRANA-CSST102-Template-Format.md` | Same content in markdown, for review and diffing without Word |
+| `TRANA-CSST102-Final-Project-Documentation.docx` | Extended 50-page build, editable |
+| `TRANA-CSST102-Final-Project-Documentation.pdf` | Extended build, fixed layout |
+| `TRANA-CSST102-Final-Project-Documentation.md` | Extended build in markdown |
+| `generator/` | Scripts that produce every file above from one source |
+| `generator/lspu_seal.jpeg` | The seal, extracted from the template, used by both builds |
 
-All three are the same content. `generator/` builds the `.docx` and `.pdf` in a
-single pass — the `.pdf` renderer replays an event log recorded while the
-`.docx` is written, so the two cannot drift apart.
+Both builds render their `.docx` and `.pdf` in a single pass: the engine records
+an ordered event log while writing the `.docx`, and the PDF renderer replays it,
+so the two cannot drift apart.
 
 ## Template compliance
 
-The professor's template asks for a specific seven-section structure. This
-document follows it exactly, including the required header block
-(PROJECT NAME / PROPONENTS / YEAR AND SECTION) on the cover:
+The template asks for a specific seven-section structure. The template-format
+build follows it exactly — nothing added, nothing dropped:
 
-| Template section | Where it is |
+| Template element | Where it is |
 | --- | --- |
-| Header block (name, proponents, year/section) | Cover page |
+| Course line, "FINAL PROJECT DOCUMENTATION" | Cover |
+| PROJECT NAME / PROPONENTS / YEAR AND SECTION | Cover |
 | 1. PROJECT OVERVIEW — Description, Objectives, Problem Definition | Section 1 |
-| 2. DATASET AND DATA PREPROCESSING — Description, Attributes, Preprocessing, Splitting | Section 2 |
-| 3. MACHINE LEARNING MODEL DEVELOPMENT — Selection, Training, Comparison, Final Selection | Section 3 |
-| 4. MODEL EVALUATION AND INTERPRETATION — Metrics, Results, Comparison, Interpretation, Limitations | Section 4 |
+| 2. DATASET AND DATA PREPROCESSING — Description, Information Details table, Dataset Attributes table, Preprocessing, Splitting | Section 2 |
+| 3. MACHINE LEARNING MODEL DEVELOPMENT — Selection, Training, Comparison table, Final Selection | Section 3 |
+| 4. MODEL EVALUATION AND INTERPRETATION — Metrics, Results, Comparison Results, Interpretation, Limitations | Section 4 |
 | 5. WEB APPLICATION DEVELOPMENT AND OUTPUT — screenshots with descriptions | Section 5 (10 numbered placeholders) |
-| 6. GROUP CONTRIBUTIONS | Section 6 |
+| 6. GROUP CONTRIBUTIONS — table | Section 6 |
 | 7. CONCLUSION | Section 7 |
-
-Beyond the template, three appendices were added because the professor asked
-for maximum detail: reproduction commands, complete metric tables, and a
-glossary.
-
-## What the group still needs to do
-
-Three things cannot be generated and must be added by hand:
-
-1. **Cover page** — replace `[SURNAME, First Name]` (three times) and
-   `[Year and Section]`. The project name and subtitle are already filled in.
-2. **Section 6** — replace the six `[SURNAME, First Name]` placeholders in the
-   Group Contributions table. The responsibility and contribution columns are
-   already accurate to the work performed, and a member's row can be verified
-   against commit history, so fill it to match what each person actually built
-   rather than dividing evenly.
-3. **Section 5 screenshots** — ten placeholders, each naming exactly what to
-   capture. Capture at 1440×900 or wider, light theme, realistic data (not empty
-   states). Insert at full width, then delete the placeholder box.
-
-After inserting screenshots: select all (`Ctrl+A`) and press `F9` to refresh any
-field codes, then update the table of contents if Word prompts.
-
-## Regenerating both files
-
-The generator needs `python-docx` and `reportlab`:
-
-```bash
-python3 -m venv .venv-docx
-.venv-docx/bin/pip install python-docx reportlab
-.venv-docx/bin/python docs/thesis/generator/build_documentation.py
-```
-
-That writes both `TRANA-CSST102-Final-Project-Documentation.docx` and
-`TRANA-CSST102-Final-Project-Documentation.pdf`.
-
-Single format, if you only need one:
-
-```bash
-.venv-docx/bin/python docs/thesis/generator/build_documentation.py --only pdf
-.venv-docx/bin/python docs/thesis/generator/build_documentation.py --only docx
-```
-
-**Editing advice.** Once the group starts adding screenshots and names, the
-`.docx` becomes the source of truth — edit it directly in Word, then export a
-fresh PDF from Word (`File → Save As → PDF`) rather than rebuilding, or the
-hand-added content will be lost. Rebuilding from the generator resets the text
-to its current state and produces PDF placeholders in place of screenshots.
-
-## PDF notes
-
-The PDF is produced with reportlab and embeds DejaVu Sans, which covers every
-glyph the document uses (→ ≤ ≥ × ± − ² ·). It has real page numbers in the
-footer, repeating table headers on multi-page tables, and "Table N continued"
-markers. Bookmarks/section structure are not included — the static Table of
-Contents at the front lists every section and subsection.
+| END OF DOCUMENTATION | Last line |
 
 ## Where the numbers come from
 
-Every figure in the document is copied from a committed report or a source file;
-nothing is estimated. The main sources:
+Every figure in both builds is copied from a committed artifact. Nothing is
+estimated.
 
-| Number | Source |
+| Source | Feeds |
 | --- | --- |
-| ±23.84% MdAPE, 43.81% within 20%, R² 0.414, coverage 16.96% | `ml/evaluation/reports/geolife_validation.json` |
-| Ablation: −0.009 min, CI [−0.019, +0.002], factor range 0.8823–1.0239 | `ml/evaluation/reports/ablation_report.json` |
-| Retraining: coverage 15.94% → 67.83%, CI [−0.071, +0.184], 3 seeds | `ml/evaluation/reports/retrain_study.json` |
-| R² 0.9924, MAPE 5.51%, feature importances, `training_source`, `calibration` | `ml/duration_model/model_card.json` |
-| ±28.2% / ±25.7% / ±40.5%, `THIN_HISTORY_MULTIPLIER` | `frontend/src/lib/ml/duration.js` |
-| 4,362 rows / 51 users / mode mix / distance range | `ml/data/external/geolife_activities.csv` |
-| 9 features, Ridge bounds, Riegel priors | `ml/duration_model/preprocess.py` |
-| Hyperparameters, split assertion, calibration guard | `ml/duration_model/train.py` |
-| Deployed URLs, stack versions | `docs/DEPLOYMENT.md`, `package.json`, `composer.json` |
+| `ml/evaluation/reports/geolife_validation.json` | External validation: MAE 5.84, MdAPE 23.84%, R² 0.414, coverage 16.96%, by-modality and by-history slices |
+| `ml/evaluation/reports/ablation_report.json` | Curve vs. model comparison: 5.83 vs 5.84 MAE, population prior 7.10 |
+| `ml/evaluation/reports/retrain_study.json` | Held-out retraining: coverage 15.94% → 67.83%, paired bootstrap CI [−0.071, +0.184] |
+| `ml/duration_model/model_card.json` | Shipped model version, corpus 8,845 rows, 7,011/1,834 split, feature importances |
+| `frontend/public/models/duration_model.json` | The deployed trees and feature order |
 
-## A note on the framing
+The synthetic internal score (R² 0.9924) is quoted **only** next to the external
+score, and is labelled as a self-score. It measures how well the model reproduces
+its own generator, not how well it predicts real activity.
 
-The document leads with the externally validated **±23.84%** figure and treats
-the synthetic **5.51%** as tautological, because the synthetic generator computes
-the target from distance and speed (`ml/data/generate_dataset.py` L99) and
-therefore makes that metric partly measure the generator.
+## What the group still needs to do
 
-This is not a weakness in the documentation — it is the project's strongest
-finding, and the document builds a chain of evidence around it: honest accuracy
-(Section 4.2), ablation proving the learned correction adds nothing (4.3.1),
-diagnosis that coverage is a data problem (4.3.2), and the measured fix
-(coverage 16% → 68% with flat accuracy). If the professor asks "why not report
-5.51%?", the answer is that a model reporting 5.51% and delivering 23.8% is more
-dangerous to its users than one reporting the truth.
+Three things cannot be generated:
+
+1. **Cover page** — replace the three `[SURNAME, First Name]` placeholders and
+   `[Year and Section]`. If the group has more or fewer than three members, add
+   or delete rows in the PROPONENTS block.
+2. **Section 6** — replace the four `[SURNAME, First Name]` placeholders in the
+   Group Contributions table. The responsibility and contribution columns are
+   already accurate to the work performed; fill the names to match what each
+   person actually built rather than dividing evenly.
+3. **Section 5 screenshots** — ten placeholders, each naming exactly what to
+   capture. Capture at 1440×900 or wider with realistic data (not empty states),
+   insert at full width, and delete the placeholder box.
+
+After inserting screenshots, select all (`Ctrl+A`) and press `F9` to refresh any
+field codes.
+
+## Regenerating
+
+```bash
+python -m venv /tmp/docenv
+/tmp/docenv/bin/pip install python-docx reportlab pypdf
+
+# Template format (the submission build)
+/tmp/docenv/bin/python docs/thesis/generator/build_template_doc.py
+
+# Extended build
+/tmp/docenv/bin/python docs/thesis/generator/build_documentation.py
+```
+
+`build_template_doc.py` accepts `--template`, `--out`, `--pdf`, and
+`--only docx|pdf`. Point `--template` at the official `.docx` if it lives
+somewhere other than `google_drive/`.
+
+## How the generator is laid out
+
+| File | Role |
+| --- | --- |
+| `template_engine.py` | `TemplateDoc` — clones the template, then offers `section_bar`, `sub`, `body`, `table`, `code`, `figure_placeholder` |
+| `template_content.py` | All prose and table data for the template-format build, with per-figure provenance comments |
+| `template_pdf.py` | Replays the event log to PDF, including the seal header |
+| `build_template_doc.py` | Entry point for the template-format build |
+| `docx_engine.py` | `Doc` — the original engine behind the extended build |
+| `section1.py` … `section8.py`, `section_front.py` | Content for the extended build |
+| `pdf_engine.py`, `build_documentation.py` | PDF replay and entry point for the extended build |
+
+The template-format engine deliberately does **not** reuse `docx_engine.py`.
+That engine composes a document from scratch with its own navy-and-grey palette,
+which would not match the school's Arial-on-A4 formatting. Cloning the template
+is the only way to inherit the anchored seal without re-measuring it.
