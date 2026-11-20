@@ -43,7 +43,7 @@
     type="button"
     onclick={onToggleFollow}
     class="grid h-8 w-8 place-items-center rounded-lg transition cursor-pointer {following
-      ? 'bg-brand-600 text-white hover:bg-brand-700'
+      ? 'bg-brand-600 text-navy hover:bg-brand-700'
       : 'text-slate-700 hover:bg-brand-50 hover:text-brand-700'}"
     aria-label={following ? 'Following your location' : 'Center on location'}
     title={following ? 'Following your location' : 'Center on location'}

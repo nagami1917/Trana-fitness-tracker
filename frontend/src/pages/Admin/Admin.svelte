@@ -124,7 +124,7 @@
       <ShieldCheck size={44} class="mx-auto text-ink-300" strokeWidth={1.8} />
       <h1 class="mt-4 font-display text-2xl font-extrabold text-ink-500">Admin access required</h1>
       <p class="mt-2 text-sm font-semibold text-ink-400">This console is limited to operator accounts.</p>
-      <a href="/" use:link class="mt-5 inline-flex rounded-full bg-brand-gradient px-5 py-2.5 text-sm font-extrabold text-white shadow-glow">
+      <a href="/" use:link class="mt-5 inline-flex rounded-full bg-brand-gradient px-5 py-2.5 text-sm font-extrabold text-navy shadow-glow">
         Back to dashboard
       </a>
     </div>
@@ -132,7 +132,7 @@
 {:else}
   <header class="mb-5 flex flex-wrap items-center justify-between gap-3">
     <div class="flex items-center gap-3">
-      <span class="grid h-11 w-11 place-items-center rounded-2xl bg-brand-gradient text-white shadow-glow">
+      <span class="grid h-11 w-11 place-items-center rounded-2xl bg-brand-gradient text-navy shadow-glow">
         <ShieldCheck size={22} strokeWidth={2.4} />
       </span>
       <div>
@@ -191,7 +191,7 @@
         value={userStatus}
         onSelect={(o) => { userStatus = o.id; loadUsers(); }}
       />
-      <button type="submit" class="rounded-full bg-brand-gradient px-4 py-2 text-xs font-extrabold text-white shadow-glow">Search</button>
+      <button type="submit" class="rounded-full bg-brand-gradient px-4 py-2 text-xs font-extrabold text-navy shadow-glow">Search</button>
       {#if busy === 'users'}<LoaderCircle size={16} class="animate-spin text-ink-400" />{/if}
     </form>
 

@@ -17,7 +17,7 @@
   {#if !tracking}
     <button
       type="button"
-      class="inline-flex w-full min-h-[46px] touch-manipulation items-center justify-center gap-2 rounded-2xl px-7 py-3.5 border border-transparent bg-brand-gradient text-white text-sm font-bold shadow-glow hover:scale-[1.01] transition active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer sm:w-auto"
+      class="inline-flex w-full min-h-[46px] touch-manipulation items-center justify-center gap-2 rounded-2xl px-7 py-3.5 border border-transparent bg-brand-gradient text-navy text-sm font-bold shadow-glow hover:scale-[1.01] transition active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer sm:w-auto"
       onclick={onStart}
       disabled={saving}
     >
@@ -28,7 +28,7 @@
     {#if paused}
       <button
         type="button"
-        class="inline-flex min-h-[44px] touch-manipulation items-center justify-center gap-2 rounded-2xl px-5 py-3 border border-transparent bg-brand-gradient text-white text-sm font-bold shadow-glow hover:scale-[1.01] transition active:scale-95 disabled:opacity-60 cursor-pointer"
+        class="inline-flex min-h-[44px] touch-manipulation items-center justify-center gap-2 rounded-2xl px-5 py-3 border border-transparent bg-brand-gradient text-navy text-sm font-bold shadow-glow hover:scale-[1.01] transition active:scale-95 disabled:opacity-60 cursor-pointer"
         onclick={onResume}
         disabled={saving}
       >

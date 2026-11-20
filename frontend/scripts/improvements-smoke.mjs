@@ -254,11 +254,11 @@ const themeMod = await import('../src/lib/theme.js');
 themeMod.setTheme('dark');
 assert.equal(document.documentElement.classList.contains('theme-dark'), true);
 assert.equal(localStorage.getItem('trana:theme'), 'dark');
-assert.equal(meta.getAttribute('content'), '#0f131d');
+assert.equal(meta.getAttribute('content'), '#101b2d');
 themeMod.toggleTheme();
 assert.equal(document.documentElement.classList.contains('theme-dark'), false);
 assert.equal(localStorage.getItem('trana:theme'), 'light');
-assert.equal(meta.getAttribute('content'), '#db2777');
+assert.equal(meta.getAttribute('content'), '#101b2d');
 console.log('✔ Outdoor high-contrast dark theme toggle & persistence');
 
 // 8. Blocked-cookie session diagnostics

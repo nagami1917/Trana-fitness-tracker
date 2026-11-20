@@ -287,7 +287,7 @@
       </div>
 
       <div class="mt-auto flex items-center gap-3 rounded-3xl border border-brand-100/70 bg-white/70 p-3">
-        <div class="grid h-10 w-10 place-items-center rounded-full bg-brand-gradient font-display text-sm font-extrabold text-white">
+        <div class="grid h-10 w-10 place-items-center rounded-full bg-brand-gradient font-display text-sm font-extrabold text-navy">
           {initial}
         </div>
         <div class="min-w-0 flex-1">
@@ -346,7 +346,7 @@
               >
                 <Bell size={18} />
                 {#if notifUnread > 0}
-                  <span class="num-tabular absolute right-1 top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-brand-500 px-1 text-[10px] font-extrabold leading-none text-white ring-2 ring-white">
+                  <span class="num-tabular absolute right-1 top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-brand-500 px-1 text-[10px] font-extrabold leading-none text-navy ring-2 ring-white">
                     {notifUnread > 9 ? '9+' : notifUnread}
                   </span>
                 {/if}
@@ -397,7 +397,7 @@
                 onclick={() => (menuOpen = !menuOpen)}
                 aria-label="Account menu"
               >
-                <span class="grid h-8 w-8 place-items-center rounded-full bg-brand-gradient font-display text-xs font-extrabold text-white">
+                <span class="grid h-8 w-8 place-items-center rounded-full bg-brand-gradient font-display text-xs font-extrabold text-navy">
                   {initial}
                 </span>
                 <span class="hidden max-w-28 truncate text-xs font-extrabold text-ink-600 sm:inline">{$session?.username ? `@${$session.username}` : 'Account'}</span>
@@ -513,7 +513,7 @@
             <a
               href={item.href}
               use:link
-              class="flex items-center gap-2.5 rounded-2xl border border-brand-100 bg-brand-50/50 px-3.5 py-3 text-sm font-bold transition {isActive($route, item.href, false) ? 'border-brand-300 bg-brand-gradient text-white shadow-glow' : 'text-ink-700 hover:border-brand-200'}"
+              class="flex items-center gap-2.5 rounded-2xl border border-brand-100 bg-brand-50/50 px-3.5 py-3 text-sm font-bold transition {isActive($route, item.href, false) ? 'border-brand-300 bg-brand-gradient text-navy shadow-glow' : 'text-ink-700 hover:border-brand-200'}"
             >
               <item.Icon size={17} />
               <span class="truncate">{item.label}</span>
@@ -538,7 +538,7 @@
       </a>
 
       <a href="/track" use:link class="relative -mt-3 flex min-w-0 flex-col items-center gap-1 rounded-2xl py-1">
-        <span class="relative grid h-11 w-14 place-items-center rounded-2xl bg-brand-gradient text-white shadow-glow transition active:scale-95 {isActive($route, '/track', false) ? 'ring-4 ring-brand-200' : ''}">
+        <span class="relative grid h-11 w-14 place-items-center rounded-2xl bg-brand-gradient text-navy shadow-glow transition active:scale-95 {isActive($route, '/track', false) ? 'ring-4 ring-brand-200' : ''}">
           <MapPin size={21} strokeWidth={2.5} />
           {#if liveTracker.tracking}
             <span

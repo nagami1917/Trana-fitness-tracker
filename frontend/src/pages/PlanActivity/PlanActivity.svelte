@@ -840,7 +840,7 @@
           {#each TYPES as type (type.id)}
             <button
               class="flex flex-col items-start gap-2 rounded-2xl border p-3 text-left transition {form.activity_type === type.id
-                ? 'border-transparent bg-brand-gradient text-white shadow-glow'
+                ? 'border-transparent bg-brand-gradient text-navy shadow-glow'
                 : 'border-brand-100 bg-white/80 text-ink-500 hover:border-brand-200'}"
               onclick={() => pickType(type.id)}
             >

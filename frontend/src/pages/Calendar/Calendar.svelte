@@ -147,7 +147,7 @@
 <div class="space-y-5">
   <div class="flex flex-wrap items-center justify-between gap-3">
     <div class="flex items-center gap-2.5">
-      <span class="grid h-11 w-11 place-items-center rounded-2xl bg-brand-gradient text-white shadow-glow">
+      <span class="grid h-11 w-11 place-items-center rounded-2xl bg-brand-gradient text-navy shadow-glow">
         <CalendarDays size={20} strokeWidth={2.2} />
       </span>
       <div>
@@ -224,7 +224,7 @@
     <Card class="bg-gradient-to-br from-brand-50 to-white">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <span class="pill !bg-brand-gradient !text-white">
+          <span class="pill !bg-brand-gradient !text-navy">
             <Flag size={11} /> {primaryRace.prep.daysUntil === 0 ? 'Race Day!' : `${primaryRace.prep.daysUntil} days to ${primaryRace.race.title || primaryRace.race.name}`}
           </span>
           <p class="mt-2 text-xs font-semibold text-ink-500">
@@ -296,7 +296,7 @@
 
           <div class="mt-2 space-y-1.5">
             {#each dayRaces as race (race.id)}
-              <div class="flex items-center gap-1.5 rounded-xl bg-brand-gradient px-2 py-1.5 text-white shadow-soft">
+              <div class="flex items-center gap-1.5 rounded-xl bg-brand-gradient px-2 py-1.5 text-navy shadow-soft">
                 <Flag size={13} class="shrink-0" />
                 <div class="min-w-0 flex-1 leading-tight">
                   <p class="truncate text-[11px] font-extrabold">{race.title || race.name}</p>

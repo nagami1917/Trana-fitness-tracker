@@ -462,7 +462,7 @@
     <div class="grid gap-5 xl:grid-cols-[minmax(0,21rem)_minmax(0,1fr)]">
       <!-- Summary identity card (Tier 1 flat) -->
       <Card flat class="flex h-fit flex-col items-center gap-4 text-center">
-        <div class="grid h-20 w-20 place-items-center rounded-full bg-brand-gradient font-display text-2xl font-extrabold text-white shadow-glow">
+        <div class="grid h-20 w-20 place-items-center rounded-full bg-brand-gradient font-display text-2xl font-extrabold text-navy shadow-glow">
           {initial}
         </div>
         <div>

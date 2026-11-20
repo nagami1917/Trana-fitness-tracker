@@ -143,7 +143,7 @@
   <div class="flex flex-col gap-5">
     <!-- identity card -->
     <Card class="flex h-fit flex-col items-center gap-4 p-6 text-center">
-      <div class="grid h-24 w-24 place-items-center rounded-full bg-brand-gradient font-display text-3xl font-extrabold text-white shadow-glow">
+      <div class="grid h-24 w-24 place-items-center rounded-full bg-brand-gradient font-display text-3xl font-extrabold text-navy shadow-glow">
         {initial}
       </div>
       <div>

@@ -20,16 +20,16 @@ export function renderActivityShareCard({
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
 
-  // Background gradient (high-contrast berry pink -> deep plum)
+  // Background gradient (midnight navy -> deep slate -> electric lime)
   const bg = ctx.createLinearGradient(0, 0, 1080, 1080);
-  bg.addColorStop(0, '#3f2333');
-  bg.addColorStop(0.55, '#6b1d45');
-  bg.addColorStop(1, '#be185d');
+  bg.addColorStop(0, '#101b2d');
+  bg.addColorStop(0.55, '#1d2d44');
+  bg.addColorStop(1, '#b7f34a');
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, 1080, 1080);
 
   // Subtle decorative glow orbs
-  ctx.fillStyle = 'rgba(249, 86, 155, 0.16)';
+  ctx.fillStyle = 'rgba(183, 243, 74, 0.16)';
   ctx.beginPath();
   ctx.arc(890, 180, 260, 0, Math.PI * 2);
   ctx.fill();
@@ -43,23 +43,23 @@ export function renderActivityShareCard({
   ctx.fill();
 
   ctx.fillStyle = '#ffffff';
-  ctx.font = '800 24px Poppins, Quicksand, sans-serif';
+  ctx.font = '800 24px Space Grotesk, Inter, sans-serif';
   ctx.fillText('TRANA', 108, 107);
 
   ctx.fillStyle = 'rgba(255, 255, 255, 0.78)';
-  ctx.font = '600 22px Quicksand, sans-serif';
+  ctx.font = '600 22px Inter, sans-serif';
   ctx.textAlign = 'right';
   ctx.fillText(athleteName, 1008, 106);
   ctx.textAlign = 'left';
 
   // Activity title + date
   const actType = (activity?.activity_type || 'run').toUpperCase();
-  ctx.fillStyle = '#f9a8d4';
-  ctx.font = '800 22px Quicksand, sans-serif';
+  ctx.fillStyle = '#dcfda0';
+  ctx.font = '800 22px Inter, sans-serif';
   ctx.fillText(`${actType} SUMMARY`, 72, 188);
 
   ctx.fillStyle = '#ffffff';
-  ctx.font = '700 32px Quicksand, sans-serif';
+  ctx.font = '700 32px Inter, sans-serif';
   ctx.fillText(activity?.started_at ? fullDate(activity.started_at) : 'Today', 72, 234);
 
   // Route silhouette panel
@@ -75,7 +75,7 @@ export function renderActivityShareCard({
   // Primary distance hero
   const distText = `${km(activity?.distance_km ?? 0, unit)} ${unit === 'imperial' ? 'mi' : 'km'}`;
   ctx.fillStyle = '#ffffff';
-  ctx.font = '800 84px Poppins, sans-serif';
+  ctx.font = '800 84px Space Grotesk, sans-serif';
   ctx.fillText(distText, 72, 756);
 
   // Metric tiles
@@ -100,17 +100,17 @@ export function renderActivityShareCard({
     roundRect(ctx, x, y, cardW, 152, 24);
     ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
     ctx.fill();
-    ctx.fillStyle = '#fbcfe8';
-    ctx.font = '800 17px Quicksand, sans-serif';
+    ctx.fillStyle = '#b7f34a';
+    ctx.font = '800 17px Inter, sans-serif';
     ctx.fillText(m.label, x + 22, y + 46);
     ctx.fillStyle = '#ffffff';
-    ctx.font = '800 30px Poppins, sans-serif';
+    ctx.font = '800 30px Space Grotesk, sans-serif';
     ctx.fillText(String(m.value), x + 22, y + 104);
   });
 
   // Footer
   ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-  ctx.font = '600 20px Quicksand, sans-serif';
+  ctx.font = '600 20px Inter, sans-serif';
   ctx.fillText('Plan the effort. Know the fuel.', 72, 1020);
 
   return canvas;
@@ -132,7 +132,7 @@ export function downloadShareCard(options = {}) {
 function drawRouteTrace(ctx, route, x, y, w, h) {
   if (!Array.isArray(route) || route.length < 2) {
     ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
-    ctx.font = '700 24px Quicksand, sans-serif';
+    ctx.font = '700 24px Inter, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('Activity logged without GPS route', x + w / 2, y + h / 2);
     ctx.textAlign = 'left';
@@ -154,7 +154,7 @@ function drawRouteTrace(ctx, route, x, y, w, h) {
   ctx.save();
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  ctx.strokeStyle = 'rgba(249, 86, 155, 0.35)';
+  ctx.strokeStyle = 'rgba(183, 243, 74, 0.35)';
   ctx.lineWidth = 14;
   ctx.beginPath();
   route.forEach(([lat, lng], idx) => {
@@ -165,14 +165,14 @@ function drawRouteTrace(ctx, route, x, y, w, h) {
   });
   ctx.stroke();
 
-  ctx.strokeStyle = '#ff85b8';
+  ctx.strokeStyle = '#b7f34a';
   ctx.lineWidth = 6;
   ctx.stroke();
 
   // Start & end dots
   const startPx = offsetX + (route[0][1] - minLng) * scale;
   const startPy = offsetY + (maxLat - route[0][0]) * scale;
-  ctx.fillStyle = '#22c55e';
+  ctx.fillStyle = '#45c78a';
   ctx.beginPath();
   ctx.arc(startPx, startPy, 10, 0, Math.PI * 2);
   ctx.fill();

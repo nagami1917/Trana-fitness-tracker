@@ -469,6 +469,192 @@ def build_section_4(doc: Doc) -> None:
         "its way out of.",
     )
 
+
+    # -------------------------------------------------------------- 4.3.3
+    doc.h3("4.3.3 Personalisation study \u2014 does an athlete\u2019s own history help?")
+
+    doc.p(
+        "Every result up to this point was produced with a user-disjoint split, which is the "
+        "correct protocol for measuring generalisation to new people. It has a consequence that "
+        "had not been examined: if no athlete appears in both training and test sets, then no "
+        "experiment in this document has ever tested the mechanism the product actually relies "
+        "on. TRANA does not ship a population model. It ships a personalised Riegel reference "
+        "curve fitted from the athlete\u2019s own chronological history, multiplied by a learned "
+        "correction. A user-disjoint split evaluates the second factor and removes the first "
+        "entirely.",
+        align="justify",
+    )
+
+    doc.quote(
+        "Why this mattered",
+        "The personalisation arm of every earlier experiment was inert. When the protocol holds "
+        "out whole users, an athlete\u2019s training history and their test rows never coexist, so "
+        "the history term has nothing to act on. Measuring its effect as \u201czero\u201d would have "
+        "been an artefact of the split, not a finding about the model. The study below changes "
+        "the split, not the model.",
+    )
+
+    doc.p(
+        "The Endomondo/FitRec corpus makes this test possible for the first time, because it is "
+        "the only dataset available to the project that carries a genuine per-athlete key "
+        "alongside enough activities per athlete to build a history. It supplies 219 distinct "
+        "athletes with a median of 150 activities each, against GeoLife\u2019s 51 users with a "
+        "handful of labelled trajectories.",
+        align="justify",
+    )
+
+    doc.table(
+        ["Property", "Value"],
+        [
+            ["Source", "FitRec / Endomondo trained-prediction export (UCSD)"],
+            ["Rows in export", "50,018"],
+            ["Rows after cleaning", "48,556"],
+            ["Distinct athletes", "219"],
+            ["Median activities per athlete", "150"],
+            ["Athletes with \u2265 10 activities", "200"],
+            ["Retained modalities", "run, ride, walk, hike"],
+            ["Duration target", "elapsed minutes, 3 min \u2013 24 h trim"],
+        ],
+        caption="Personalisation corpus. The per-athlete key is what the GeoLife protocol could never supply.",
+        widths=[2.6, 3.9],
+        align_numeric=False,
+        font_size=8.5,
+    )
+
+    doc.h4("4.3.3.1 Three features that had to be removed")
+
+    doc.p(
+        "The export is a sport-classification feature table, not a duration table, and three of "
+        "its columns are algebraically derived from the target. Each was found by testing rather "
+        "than by inspection, and each would have produced a spectacular and entirely false "
+        "result. They are documented here because the same trap is present in any feature store "
+        "built for one task and reused for another.",
+        align="justify",
+    )
+
+    doc.table(
+        ["Column", "Relationship to the target", "Evidence", "Why it leaks"],
+        [
+            ["points_per_sec", "num_points / duration_sec",
+             "median relative error 0.00000000",
+             "Given num_points, duration is recovered in one division"],
+            ["climb_rate", "alt_range / duration_sec \u00d7 60",
+             "correlation +1.000000, ratio exactly 60.0",
+             "Given alt_range, duration is recovered in one division"],
+            ["gps_spread", "grows with time in motion",
+             "Spearman \u03c1 = +0.60 with log duration",
+             "Recapitulates how long the session lasted"],
+        ],
+        caption="Leaking columns identified by algebraic reconstruction and incremental feature addition.",
+        widths=[1.1, 1.9, 1.5, 2.0],
+        align_numeric=False,
+        font_size=8.5,
+    )
+
+    doc.p(
+        "The detection method is worth recording because it generalises. Scoring each column\u2019s "
+        "log-log correlation with the target flagged only moderate relationships, and a single "
+        "feature reached at best R\u00b2 0.25. The leak emerged only when features were added one at "
+        "a time and the model\u2019s R\u00b2 was watched: it sat near 0.38 with four features and "
+        "jumped to 0.9919 the moment climb_rate entered. A step change that large in a model "
+        "whose parts are each weak is the signature of an algebraic relationship between "
+        "features, and the direct reconstruction test confirmed it exactly. With the three "
+        "columns removed, the same model falls to R\u00b2 0.28 on a user-disjoint split \u2014 which is "
+        "the honest figure for terrain and heart rate alone.",
+        align="justify",
+    )
+
+    doc.h4("4.3.3.2 Protocol")
+
+    doc.p(
+        "The split is chronological within each athlete: the earliest 70% of each person\u2019s "
+        "activities form the history, the most recent 30% are held out. This is the protocol the "
+        "product uses in production \u2014 predictions are always made from the past, never from "
+        "the future \u2014 and it is the only split under which personalisation is measurable. "
+        "209 athletes appear in both folds, yielding 33,884 history rows and 14,656 held-out rows.",
+        align="justify",
+    )
+
+    doc.p(
+        "The personalised predictor is deliberately simple, so that any gain is attributable to "
+        "history rather than to extra capacity. A global gradient-boosted model is trained on "
+        "terrain and heart-rate features. Each athlete\u2019s mean residual in log-duration is then "
+        "computed from the history fold alone and applied to their held-out rows, shrunk toward "
+        "zero by n / (n + 2) so that athletes with little history are pulled back to the "
+        "population prediction. The shrinkage constant was not tuned on the test fold.",
+        align="justify",
+    )
+
+    doc.table(
+        ["Metric", "Global model only", "+ athlete\u2019s own history", "Change"],
+        [
+            ["MAE (minutes)", "96.92", "91.92", "\u22125.00"],
+            ["MdAPE", "49.06%", "48.59%", "\u22120.47 pts"],
+            ["R\u00b2", "0.133", "0.202", "+0.068"],
+        ],
+        caption="Personalisation on 14,656 held-out activities from 209 athletes. History improves every metric, and it improves MAE most.",
+        widths=[1.7, 1.9, 2.0, 1.1],
+        align_numeric=False,
+        font_size=8.5,
+    )
+
+    doc.p(
+        "The finding is that the history term earns its place. It reduces mean absolute error by "
+        "five minutes per activity and raises R\u00b2 by 0.068, on rows the model has never seen and "
+        "for athletes whose future behaviour could not have been memorised. The effect is "
+        "larger than the ablation\u2019s \u22120.009 min for the learned correction and larger than the "
+        "entire 11-fold corpus expansion of the scaling study, which moved MAE by 0.01 min. Of "
+        "the interventions this project has measured, knowing who the athlete is turns out to "
+        "matter more than either a bigger corpus or a cleverer correction.",
+        align="justify",
+    )
+
+    doc.h4("4.3.3.3 What this does and does not establish")
+
+    doc.p(
+        "The result confirms the architecture, not the shipped accuracy. The absolute errors "
+        "here are far larger than the 5.84 min reported against GeoLife, and the reason is "
+        "structural rather than a defect: this export contains no distance column. TRANA predicts "
+        "duration from distance and climb, and distance is precisely the input with the strongest "
+        "physical relationship to elapsed time. A model asked to infer duration from terrain "
+        "shape and heart rate alone is being asked to solve a harder and different problem. The "
+        "MAE of 91.92 min is therefore not comparable to any other figure in this document and "
+        "must not be presented as one.",
+        align="justify",
+    )
+
+    doc.p(
+        "What the experiment does establish is narrower and more useful: the personalisation "
+        "mechanism produces a measurable, out-of-sample improvement when it is given the chance "
+        "to operate. That had never been demonstrated in this project, and it could not have "
+        "been demonstrated with GeoLife, whose per-user activity counts are too small to fit a "
+        "reference curve.",
+        align="justify",
+    )
+
+    doc.p(
+        "A second observation deserves care rather than a claim. Grouping held-out error by "
+        "history depth does not show the monotonic improvement one would hope for: athletes with "
+        "150 or more prior activities show the largest absolute error (96.40 min), while the "
+        "50\u2013150 band is lowest (73.41 min). That pattern is confounded, because athletes with "
+        "long histories are also the ones recording the longest and most varied sessions, and "
+        "absolute error scales with session length. The honest reading is that history depth "
+        "cannot be separated from activity mix in this corpus, and no conclusion about how much "
+        "history is enough is drawn here.",
+        align="justify",
+    )
+
+    doc.quote(
+        "The finding, stated precisely",
+        "Personalisation is real and measurable, and it had been invisible because the "
+        "user-disjoint protocol suppresses it by construction. On 14,656 held-out activities "
+        "from 209 athletes, an athlete\u2019s own history reduces mean absolute error by 5.0 minutes "
+        "and raises R\u00b2 from 0.133 to 0.202 relative to an otherwise identical global model. "
+        "Absolute error in this study is not comparable to the GeoLife result, because the "
+        "export carries no distance feature.",
+    )
+
+
     # -------------------------------------------------------------- 4.4
     doc.h2("4.4 Results Interpretation")
 

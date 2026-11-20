@@ -4,47 +4,73 @@ export default {
   theme: {
     extend: {
       colors: {
+        /* Electric Lime — primary accents and actions.
+         * The scale is tuned for a DARK surface: low values are deep
+         * lime-tinted tints used for backgrounds and borders, mid values are
+         * the accent itself, high values are light limes used for accent text
+         * on navy where the mid tone would not have enough contrast. */
         brand: {
-          50: '#fff5f9',
-          100: '#ffe6f1',
-          200: '#ffcfe4',
-          300: '#ffa9cd',
-          400: '#ff7bb2',
-          500: '#f9569b',
-          600: '#ec4899',
-          700: '#db2777',
-          800: '#be185d',
-          900: '#9d174d',
+          50: '#16241a',
+          100: '#1d3324',
+          200: '#2c4d33',
+          300: '#4a7a3c',
+          400: '#7dbb42',
+          500: '#b7f34a',
+          600: '#c9f96f',
+          700: '#dcfda0',
+          800: '#eaffc4',
+          900: '#f4ffe3',
         },
-        cream: '#fffaf8',
+
+        /* Core surfaces, named so components can stop guessing hexes. */
+        navy: '#101b2d',
+        slate: '#1d2d44',
+        card: '#1a2940',
+        line: '#26374f',
+        muted: '#a6b3c2',
+        success: '#45c78a',
+        alert: '#ffb547',
+        cyan: '#5fd4e8',
+        'muted-blue': '#7d9bc4',
+
+        cream: '#101b2d',
+
+        /* Ink — INVERTED for a dark surface.
+         * Previously 900 was near-black text and 100 a near-white tint.
+         * Now 900 is pure white text and 100 is the card surface, so every
+         * existing `text-ink-900` / `bg-ink-100` usage keeps working and
+         * simply flips polarity. */
         ink: {
-          900: '#3f2333',
-          800: '#4d2e40',
-          700: '#5c3a4c',
-          600: '#603e50',
-          500: '#644253',
-          400: '#755263',
-          300: '#9a7788',
-          200: '#e7d3dd',
-          100: '#f6ebf0',
+          900: '#ffffff',
+          800: '#ebf1f8',
+          700: '#d3deea',
+          600: '#bcccdd',
+          500: '#a6b3c2',
+          400: '#8b9bb0',
+          300: '#6b7c93',
+          200: '#2a3d57',
+          100: '#1a2940',
         },
       },
       fontFamily: {
-        sans: ['Quicksand', 'Poppins', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-        display: ['Poppins', 'Quicksand', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        /* Body copy and buttons */
+        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        /* Headings and statistics */
+        display: ['Space Grotesk', 'Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
       boxShadow: {
-        soft: '0 10px 30px -12px rgba(219, 39, 119, 0.24)',
-        card: '0 18px 40px -24px rgba(190, 24, 93, 0.35)',
-        glow: '0 12px 28px -10px rgba(219, 39, 119, 0.50)',
-        inset: 'inset 0 1px 0 0 rgba(255,255,255,0.7)',
+        /* Soft, subtle elevation. Deep navy base instead of pink. */
+        soft: '0 8px 24px -14px rgba(6, 12, 22, 0.55)',
+        card: '0 14px 34px -22px rgba(6, 12, 22, 0.68)',
+        glow: '0 10px 24px -12px rgba(183, 243, 74, 0.32)',
+        inset: 'inset 0 1px 0 0 rgba(255, 255, 255, 0.05)',
       },
       borderRadius: {
         '4xl': '2rem',
       },
       backgroundImage: {
-        'pink-fade': 'linear-gradient(160deg, #fff7fa 0%, #ffe9f2 45%, #ffdcea 100%)',
-        'brand-gradient': 'linear-gradient(135deg, #e11d74 0%, #db2777 55%, #be185d 100%)',
+        'night-fade': 'linear-gradient(165deg, #101b2d 0%, #132033 45%, #16263c 100%)',
+        'brand-gradient': 'linear-gradient(135deg, #b7f34a 0%, #a5e63c 55%, #8fd32c 100%)',
       },
       keyframes: {
         float: {

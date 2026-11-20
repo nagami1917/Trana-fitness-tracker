@@ -3,10 +3,10 @@
  */
 
 const DEFAULT_ZONE_DEFS = [
-  { zone: 1, name: 'Recovery', pctLow: 0.50, pctHigh: 0.60, color: '#0ea5e9' },
-  { zone: 2, name: 'Aerobic', pctLow: 0.60, pctHigh: 0.70, color: '#10b981' },
+  { zone: 1, name: 'Recovery', pctLow: 0.50, pctHigh: 0.60, color: '#7d9bc4' },
+  { zone: 2, name: 'Aerobic', pctLow: 0.60, pctHigh: 0.70, color: '#45c78a' },
   { zone: 3, name: 'Tempo', pctLow: 0.70, pctHigh: 0.80, color: '#f59e0b' },
-  { zone: 4, name: 'Threshold', pctLow: 0.80, pctHigh: 0.90, color: '#ec4899' },
+  { zone: 4, name: 'Threshold', pctLow: 0.80, pctHigh: 0.90, color: '#b7f34a' },
   { zone: 5, name: 'VO2 Max', pctLow: 0.90, pctHigh: 1.00, color: '#ef4444' },
 ];
 
