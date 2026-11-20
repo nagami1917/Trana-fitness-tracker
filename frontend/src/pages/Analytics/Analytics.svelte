@@ -365,7 +365,7 @@
         {#if weightLogs.length >= 2}
           <LineChart
             labels={weightTrend.map((w) => shortDate(w.measured_at))}
-            series={[{ label: weightUnit($unitSystem), data: weightTrend.map((w) => Number(toDisplayWeight(w.weight_kg, $unitSystem).toFixed(1))), color: '#f9569b' }]}
+            series={[{ label: weightUnit($unitSystem), data: weightTrend.map((w) => Number(toDisplayWeight(w.weight_kg, $unitSystem).toFixed(1))), color: '#b7f34a' }]}
             height={210}
             tooltipLabel={(ctx) => `${Number(ctx.parsed.y).toFixed(1)} ${weightUnit($unitSystem)}`}
             yTicks={(v) => Number(v).toFixed(0)}
@@ -586,7 +586,7 @@
         <div class="mt-3">
           <LineChart
             labels={aerobicEfficiency.series.map((s) => s.label)}
-            series={[{ label: 'EF (m/min/bpm)', data: aerobicEfficiency.series.map((s) => s.efficiencyIndex), color: '#10b981' }]}
+            series={[{ label: 'EF (m/min/bpm)', data: aerobicEfficiency.series.map((s) => s.efficiencyIndex), color: '#45c78a' }]}
             height={175}
             tooltipLabel={(ctx) => `${Number(ctx.parsed.y).toFixed(2)} m/min/bpm`}
           />
@@ -616,7 +616,7 @@
         'Fueling is derived from MET energy cost and sports-nutrition intake guidelines.',
       ] as step, index (step)}
         <li class="rounded-2xl bg-white/80 p-3.5">
-          <span class="grid h-7 w-7 place-items-center rounded-full bg-brand-gradient text-[11px] font-extrabold text-white">{index + 1}</span>
+          <span class="grid h-7 w-7 place-items-center rounded-full bg-brand-gradient text-[11px] font-extrabold text-navy">{index + 1}</span>
           <p class="mt-2 text-[12px] font-semibold leading-relaxed text-ink-500">{step}</p>
         </li>
       {/each}

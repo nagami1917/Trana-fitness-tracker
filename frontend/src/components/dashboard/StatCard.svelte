@@ -11,7 +11,7 @@
     sky: 'from-sky-100 to-sky-200/60 text-sky-600',
     mint: 'from-emerald-100 to-emerald-200/60 text-emerald-600',
   };
-  const STROKES = { brand: '#f9569b', rose: '#fb7185', amber: '#f59e0b', sky: '#0ea5e9', mint: '#10b981' };
+  const STROKES = { brand: '#b7f34a', rose: '#fb7185', amber: '#f59e0b', sky: '#7d9bc4', mint: '#45c78a' };
   let up = $derived((delta ?? 0) >= 0);
 </script>
 

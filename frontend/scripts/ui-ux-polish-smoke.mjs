@@ -41,8 +41,11 @@ function contrastRatio(hexA, hexB) {
 const tailwindCfg = readFileSync(resolve(root, 'tailwind.config.js'), 'utf8');
 const ink400Match = tailwindCfg.match(/ink:\s*\{[\s\S]*?400:\s*'(#[\da-fA-F]{6})'/);
 assert.ok(ink400Match, 'Expected ink[400] hex color in tailwind.config.js');
-const ratio = contrastRatio(ink400Match[1], '#ffffff');
-assert.ok(ratio >= 4.5, `Expected ink[400] (${ink400Match[1]}) WCAG AA >= 4.5:1 on white, got ${ratio.toFixed(2)}`);
+// TRANA is a dark-identity app: ink[400] is secondary text on card surfaces,
+// so contrast is measured against the card background, not white.
+const CARD_SURFACE = '#1a2940';
+const ratio = contrastRatio(ink400Match[1], CARD_SURFACE);
+assert.ok(ratio >= 4.5, `Expected ink[400] (${ink400Match[1]}) WCAG AA >= 4.5:1 on card surface ${CARD_SURFACE}, got ${ratio.toFixed(2)}`);
 
 const appCss = readFileSync(resolve(root, 'src/app.css'), 'utf8');
 for (const token of ['--bg-surface', '--bg-subtle', '--text-primary', '--text-muted', '--border-hairline', '--track-ring', '--track-bar', '--chart-tick', '--brand-text', '.bg-sky-50', '.bg-ink-100', '.bg-brand-50\\/75', '.bg-violet-50\\/70', '.card-flat', 'tabular-nums', '.leaflet-tile-pane']) {
@@ -57,9 +60,10 @@ for (const shade of ['100:', '200:', '300:', '400:', '500:', '600:', '700:', '80
 }
 const gradMatch = tailwindCfg.match(/'brand-gradient':\s*'([^']+)'/);
 assert.ok(gradMatch, 'Expected brand-gradient in tailwind.config.js');
+// The lime gradient carries navy label text (white on lime is ~1.3:1).
 for (const stopHex of gradMatch[1].match(/#[0-9a-fA-F]{6}/g) || []) {
-  const gradContrast = contrastRatio(stopHex, '#ffffff');
-  assert.ok(gradContrast >= 4.5, `Expected brand-gradient stop ${stopHex} WCAG AA >= 4.5:1 with white text, got ${gradContrast.toFixed(2)}`);
+  const gradContrast = contrastRatio(stopHex, '#101b2d');
+  assert.ok(gradContrast >= 4.5, `Expected brand-gradient stop ${stopHex} WCAG AA >= 4.5:1 with navy text, got ${gradContrast.toFixed(2)}`);
 }
 
 const donutSrc = readFileSync(resolve(root, 'src/components/common/DonutRing.svelte'), 'utf8');

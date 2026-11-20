@@ -1,6 +1,10 @@
 /**
  * Theme preference (`light` | `dark`), persisted in `localStorage`.
- * Outdoor high-contrast dark mode eases night running & harsh sunlight contrast.
+ *
+ * TRANA now ships a single dark identity (Midnight Navy surfaces with Electric
+ * Lime accents), so both states resolve to the same appearance. The store, the
+ * toggle and the localStorage key are kept as-is so no consumer component had
+ * to change.
  */
 
 import { writable } from 'svelte/store';
@@ -21,7 +25,7 @@ function applyTheme(mode) {
     document.documentElement.classList.toggle('theme-dark', isDark);
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) {
-      meta.setAttribute('content', isDark ? '#0f131d' : '#db2777');
+      meta.setAttribute('content', '#101b2d');
     }
   }
 }

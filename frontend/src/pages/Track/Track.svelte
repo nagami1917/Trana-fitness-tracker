@@ -785,7 +785,7 @@
           onclick={() => setRecordMode('gps')}
           aria-pressed={!isManualMode}
           class="flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-1.5 text-[11px] font-extrabold transition disabled:opacity-60 sm:flex-initial sm:rounded-full {!isManualMode
-            ? 'bg-brand-gradient text-white'
+            ? 'bg-brand-gradient text-navy'
             : 'text-ink-500 hover:text-ink-900'}"
         >
           <Navigation size={12} /> Live GPS
@@ -796,7 +796,7 @@
           onclick={() => setRecordMode('manual')}
           aria-pressed={isManualMode}
           class="flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-1.5 text-[11px] font-extrabold transition disabled:opacity-60 sm:flex-initial sm:rounded-full {isManualMode
-            ? 'bg-brand-gradient text-white'
+            ? 'bg-brand-gradient text-navy'
             : 'text-ink-500 hover:text-ink-900'}"
         >
           <Ruler size={12} /> Enter distance
@@ -810,7 +810,7 @@
             disabled={tracking}
             onclick={() => selectSport(sport.id)}
             class="inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-bold transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed {activityType === sport.id
-              ? 'bg-brand-gradient text-white shadow-glow'
+              ? 'bg-brand-gradient text-navy shadow-glow'
               : 'bg-brand-50 text-ink-700 hover:bg-brand-100'}"
           >
             <ActivityIcon type={sport.id} size="xs" tone={activityType === sport.id ? 'solid' : 'brand'} />
@@ -1113,7 +1113,7 @@
               type="button"
               disabled={tracking}
               class="inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-1.5 text-xs font-extrabold transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed sm:flex-initial {pathSource === 'none'
-                ? 'bg-brand-gradient text-white shadow-glow'
+                ? 'bg-brand-gradient text-navy shadow-glow'
                 : 'text-ink-600 hover:bg-brand-50'}"
               onclick={() => selectPathSource('none')}
             >
@@ -1123,7 +1123,7 @@
               type="button"
               disabled={tracking}
               class="inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-1.5 text-xs font-extrabold transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed sm:flex-initial {pathSource === 'create'
-                ? 'bg-brand-gradient text-white shadow-glow'
+                ? 'bg-brand-gradient text-navy shadow-glow'
                 : 'text-ink-600 hover:bg-brand-50'}"
               onclick={() => selectPathSource('create')}
             >
@@ -1133,7 +1133,7 @@
               type="button"
               disabled={tracking}
               class="inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-1.5 text-xs font-extrabold transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed sm:flex-initial {pathSource === 'plan'
-                ? 'bg-brand-gradient text-white shadow-glow'
+                ? 'bg-brand-gradient text-navy shadow-glow'
                 : 'text-ink-600 hover:bg-brand-50'}"
               onclick={() => selectPathSource('plan')}
             >

@@ -110,16 +110,16 @@
       el.style.borderRadius = '6px';
       el.style.background = 'conic-gradient(#3f2333 0 25%, #ffffff 0 50%, #3f2333 0 75%, #ffffff 0)';
       el.style.border = '2.5px solid #ffffff';
-      el.style.boxShadow = '0 4px 12px rgba(219, 39, 119, 0.45)';
+      el.style.boxShadow = '0 4px 12px rgba(183, 243, 74, 0.45)';
     } else {
       el.style.width = '20px';
       el.style.height = '20px';
       el.style.borderRadius = '9999px';
-      el.style.background = '#f9569b';
+      el.style.background = '#b7f34a';
       el.style.color = '#ffffff';
       el.style.font = '800 10px/1 sans-serif';
       el.style.border = '2px solid #ffffff';
-      el.style.boxShadow = '0 2px 8px rgba(249, 86, 155, 0.45)';
+      el.style.boxShadow = '0 2px 8px rgba(183, 243, 74, 0.45)';
       el.textContent = label;
     }
 

@@ -11,9 +11,9 @@
   <svg width={size} height={size} class="-rotate-90">
     <defs>
       <linearGradient id={gid} x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stop-color="#f9569b" />
-        <stop offset="55%" stop-color="#db2777" />
-        <stop offset="100%" stop-color="#be185d" />
+        <stop offset="0%" stop-color="#b7f34a" />
+        <stop offset="55%" stop-color="#b7f34a" />
+        <stop offset="100%" stop-color="#8fd32c" />
       </linearGradient>
     </defs>
     <circle cx={size / 2} cy={size / 2} {r} stroke={track} stroke-width={thickness} fill="none" />

@@ -109,8 +109,8 @@
       <path d={stats.areaPath} fill="url(#trana-ele-grad)" />
       <path d={stats.linePath} fill="none" stroke="#ea580c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
       {#if hoveredPoint}
-        <line x1={hoveredPoint.x} y1="0" x2={hoveredPoint.x} y2={stats.H} stroke="#f9569b" stroke-width="1.5" stroke-dasharray="3 2" />
-        <circle cx={hoveredPoint.x} cy={hoveredPoint.y} r="4" fill="#f9569b" stroke="#ffffff" stroke-width="1.5" />
+        <line x1={hoveredPoint.x} y1="0" x2={hoveredPoint.x} y2={stats.H} stroke="#b7f34a" stroke-width="1.5" stroke-dasharray="3 2" />
+        <circle cx={hoveredPoint.x} cy={hoveredPoint.y} r="4" fill="#b7f34a" stroke="#ffffff" stroke-width="1.5" />
       {/if}
     </svg>
 

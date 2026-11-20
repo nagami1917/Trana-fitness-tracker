@@ -75,7 +75,7 @@
   const stopIcon = (label) =>
     L.divIcon({
       className: '',
-      html: `<span class="route-marker" style="display:grid;place-items:center;width:18px;height:18px;border-radius:9999px;background:#f9569b;color:#fff;font:800 9px/1 sans-serif;border:2px solid #fff;box-shadow:0 2px 8px rgba(249,86,155,.45)">${label}</span>`,
+      html: `<span class="route-marker" style="display:grid;place-items:center;width:18px;height:18px;border-radius:9999px;background:#b7f34a;color:#fff;font:800 9px/1 sans-serif;border:2px solid #fff;box-shadow:0 2px 8px rgba(249,86,155,.45)">${label}</span>`,
       iconSize: [18, 18],
       iconAnchor: [9, 9],
     });
@@ -171,7 +171,7 @@
           lineCap: 'round',
         }).addTo(layerGroup);
         line = L.polyline(path, {
-          color: '#f9569b',
+          color: '#b7f34a',
           weight: 4.5,
           opacity: 0.96,
           lineJoin: 'round',
@@ -179,7 +179,7 @@
         }).addTo(layerGroup);
       } else if (points.length > 1) {
         guide = L.polyline(points, {
-          color: '#f9569b',
+          color: '#b7f34a',
           weight: 3.5,
           opacity: 0.9,
           lineJoin: 'round',
@@ -190,7 +190,7 @@
     } else {
       if (hasPlanned) {
         guide = L.polyline(plannedPath, {
-          color: '#a855f7',
+          color: '#5fd4e8',
           weight: 3.5,
           opacity: linePoints.length > 1 ? 0.55 : 0.85,
           lineJoin: 'round',
@@ -207,7 +207,7 @@
           lineCap: 'round',
         }).addTo(layerGroup);
         line = L.polyline(linePoints, {
-          color: '#f9569b',
+          color: '#b7f34a',
           weight: 4.5,
           opacity: 0.96,
           lineJoin: 'round',
@@ -516,7 +516,7 @@
     text-align: right;
   }
   :global(.leaflet-control-attribution a) {
-    color: #db2777;
+    color: #b7f34a;
   }
   :global(.theme-dark .leaflet-control-attribution) {
     background: rgba(15, 19, 29, 0.82);

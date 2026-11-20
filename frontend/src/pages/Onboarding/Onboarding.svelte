@@ -530,7 +530,7 @@
               aria-pressed={selected}
               onclick={() => toggleActivity(type.id)}
             >
-              <span class="grid h-9 w-9 flex-none place-items-center rounded-xl {selected ? 'bg-brand-500 text-white' : 'bg-brand-100 text-brand-600'}">
+              <span class="grid h-9 w-9 flex-none place-items-center rounded-xl {selected ? 'bg-brand-500 text-navy' : 'bg-brand-100 text-brand-600'}">
                 {#if selected}<Check size={16} />{:else}<Plus size={16} />{/if}
               </span>
               <span class="min-w-0">

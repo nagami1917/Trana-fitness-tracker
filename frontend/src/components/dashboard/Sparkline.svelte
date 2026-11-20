@@ -1,7 +1,7 @@
 <script>
   import { sparkPath } from '../../lib/format.js';
 
-  let { values = [], width = 92, height = 30, class: cls = '', stroke = '#f9569b' } = $props();
+  let { values = [], width = 92, height = 30, class: cls = '', stroke = '#b7f34a' } = $props();
 
   let line = $derived(sparkPath(values, width, height));
   let area = $derived(line ? `${line} L${width},${height} L0,${height} Z` : '');

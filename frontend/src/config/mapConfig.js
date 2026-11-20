@@ -80,8 +80,8 @@ export const TRANA_THEME = {
   halo: 'rgba(0,0,0,0.6)',
 
   // Brand accents used for markers and controls.
-  brand: '#f9569b',
-  brandOnWhite: '#ec4899',
+  brand: '#b7f34a',
+  brandOnWhite: '#b7f34a',
 
   // Control surfaces.
   controlBg: 'rgba(255, 255, 255, 0.9)',
@@ -96,7 +96,7 @@ export const ACTUAL_ROUTE_WIDTH = 5;
 export const ACTUAL_ROUTE_OPACITY = 0.95;
 export const ACTIVITY_LINE_WIDTH = ACTUAL_ROUTE_WIDTH;
 export const ACTIVITY_LINE_OPACITY = ACTUAL_ROUTE_OPACITY;
-export const PLANNED_ROUTE_COLOR = '#db2777';
+export const PLANNED_ROUTE_COLOR = '#b7f34a';
 export const PLANNED_ROUTE_WIDTH = 5;
 export const PLANNED_ROUTE_OPACITY = 0.88;
 export const PLANNED_ROUTE_DASH = [3, 2];
@@ -105,9 +105,9 @@ export const PLANNED_ROUTE_DASH = [3, 2];
 export const SLOW_SPEED_KMH = 8;
 export const MODERATE_SPEED_KMH = 13;
 
-export const SLOW_ROUTE_COLOR = '#f9569b';    // brand pink — easy effort
+export const SLOW_ROUTE_COLOR = '#b7f34a';    // brand pink — easy effort
 export const MODERATE_ROUTE_COLOR = '#f59e0b'; // amber — tempo
-export const FAST_ROUTE_COLOR = '#10b981';    // emerald — fast
+export const FAST_ROUTE_COLOR = '#45c78a';    // emerald — fast
 
 export const SPEED_COLOR_RAMP = [
   'interpolate',

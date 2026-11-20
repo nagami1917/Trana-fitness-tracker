@@ -28,7 +28,7 @@
       borderRadius: 8,
       borderSkipped: false,
       maxBarThickness,
-      hoverBackgroundColor: s.hoverColor ?? '#db2777',
+      hoverBackgroundColor: s.hoverColor ?? '#b7f34a',
     }));
 
   const options = () => {

@@ -6,63 +6,50 @@
 
 @layer base {
   :root {
-    color-scheme: light;
-    --bg-canvas: #fff8fb;
-    --bg-canvas-accent-1: #ffe3ef;
-    --bg-canvas-accent-2: #ffe9f4;
-    --bg-canvas-end: #ffeaf3;
-    --bg-surface: rgba(255, 255, 255, 0.88);
-    --bg-surface-solid: #ffffff;
-    --bg-subtle: rgba(255, 245, 249, 0.78);
-    --bg-elevated: rgba(255, 255, 255, 0.94);
-    --bg-chrome: rgba(255, 255, 255, 0.72);
-    --border-hairline: #ffdbe9;
-    --border-card: rgba(255, 255, 255, 0.8);
-    --text-primary: #3f2333;
-    --text-secondary: #5c3a4c;
-    --text-muted: #755263;
-    --brand-text: #db2777;
-    --brand-text-strong: #be185d;
-    --brand-accent: #f9569b;
-    --track-ring: #ffe1ee;
-    --track-bar: rgba(255, 207, 228, 0.7);
-    --chart-tick: #755263;
-    --chart-grid: rgba(255, 169, 205, 0.42);
-    --chart-point-bg: #ffffff;
-    --chart-tooltip-bg: rgba(63, 35, 51, 0.94);
-    --chart-tooltip-text: #fff8fb;
-    --shadow-surface: 0 10px 30px -12px rgba(219, 39, 119, 0.22);
-    --shadow-elevated: 0 18px 40px -24px rgba(190, 24, 93, 0.3);
+    color-scheme: dark;
+
+    /* ---- Surfaces ------------------------------------------------------ */
+    --bg-canvas: #101b2d;            /* Midnight Navy — app background      */
+    --bg-canvas-accent-1: rgba(183, 243, 74, 0.05);
+    --bg-canvas-accent-2: rgba(95, 212, 232, 0.04);
+    --bg-canvas-end: #0d1626;
+    --bg-surface: #1a2940;           /* Card Surface — cards and panels     */
+    --bg-surface-solid: #1a2940;
+    --bg-subtle: rgba(29, 45, 68, 0.72);  /* Deep Slate Blue — secondary     */
+    --bg-elevated: #1f3049;
+    --bg-chrome: rgba(16, 27, 45, 0.82);
+
+    /* ---- Lines --------------------------------------------------------- */
+    --border-hairline: #26374f;
+    --border-card: rgba(38, 55, 79, 0.9);
+
+    /* ---- Text ---------------------------------------------------------- */
+    --text-primary: #ffffff;         /* Pure White — main text              */
+    --text-secondary: #d3deea;
+    --text-muted: #a6b3c2;           /* Muted Gray — labels                 */
+    --brand-text: #b7f34a;           /* Electric Lime — accents             */
+    --brand-text-strong: #dcfda0;
+    --brand-accent: #b7f34a;
+
+    /* ---- Data viz ------------------------------------------------------ */
+    --track-ring: #24374f;
+    --track-bar: #2c425c;
+    --chart-tick: #a6b3c2;
+    --chart-grid: rgba(125, 155, 196, 0.18);
+    --chart-point-bg: #1a2940;
+    --chart-tooltip-bg: rgba(10, 18, 30, 0.96);
+    --chart-tooltip-text: #ffffff;
+
+    /* ---- Depth --------------------------------------------------------- */
+    --shadow-surface: 0 8px 24px -14px rgba(6, 12, 22, 0.55);
+    --shadow-elevated: 0 14px 34px -22px rgba(6, 12, 22, 0.68);
   }
 
+  /* TRANA now ships a single dark identity. The `.theme-dark` class is kept
+   * as a no-op alias so the existing theme store and toggle keep working
+   * without touching any component. */
   html.theme-dark {
     color-scheme: dark;
-    --bg-canvas: #0b0d14;
-    --bg-canvas-accent-1: rgba(219, 39, 119, 0.14);
-    --bg-canvas-accent-2: rgba(168, 85, 247, 0.1);
-    --bg-canvas-end: #0f131d;
-    --bg-surface: #151a28;
-    --bg-surface-solid: #151a28;
-    --bg-subtle: #1c2336;
-    --bg-elevated: #1e263b;
-    --bg-chrome: rgba(15, 19, 29, 0.86);
-    --border-hairline: #2b3550;
-    --border-card: #28324b;
-    --text-primary: #f8fafc;
-    --text-secondary: #cbd5e1;
-    --text-muted: #94a3b8;
-    --brand-text: #f9a8d4;
-    --brand-text-strong: #fbcfe8;
-    --brand-accent: #ff7bb2;
-    --track-ring: #2a344f;
-    --track-bar: #28324b;
-    --chart-tick: #cbd5e1;
-    --chart-grid: rgba(148, 163, 184, 0.16);
-    --chart-point-bg: #151a28;
-    --chart-tooltip-bg: rgba(15, 19, 29, 0.96);
-    --chart-tooltip-text: #f8fafc;
-    --shadow-surface: 0 14px 32px -12px rgba(0, 0, 0, 0.65);
-    --shadow-elevated: 0 18px 40px -20px rgba(0, 0, 0, 0.75);
   }
 
   html,
@@ -81,6 +68,7 @@
     background-attachment: fixed;
   }
 
+  /* Space Grotesk Bold for headings */
   h1,
   h2,
   h3,
@@ -90,26 +78,21 @@
   }
 
   ::selection {
-    @apply bg-brand-200 text-brand-900;
+    @apply bg-brand-500 text-navy;
   }
 
-  /* Soft pink scrollbars */
+  /* Subtle navy scrollbars */
   * {
     scrollbar-width: thin;
-    scrollbar-color: #ffcfe4 transparent;
-  }
-  html.theme-dark * {
-    scrollbar-color: #3a4666 transparent;
+    scrollbar-color: #2c425c transparent;
   }
   *::-webkit-scrollbar {
     width: 8px;
     height: 8px;
   }
   *::-webkit-scrollbar-thumb {
-    @apply rounded-full bg-brand-200;
-  }
-  html.theme-dark *::-webkit-scrollbar-thumb {
-    background-color: #3a4666;
+    @apply rounded-full;
+    background-color: #2c425c;
   }
   *::-webkit-scrollbar-track {
     background: transparent;
@@ -117,7 +100,7 @@
 }
 
 @layer components {
-  /* Tier 2: Elevated primary workflow card */
+  /* Tier 2: Elevated primary workflow card — dimensions unchanged */
   .card {
     @apply rounded-3xl border backdrop-blur-sm;
     background-color: var(--bg-surface);
@@ -139,18 +122,20 @@
     border-color: var(--border-hairline);
   }
 
+  /* Buttons — Inter SemiBold, geometry unchanged */
   .btn {
-    @apply inline-flex select-none touch-manipulation items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-bold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50;
-    @apply focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-200;
+    @apply inline-flex select-none touch-manipulation items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50;
+    @apply focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-500/25;
   }
 
-  /* Tier 3: Reserved for the primary CTA per view */
+  /* Tier 3: Reserved for the primary CTA per view.
+   * Lime fill with navy text — the accent is the button, not its label. */
   .btn-primary {
-    @apply btn bg-brand-gradient text-white shadow-glow hover:brightness-105;
+    @apply btn bg-brand-gradient text-navy shadow-glow hover:brightness-105;
   }
 
   .btn-ghost {
-    @apply btn border hover:border-brand-300;
+    @apply btn border hover:border-brand-400/60;
     background-color: var(--bg-elevated);
     border-color: var(--border-hairline);
     color: var(--text-secondary);
@@ -160,8 +145,8 @@
   }
 
   .btn-chip {
-    @apply inline-flex touch-manipulation items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-bold transition hover:border-brand-300;
-    @apply focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-200;
+    @apply inline-flex touch-manipulation items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-semibold transition hover:border-brand-400/60;
+    @apply focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-500/25;
     background-color: var(--bg-subtle);
     border-color: var(--border-hairline);
     color: var(--text-secondary);
@@ -171,11 +156,11 @@
   }
 
   .btn-chip-active {
-    @apply border-transparent bg-brand-gradient text-white shadow-glow hover:text-white;
+    @apply border-transparent bg-brand-gradient text-navy shadow-glow hover:text-navy;
   }
 
   .input {
-    @apply w-full min-w-0 max-w-full rounded-2xl border px-4 py-2.5 text-base font-semibold outline-none transition placeholder:font-medium focus:border-brand-300 focus:ring-4 focus:ring-brand-100 sm:text-sm;
+    @apply w-full min-w-0 max-w-full rounded-2xl border px-4 py-2.5 text-base font-medium outline-none transition placeholder:font-normal focus:border-brand-500/60 focus:ring-4 focus:ring-brand-500/15 sm:text-sm;
     background-color: var(--bg-elevated);
     border-color: var(--border-hairline);
     color: var(--text-primary);
@@ -186,18 +171,18 @@
   }
 
   .label {
-    @apply mb-1.5 block text-xs font-bold uppercase tracking-[0.08em];
+    @apply mb-1.5 block text-xs font-semibold uppercase tracking-[0.08em];
     color: var(--text-muted);
   }
 
   .pill {
-    @apply inline-flex items-center gap-1 rounded-full bg-brand-100/80 px-2.5 py-1 text-[11px] font-bold;
+    @apply inline-flex items-center gap-1 rounded-full bg-brand-100 px-2.5 py-1 text-[11px] font-semibold;
     color: var(--brand-text-strong);
   }
 
   .nav-link {
-    @apply flex items-center gap-3 rounded-2xl px-3.5 py-2.5 text-sm font-bold transition;
-    @apply focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-200;
+    @apply flex items-center gap-3 rounded-2xl px-3.5 py-2.5 text-sm font-semibold transition;
+    @apply focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-500/25;
     color: var(--text-secondary);
   }
 
@@ -206,12 +191,14 @@
     color: var(--brand-text);
   }
 
+  /* Active nav: lime pill with navy text */
   .nav-link-active {
-    @apply bg-brand-gradient text-white shadow-glow hover:text-white;
+    @apply bg-brand-gradient text-navy shadow-glow hover:text-navy;
   }
 
+  /* Statistics — Space Grotesk SemiBold (font-display + semibold) */
   .stat-value {
-    @apply font-display text-2xl font-extrabold leading-none tracking-tight;
+    @apply font-display text-2xl font-semibold leading-none tracking-tight;
     font-variant-numeric: tabular-nums;
     color: var(--text-primary);
   }
@@ -225,7 +212,7 @@
   }
 
   .divider {
-    @apply h-px w-full bg-gradient-to-r from-transparent via-brand-100 to-transparent;
+    @apply h-px w-full bg-gradient-to-r from-transparent via-line to-transparent;
   }
 
   .glass-soft {
@@ -241,7 +228,7 @@
   .skeleton-bar::after {
     content: '';
     @apply absolute inset-0;
-    background: linear-gradient(90deg, transparent 0%, rgba(249, 86, 155, 0.12) 50%, transparent 100%);
+    background: linear-gradient(90deg, transparent 0%, rgba(183, 243, 74, 0.08) 50%, transparent 100%);
     animation: shimmer 1.5s linear infinite;
   }
 }
@@ -249,15 +236,15 @@
 /* Leaflet theme ------------------------------------------------------------ */
 .leaflet-container {
   font-family: inherit;
-  background: #eaf3ee;
+  background: #0d1626;
 }
 
 .leaflet-bar {
   border: none !important;
   border-radius: 14px !important;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.92) !important;
-  box-shadow: 0 4px 14px rgba(219, 39, 119, 0.2) !important;
+  background: rgba(26, 41, 64, 0.94) !important;
+  box-shadow: 0 4px 14px rgba(6, 12, 22, 0.55) !important;
   backdrop-filter: blur(6px);
 }
 
@@ -265,10 +252,10 @@
 .leaflet-bar a:hover,
 .leaflet-bar a:focus {
   border: none !important;
-  border-bottom: 1px solid #ffe0ec !important;
+  border-bottom: 1px solid #26374f !important;
   border-radius: 0 !important;
   background: transparent !important;
-  color: #db2777 !important;
+  color: #b7f34a !important;
   width: 36px !important;
   height: 36px !important;
   line-height: 36px !important;
@@ -277,7 +264,7 @@
 
 .leaflet-bar a:hover,
 .leaflet-bar a:focus {
-  background: #fdf2f8 !important;
+  background: #1f3049 !important;
 }
 
 .leaflet-bar a:last-child {
@@ -285,271 +272,275 @@
 }
 
 .leaflet-bar a.leaflet-disabled {
-  color: #f9a8d4 !important;
+  color: #4a7a3c !important;
 }
 
 .leaflet-control-attribution {
   font-size: 9px !important;
-  background: rgba(255, 255, 255, 0.75) !important;
+  background: rgba(16, 27, 45, 0.8) !important;
+  color: #a6b3c2 !important;
   border-radius: 999px;
   padding: 1px 8px;
-  box-shadow: 0 1px 4px rgba(219, 39, 119, 0.12);
+  box-shadow: 0 1px 4px rgba(6, 12, 22, 0.4);
 }
 
 .route-marker {
   border-radius: 9999px;
-  border: 3px solid #fff;
-  box-shadow: 0 4px 12px rgba(219, 39, 119, 0.45);
+  border: 3px solid #101b2d;
+  box-shadow: 0 4px 12px rgba(183, 243, 74, 0.35);
+}
+
+/* Night basemap: dim the daylight raster tiles without touching polylines
+ * or markers, which are rendered in separate panes. */
+.leaflet-tile-pane {
+  filter: brightness(0.86) saturate(0.75);
 }
 
 /* Dark theme adjustments mapped onto semantic tokens + night basemap filter */
-html.theme-dark .bg-white,
-html.theme-dark .bg-white\/95,
-html.theme-dark .bg-white\/92,
-html.theme-dark .bg-white\/90,
-html.theme-dark .bg-white\/85,
-html.theme-dark .bg-white\/80,
-html.theme-dark .bg-white\/75,
-html.theme-dark .bg-white\/70,
-html.theme-dark .bg-white\/60,
-html.theme-dark .bg-white\/45,
-html.theme-dark .bg-white\/40 {
+.bg-white,
+.bg-white\/95,
+.bg-white\/92,
+.bg-white\/90,
+.bg-white\/85,
+.bg-white\/80,
+.bg-white\/75,
+.bg-white\/70,
+.bg-white\/60,
+.bg-white\/45,
+.bg-white\/40 {
   background-color: var(--bg-surface) !important;
   border-color: var(--border-card) !important;
   color: var(--text-primary);
 }
 
-html.theme-dark .bg-brand-50,
-html.theme-dark .bg-brand-50\/90,
-html.theme-dark .bg-brand-50\/80,
-html.theme-dark .bg-brand-50\/75,
-html.theme-dark .bg-brand-50\/70,
-html.theme-dark .bg-brand-50\/60,
-html.theme-dark .bg-brand-50\/50,
-html.theme-dark .bg-brand-50\/40,
-html.theme-dark .bg-brand-50\/30,
-html.theme-dark .bg-brand-50\/20,
-html.theme-dark .bg-ink-50 {
+.bg-brand-50,
+.bg-brand-50\/90,
+.bg-brand-50\/80,
+.bg-brand-50\/75,
+.bg-brand-50\/70,
+.bg-brand-50\/60,
+.bg-brand-50\/50,
+.bg-brand-50\/40,
+.bg-brand-50\/30,
+.bg-brand-50\/20,
+.bg-ink-50 {
   background-color: var(--bg-subtle) !important;
   border-color: var(--border-hairline) !important;
 }
 
-html.theme-dark .bg-brand-100,
-html.theme-dark .bg-brand-100\/80,
-html.theme-dark .bg-brand-100\/70,
-html.theme-dark .bg-ink-100,
-html.theme-dark .bg-ink-200 {
-  background-color: #262f47 !important;
+.bg-brand-100,
+.bg-brand-100\/80,
+.bg-brand-100\/70,
+.bg-ink-100,
+.bg-ink-200 {
+  background-color: #22344d !important;
   border-color: var(--border-hairline) !important;
 }
 
-html.theme-dark [class*='from-brand-50'],
-html.theme-dark [class*='from-brand-100'],
-html.theme-dark [class*='from-white'],
-html.theme-dark [class*='via-brand-50'],
-html.theme-dark [class*='via-white'],
-html.theme-dark [class*='to-brand-50'],
-html.theme-dark [class*='to-brand-100'],
-html.theme-dark [class*='to-white'] {
-  --tw-gradient-from: var(--bg-subtle) var(--tw-gradient-from-position) !important;
+[class*='from-brand-50'],
+[class*='from-brand-100'],
+[class*='from-white'],
+[class*='via-brand-50'],
+[class*='via-white'],
+[class*='to-brand-50'],
+[class*='to-brand-100'],
+[class*='to-white'] {
+  --tw-gradient-from: var(--bg-surface) var(--tw-gradient-from-position) !important;
   --tw-gradient-via: var(--bg-surface) var(--tw-gradient-via-position) !important;
   --tw-gradient-to: var(--bg-surface) var(--tw-gradient-to-position) !important;
 }
 
-html.theme-dark .bg-amber-50,
-html.theme-dark .bg-amber-50\/70,
-html.theme-dark .bg-amber-100 {
-  background-color: rgba(120, 53, 15, 0.32) !important;
-  border-color: rgba(245, 158, 11, 0.35) !important;
-  color: #fde68a !important;
+.bg-amber-50,
+.bg-amber-50\/70,
+.bg-amber-100 {
+  background-color: rgba(255, 181, 71, 0.12) !important;
+  border-color: rgba(255, 181, 71, 0.34) !important;
+  color: #ffd79a !important;
 }
 
-html.theme-dark .bg-emerald-50,
-html.theme-dark .bg-emerald-50\/70,
-html.theme-dark .bg-emerald-50\/60,
-html.theme-dark .bg-emerald-100 {
-  background-color: rgba(6, 78, 59, 0.32) !important;
-  border-color: rgba(16, 185, 129, 0.35) !important;
-  color: #a7f3d0 !important;
+.bg-emerald-50,
+.bg-emerald-50\/70,
+.bg-emerald-50\/60,
+.bg-emerald-100 {
+  background-color: rgba(69, 199, 138, 0.13) !important;
+  border-color: rgba(69, 199, 138, 0.34) !important;
+  color: #8ee6b8 !important;
 }
 
-html.theme-dark .bg-rose-50,
-html.theme-dark .bg-rose-50\/60,
-html.theme-dark .bg-rose-100,
-html.theme-dark .bg-red-50,
-html.theme-dark .bg-red-50\/70,
-html.theme-dark .bg-red-100 {
-  background-color: rgba(136, 19, 55, 0.32) !important;
-  border-color: rgba(244, 63, 94, 0.38) !important;
-  color: #fecdd3 !important;
+.bg-rose-50,
+.bg-rose-50\/60,
+.bg-rose-100,
+.bg-red-50,
+.bg-red-50\/70,
+.bg-red-100 {
+  background-color: rgba(244, 63, 94, 0.12) !important;
+  border-color: rgba(244, 63, 94, 0.34) !important;
+  color: #ffb7c1 !important;
 }
 
-html.theme-dark .bg-sky-50,
-html.theme-dark .bg-sky-50\/70,
-html.theme-dark .bg-sky-100 {
-  background-color: rgba(12, 74, 110, 0.34) !important;
-  border-color: rgba(56, 189, 248, 0.38) !important;
-  color: #bae6fd !important;
+.bg-sky-50,
+.bg-sky-50\/70,
+.bg-sky-100 {
+  background-color: rgba(95, 212, 232, 0.12) !important;
+  border-color: rgba(95, 212, 232, 0.34) !important;
+  color: #a5e9f5 !important;
 }
 
-html.theme-dark .bg-violet-50\/70 {
-  background-color: rgba(76, 29, 149, 0.3) !important;
-  border-color: rgba(167, 139, 250, 0.38) !important;
-  color: #ddd6fe !important;
+.bg-violet-50\/70 {
+  background-color: rgba(125, 155, 196, 0.13) !important;
+  border-color: rgba(125, 155, 196, 0.34) !important;
+  color: #c3d4ea !important;
 }
 
-html.theme-dark .border-amber-200,
-html.theme-dark .border-amber-300 {
-  border-color: rgba(245, 158, 11, 0.38) !important;
+.border-amber-200,
+.border-amber-300 {
+  border-color: rgba(255, 181, 71, 0.38) !important;
 }
 
-html.theme-dark .border-emerald-100,
-html.theme-dark .border-emerald-200 {
-  border-color: rgba(16, 185, 129, 0.35) !important;
+.border-emerald-100,
+.border-emerald-200 {
+  border-color: rgba(69, 199, 138, 0.34) !important;
 }
 
-html.theme-dark .border-rose-100,
-html.theme-dark .border-rose-200,
-html.theme-dark .border-rose-300,
-html.theme-dark .border-red-200 {
-  border-color: rgba(244, 63, 94, 0.38) !important;
+.border-rose-100,
+.border-rose-200,
+.border-rose-300,
+.border-red-200 {
+  border-color: rgba(244, 63, 94, 0.34) !important;
 }
 
-html.theme-dark .border-sky-200 {
-  border-color: rgba(56, 189, 248, 0.38) !important;
+.border-sky-200 {
+  border-color: rgba(95, 212, 232, 0.34) !important;
 }
 
-html.theme-dark .border-violet-200 {
-  border-color: rgba(167, 139, 250, 0.38) !important;
+.border-violet-200 {
+  border-color: rgba(125, 155, 196, 0.34) !important;
 }
 
-html.theme-dark .border-slate-200\/80 {
+.border-slate-200\/80 {
   border-color: var(--border-hairline) !important;
 }
 
-html.theme-dark .text-red-900,
-html.theme-dark .text-rose-700,
-html.theme-dark .text-rose-800 {
-  color: #fecdd3 !important;
+.text-red-900,
+.text-rose-700,
+.text-rose-800 {
+  color: #ffb7c1 !important;
 }
 
-html.theme-dark .text-amber-600,
-html.theme-dark .text-amber-700,
-html.theme-dark .text-amber-800,
-html.theme-dark .text-amber-900 {
-  color: #fde68a !important;
+.text-amber-600,
+.text-amber-700,
+.text-amber-800,
+.text-amber-900 {
+  color: #ffd79a !important;
 }
 
-html.theme-dark .text-emerald-600,
-html.theme-dark .text-emerald-900 {
-  color: #a7f3d0 !important;
+.text-emerald-600,
+.text-emerald-900 {
+  color: #8ee6b8 !important;
 }
 
-html.theme-dark .text-sky-900 {
-  color: #bae6fd !important;
+.text-sky-900 {
+  color: #a5e9f5 !important;
 }
 
-html.theme-dark .text-violet-700,
-html.theme-dark .text-violet-900 {
-  color: #ddd6fe !important;
+.text-violet-700,
+.text-violet-900 {
+  color: #c3d4ea !important;
 }
 
-html.theme-dark .text-cyan-600 {
-  color: #67e8f9 !important;
+.text-cyan-600 {
+  color: #5fd4e8 !important;
 }
 
-html.theme-dark .text-ink-900,
-html.theme-dark .text-ink-800 {
+.text-ink-900,
+.text-ink-800 {
   color: var(--text-primary) !important;
 }
 
-html.theme-dark .text-ink-700,
-html.theme-dark .text-ink-600,
-html.theme-dark .text-slate-700 {
+.text-ink-700,
+.text-ink-600,
+.text-slate-700 {
   color: var(--text-secondary) !important;
 }
 
-html.theme-dark .text-ink-500,
-html.theme-dark .text-ink-400,
-html.theme-dark .text-ink-300 {
+.text-ink-500,
+.text-ink-400,
+.text-ink-300 {
   color: var(--text-muted) !important;
 }
 
-html.theme-dark .text-brand-600:not(.text-white),
-html.theme-dark .text-brand-700:not(.text-white),
-html.theme-dark .text-brand-800:not(.text-white) {
+.text-brand-600:not(.text-white),
+.text-brand-700:not(.text-white),
+.text-brand-800:not(.text-white) {
   color: var(--brand-text) !important;
 }
 
-html.theme-dark .text-sky-600,
-html.theme-dark .text-sky-700,
-html.theme-dark .text-sky-800 {
-  color: #7dd3fc !important;
+.text-sky-600,
+.text-sky-700,
+.text-sky-800 {
+  color: #8fdcea !important;
 }
 
-html.theme-dark .text-red-600,
-html.theme-dark .text-red-700,
-html.theme-dark .text-rose-600 {
-  color: #fda4af !important;
+.text-red-600,
+.text-red-700,
+.text-rose-600 {
+  color: #ff93a2 !important;
 }
 
-html.theme-dark .text-emerald-700,
-html.theme-dark .text-emerald-800 {
-  color: #6ee7b7 !important;
+.text-emerald-700,
+.text-emerald-800 {
+  color: #a8f0cd !important;
 }
 
-html.theme-dark .border-brand-100,
-html.theme-dark .border-brand-100\/70,
-html.theme-dark .border-brand-100\/80,
-html.theme-dark .border-brand-200,
-html.theme-dark .border-brand-200\/80,
-html.theme-dark .border-brand-200\/70,
-html.theme-dark .border-brand-300,
-html.theme-dark .border-white\/50,
-html.theme-dark .border-white\/60,
-html.theme-dark .border-white\/70,
-html.theme-dark .border-white\/80 {
+.border-brand-100,
+.border-brand-100\/70,
+.border-brand-100\/80,
+.border-brand-200,
+.border-brand-200\/80,
+.border-brand-200\/70,
+.border-brand-300,
+.border-white\/50,
+.border-white\/60,
+.border-white\/70,
+.border-white\/80 {
   border-color: var(--border-hairline) !important;
 }
 
-html.theme-dark .ring-white,
-html.theme-dark .ring-white\/80 {
+.ring-white,
+.ring-white\/80 {
   --tw-ring-color: var(--border-card) !important;
 }
 
-html.theme-dark .hover\:bg-white:hover,
-html.theme-dark .hover\:bg-brand-50:hover,
-html.theme-dark .hover\:bg-brand-100:hover {
+.hover\:bg-white:hover,
+.hover\:bg-brand-50:hover,
+.hover\:bg-brand-100:hover {
   background-color: var(--bg-elevated) !important;
 }
 
-html.theme-dark .hover\:bg-rose-50:hover,
-html.theme-dark .hover\:bg-red-50:hover {
-  background-color: rgba(136, 19, 55, 0.42) !important;
+.hover\:bg-rose-50:hover,
+.hover\:bg-red-50:hover {
+  background-color: rgba(244, 63, 94, 0.18) !important;
 }
 
-html.theme-dark .pill {
-  background-color: rgba(236, 72, 153, 0.18);
+.pill {
+  background-color: rgba(183, 243, 74, 0.14);
   color: var(--brand-text-strong);
 }
 
 /* Dim & invert ONLY Leaflet daylight map tiles (leave polylines & markers vibrant) */
-html.theme-dark .leaflet-container {
-  background: #131826;
+.leaflet-container {
+  background: #0d1626;
 }
 
-html.theme-dark .leaflet-tile-pane {
-  filter: invert(92%) hue-rotate(180deg) brightness(95%) contrast(92%);
-}
 
-html.theme-dark .leaflet-bar {
+.leaflet-bar {
   background: rgba(21, 26, 40, 0.92) !important;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45) !important;
 }
 
-html.theme-dark .leaflet-bar a {
-  color: #f9a8d4 !important;
-  border-bottom-color: #2b3550 !important;
+.leaflet-bar a {
+  color: #b7f34a !important;
+  border-bottom-color: #26374f !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

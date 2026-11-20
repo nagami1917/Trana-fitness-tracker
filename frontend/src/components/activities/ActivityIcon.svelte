@@ -18,7 +18,7 @@
 
 <span
   class="grid shrink-0 place-items-center {s.box} shadow-inset {tone === 'solid'
-    ? 'bg-brand-gradient text-white'
+    ? 'bg-brand-gradient text-navy'
     : 'bg-gradient-to-br from-brand-100 to-brand-200/70 text-brand-600'}"
 >
   <Icon size={s.icon} strokeWidth={2.2} />

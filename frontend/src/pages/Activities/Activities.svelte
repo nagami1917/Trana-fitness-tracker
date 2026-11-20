@@ -675,7 +675,7 @@
         {#each TYPES.filter((t) => t.id !== 'all') as type (type.id)}
           <button
             class="flex items-center justify-center gap-1.5 rounded-2xl border py-2.5 text-xs font-extrabold transition {draft.activity_type === type.id
-              ? 'border-transparent bg-brand-gradient text-white shadow-glow'
+              ? 'border-transparent bg-brand-gradient text-navy shadow-glow'
               : 'border-brand-100 bg-white text-ink-500 hover:border-brand-200'}"
             onclick={() => setDraftType(type.id)}
           >
@@ -890,7 +890,7 @@
               <button
                 type="button"
                 class="flex items-center justify-center rounded-2xl border py-2 text-xs font-extrabold transition {editDraft.activity_type === type.id
-                  ? 'border-transparent bg-brand-gradient text-white shadow-glow'
+                  ? 'border-transparent bg-brand-gradient text-navy shadow-glow'
                   : 'border-brand-100 bg-white text-ink-500 hover:border-brand-200'}"
                 onclick={() => (editDraft.activity_type = type.id)}
               >
