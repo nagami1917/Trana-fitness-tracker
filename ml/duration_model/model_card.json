@@ -1,6 +1,6 @@
 {
   "name": "TRANA duration model",
-  "version": "20261113.1328",
+  "version": "20261121.0023",
   "algorithm": "GradientBoostingRegressor (quantile loss, q10/q50/q90)",
   "target": "log(duration / flat-equivalent time at the athlete's own chronological reference curve)",
   "output": "activity duration in minutes (base \u00d7 exp(prediction))",
@@ -16,27 +16,163 @@
     "is_hike"
   ],
   "metrics": {
-    "mae_min": 5.76,
-    "rmse_min": 14.13,
-    "r2": 0.9924,
-    "mape_pct": 5.51,
-    "interval_coverage_pct": 78.9,
-    "train_rows": 7011,
-    "test_rows": 1834
+    "n": 11566,
+    "mae_min": 32.49,
+    "rmse_min": 66.17,
+    "r2": 0.4419,
+    "mape_pct": 42.53,
+    "within_15_pct": 25.87,
+    "interval_coverage_pct": 60.84,
+    "anchor_mae_min": 33.15,
+    "mae_improvement_vs_anchor_pct": 1.98,
+    "train_rows": 32281,
+    "test_rows": 11566
+  },
+  "validation": {
+    "split_strategy": "80/20 GroupShuffleSplit by user_id",
+    "train_users": 174,
+    "test_users": 44,
+    "total_users": 218,
+    "user_overlap": 0,
+    "by_activity_type": {
+      "run": {
+        "n": 5284,
+        "mae_min": 15.33,
+        "rmse_min": 23.67,
+        "r2": 0.5518,
+        "mape_pct": 33.11,
+        "within_15_pct": 34.25,
+        "interval_coverage_pct": 72.6,
+        "anchor_mae_min": 16.25,
+        "mae_improvement_vs_anchor_pct": 5.68
+      },
+      "ride": {
+        "n": 6243,
+        "mae_min": 46.94,
+        "rmse_min": 87.11,
+        "r2": 0.3743,
+        "mape_pct": 50.46,
+        "within_15_pct": 18.81,
+        "interval_coverage_pct": 51.0,
+        "anchor_mae_min": 47.33,
+        "mae_improvement_vs_anchor_pct": 0.82
+      },
+      "walk": {
+        "n": 30,
+        "mae_min": 38.36,
+        "rmse_min": 85.33,
+        "r2": 0.3056,
+        "mape_pct": 50.47,
+        "within_15_pct": 23.33,
+        "interval_coverage_pct": 43.33,
+        "anchor_mae_min": 39.48,
+        "mae_improvement_vs_anchor_pct": 2.83
+      },
+      "hike": {
+        "n": 9,
+        "mae_min": 64.65,
+        "rmse_min": 99.03,
+        "r2": -1.0631,
+        "mape_pct": 48.36,
+        "within_15_pct": 11.11,
+        "interval_coverage_pct": 44.44,
+        "anchor_mae_min": 91.54,
+        "mae_improvement_vs_anchor_pct": 29.38
+      }
+    },
+    "by_elevation_density": {
+      "low_lt_20_m_per_km": {
+        "n": 11264,
+        "mae_min": 32.71,
+        "rmse_min": 66.7,
+        "r2": 0.4414,
+        "mape_pct": 42.52,
+        "within_15_pct": 25.77,
+        "interval_coverage_pct": 60.52,
+        "anchor_mae_min": 33.14,
+        "mae_improvement_vs_anchor_pct": 1.31
+      },
+      "moderate_20_to_60_m_per_km": {
+        "n": 255,
+        "mae_min": 25.25,
+        "rmse_min": 43.94,
+        "r2": 0.4476,
+        "mape_pct": 41.16,
+        "within_15_pct": 31.37,
+        "interval_coverage_pct": 73.73,
+        "anchor_mae_min": 37.02,
+        "mae_improvement_vs_anchor_pct": 31.8
+      },
+      "high_ge_60_m_per_km": {
+        "n": 47,
+        "mae_min": 20.1,
+        "rmse_min": 27.55,
+        "r2": 0.3147,
+        "mape_pct": 51.55,
+        "within_15_pct": 19.15,
+        "interval_coverage_pct": 68.09,
+        "anchor_mae_min": 13.31,
+        "mae_improvement_vs_anchor_pct": -50.97
+      }
+    },
+    "elevation_density_available": true,
+    "elevation_density_definition": "elevation_gain_m / distance_km (m per km); not a measured terrain label",
+    "by_history": {
+      "cold_start": {
+        "n": 89,
+        "mae_min": 27.79,
+        "rmse_min": 45.57,
+        "r2": 0.4326,
+        "mape_pct": 57.14,
+        "within_15_pct": 23.6,
+        "interval_coverage_pct": 58.43,
+        "anchor_mae_min": 33.91,
+        "mae_improvement_vs_anchor_pct": 18.07
+      },
+      "one_prior_activity": {
+        "n": 78,
+        "mae_min": 33.79,
+        "rmse_min": 75.59,
+        "r2": -1.4956,
+        "mape_pct": 57.93,
+        "within_15_pct": 33.33,
+        "interval_coverage_pct": 71.79,
+        "anchor_mae_min": 37.32,
+        "mae_improvement_vs_anchor_pct": 9.47
+      },
+      "two_or_more_prior_activities": {
+        "n": 11399,
+        "mae_min": 32.52,
+        "rmse_min": 66.23,
+        "r2": 0.4454,
+        "mape_pct": 42.31,
+        "within_15_pct": 25.84,
+        "interval_coverage_pct": 60.79,
+        "anchor_mae_min": 33.11,
+        "mae_improvement_vs_anchor_pct": 1.79
+      }
+    },
+    "baseline": "personal Riegel reference curve without the learned correction"
   },
   "feature_importance": {
-    "elevation_per_km": 0.6849,
-    "history_count": 0.1516,
-    "elevation_gain_m": 0.0473,
-    "distance_km": 0.0372,
-    "is_ride": 0.0347,
-    "is_run": 0.022,
-    "is_hike": 0.0101,
-    "is_walk": 0.0061,
-    "experience_level": 0.0061
+    "elevation_per_km": 0.4411,
+    "distance_km": 0.3621,
+    "elevation_gain_m": 0.1012,
+    "is_ride": 0.0484,
+    "is_run": 0.0207,
+    "is_walk": 0.0143,
+    "history_count": 0.0116,
+    "experience_level": 0.0005,
+    "is_hike": 0.0
   },
-  "trained_at": "2026-11-13T13:28:54+00:00",
-  "corpus_rows": 8845,
-  "training_source": "synthetic",
+  "trained_at": "2026-11-21T00:23:18+00:00",
+  "corpus_rows": 43847,
+  "training_source": "csv",
+  "source_label": "Endomondo (FitRec) recorded workouts",
+  "data_requirements": {
+    "minimum_valid_activities_for_full_retraining": 200,
+    "minimum_distinct_pseudonymous_users_for_user_holdout": 5,
+    "minimums_are_accuracy_guarantees": false
+  },
   "calibration": null
 }
