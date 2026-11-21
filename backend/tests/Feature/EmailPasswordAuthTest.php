@@ -366,11 +366,14 @@ class EmailPasswordAuthTest extends TestCase
      */
     public function test_registration_refuses_before_writing_a_user_when_smtp_credentials_are_unusable(): void
     {
-        // Route A: the transport is the real one and the values are usable.
-        // The defects below are the values, not the environment, and they have
-        // to be caught here too - not only when APP_ENV says production.
+        // assertRealProductionMailer() returns early outside production, so this
+        // asserts the guard on its production path. app()->instance('env', ...)
+        // is how the rest of this suite does that (see the cookie tests) and is
+        // the only mechanism that reaches app()->environment() here.
         config(['services.trana.allow_password_signup' => true]);
+        $previousEnvironment = app()->environment();
         $previousMail = config('mail');
+        app()->instance('env', 'production');
 
         $register = fn (string $email, string $username) => $this->postJson('/api/auth/register', [
             'name' => 'Stranded Athlete',
@@ -409,6 +412,7 @@ class EmailPasswordAuthTest extends TestCase
             $register('configured@gmail.com', 'configured_mailer')->assertAccepted();
             $this->assertDatabaseHas('users', ['email' => 'configured@gmail.com']);
         } finally {
+            app()->instance('env', $previousEnvironment);
             config(['mail' => $previousMail]);
         }
     }
