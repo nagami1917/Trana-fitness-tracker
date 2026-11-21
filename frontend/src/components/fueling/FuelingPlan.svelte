@@ -40,18 +40,18 @@
   /**
    * The range to display.
    *
-   * The model's own q10-q90 band is calibrated against the synthetic corpus and
-   * covers real durations only ~17% of the time, so it is shown only when no
-   * validated figure is available. `validatedLow`/`High` come from the GeoLife
-   * external validation and reflect the error the model has actually
-   * demonstrated for this sport and history depth.
+   * The model's own q10-q90 band covers real durations 65.5% of the time
+   * against a nominal 80%, so it is shown only when no validated figure is
+   * available. `validatedLow`/`High` come from the Endomondo holdout study and
+   * reflect the error the model has actually demonstrated for this sport and
+   * history depth.
    */
   const displayLow = $derived(Number(d.validatedLow ?? d.low));
   const displayHigh = $derived(Number(d.validatedHigh ?? d.high));
 
   const rangeTitle = $derived(
     d.validatedErrorPct
-      ? `Median estimate ±${d.validatedErrorPct}% — the error measured on real GPS activities (GeoLife validation), not the narrower synthetic-data band`
+      ? `Median estimate ±${d.validatedErrorPct}% — the error measured on recorded workouts from athletes the model never saw, not the optimistic in-sample band`
       : 'Model quantile range',
   );
 
