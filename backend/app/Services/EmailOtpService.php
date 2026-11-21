@@ -216,19 +216,6 @@ class EmailOtpService
         return hash_hmac('sha256', $email."\0".$purpose."\0".$code, $key);
     }
 
-    /**
-     * Fail early when this deployment could not deliver a code at all.
-     *
-     * `issue()` calls this before it writes anything, so a broken transport
-     * never leaves a challenge behind. AuthController::register() calls it
-     * before it creates a user, so a broken transport never leaves an account
-     * that cannot be verified and cannot be registered again.
-     */
-    public function assertCanDeliver(): void
-    {
-        $this->assertRealProductionMailer();
-    }
-
     private function assertRealProductionMailer(): void
     {
         if (! app()->environment('production')) {
