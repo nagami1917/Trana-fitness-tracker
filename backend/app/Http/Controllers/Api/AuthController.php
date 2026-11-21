@@ -60,27 +60,6 @@ class AuthController extends Controller
             'password' => $this->passwordRules(),
         ]);
 
-        // Prove the mailer can be addressed before writing anything. The send
-        // itself can still fail - auth, quota, network - and that path below
-        // still answers 503. What this removes is the case that strands an
-        // account with no way back: a misconfigured transport is now rejected
-        // while it is still an error for everyone, not a dead user row.
-        try {
-            $otp->assertCanDeliver();
-        } catch (Throwable $exception) {
-            Log::error('Password registration refused: the mail transport is not configured', [
-                'exception' => get_class($exception),
-            ]);
-
-            return response()->json([
-                'code' => 'EMAIL_VERIFICATION_UNAVAILABLE',
-                'email' => null,
-                'expires_in' => 0,
-                'resend_after' => EmailOtpService::SEND_COOLDOWN_SECONDS,
-                'message' => 'Account creation is unavailable because this deployment cannot send verification codes yet. Continue with Google, or ask the TRANA operator.',
-            ], 503);
-        }
-
         try {
             $user = DB::transaction(fn () => User::create([
                 'name' => $data['name'],
@@ -111,7 +90,8 @@ class AuthController extends Controller
                 'email' => $user->email,
                 'expires_in' => 0,
                 'resend_after' => EmailOtpService::SEND_COOLDOWN_SECONDS,
-                'message' => 'Your account is saved, but the verification email could not be sent. Please try resending the code.',            ], 503);
+                'message' => 'Your account is saved, but the verification email could not be sent. Please try resending the code.',
+            ], 503);
         }
 
         if (! $sent) {
