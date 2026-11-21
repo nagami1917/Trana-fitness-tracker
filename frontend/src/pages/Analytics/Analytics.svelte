@@ -68,6 +68,43 @@
       .map(([key, value]) => ({ key, label: FEATURE_LABELS[key] ?? key, value: Math.round(value * 100) })),
   );
 
+  /**
+   * Which corpus the numbers on this card were scored against.
+   *
+   * These labels used to be hardcoded "synthetic" no matter what the shipped
+   * artifact was. Once the model was retrained on Endomondo's recorded
+   * workouts, real held-out scores were still being labelled synthetic — and,
+   * far worse in the other direction, a synthetic-era card left in the service
+   * worker cache showed "±6%" beside a model whose measured error is ±42%.
+   * A reader cannot tell honest numbers from stale ones if the caption lies,
+   * so the caption is now derived from the card itself.
+   */
+  const metricSource = $derived($modelCard?.training_source ?? null);
+  const isSynthetic = $derived(metricSource === 'synthetic');
+  const sourceWord = $derived(isSynthetic ? 'synthetic' : 'held-out');
+  const metricLabels = $derived(
+    metricSource
+      ? { r2: `R² (${sourceWord})`, error: `Error (${sourceWord})` }
+      : { r2: 'R²', error: 'Error' },
+  );
+
+  const validationCopy = $derived.by(() => {
+    if (!metricSource) return 'Model metadata unavailable in this build.';
+    if (isSynthetic) {
+      return 'The figures below are scored on synthetic activities this model generated itself — they measure '
+        + 'formula recovery, not real-world accuracy. Validated real-world error is shown separately.';
+    }
+    const card = $modelCard ?? {};
+    const rows = Number(card.metrics?.test_rows ?? 0);
+    const athletes = Number(card.validation?.test_users ?? 0);
+    const scored = rows && athletes
+      ? `${rows.toLocaleString()} held-out workouts from ${athletes} athletes`
+      : (rows ? `${rows.toLocaleString()} held-out workouts` : 'held-out data');
+    return `Scored on ${scored} kept out of training (${card.validation?.split_strategy ?? 'held-out split'}), `
+      + 'so these are measured errors rather than figures recovered from generated data. '
+      + 'Test metrics may still differ from your individual results.';
+  });
+
   const averages = $derived.by(() => {
     const runs = $activities.filter((a) => a.activity_type === 'run' && a.distance_km > 0 && a.duration_min > 0);
     const total = $activities.reduce((acc, a) => acc + a.distance_km, 0);
@@ -169,17 +206,12 @@
         </div>
 
         <p class="mt-3 text-[11px] font-semibold leading-relaxed text-ink-500">
-          {#if $modelCard?.training_source === 'synthetic'}
-            The figures below are scored on synthetic activities this model generated itself — they measure
-            formula recovery, not real-world accuracy. Validated real-world error is shown separately.
-          {:else}
-            Test metrics may not reflect your individual results.
-          {/if}
+          {validationCopy}
         </p>
         <div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {#each [
-            { label: 'R² (synthetic)', value: $modelCard?.metrics?.r2 ?? '—' },
-            { label: 'Error (synthetic)', value: $modelCard?.metrics ? `±${Math.round($modelCard.metrics.mape_pct)}%` : '—' },
+            { label: metricLabels.r2, value: $modelCard?.metrics?.r2 ?? '—' },
+            { label: metricLabels.error, value: $modelCard?.metrics ? `±${Math.round($modelCard.metrics.mape_pct)}%` : '—' },
             { label: 'MAE', value: $modelCard?.metrics ? `${$modelCard.metrics.mae_min} min` : '—' },
             { label: '80% band', value: $modelCard?.metrics ? `${$modelCard.metrics.interval_coverage_pct}%` : '—' },
           ] as metric (metric.label)}

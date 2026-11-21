@@ -56,10 +56,18 @@ export default defineConfig(({ mode }) => {
               },
             },
             {
+              // Model artifacts are refreshed per deploy, not per session.
+              // NetworkFirst (not StaleWhileRevalidate) because a retrained
+              // model must not serve yesterday's trees — or yesterday's model
+              // card — from cache on the first load after a deploy. On the
+              // dashboard that showed synthetic-era scores (R² 0.99, ±6%) for
+              // a model actually measured at R² 0.44, ±42%. Offline still
+              // works: the cached copy answers when the network is unavailable.
               urlPattern: /\/models\/.*\.json$/i,
-              handler: 'StaleWhileRevalidate',
+              handler: 'NetworkFirst',
               options: {
                 cacheName: 'ml-models',
+                networkTimeoutSeconds: 3,
                 expiration: { maxEntries: 8, maxAgeSeconds: 60 * 60 * 24 * 30 },
               },
             },
