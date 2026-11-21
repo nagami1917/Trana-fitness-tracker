@@ -253,10 +253,17 @@ class EmailOtpService
             // sample `your-gmail@gmail.com` and MAIL_PASSWORD was empty, so
             // every send failed at auth while the two checks above passed.
             // Catching it here fails the same way a bad host does - before a
-            // user row exists - instead of after.
-            $username = trim((string) config('mail.mailers.smtp.username'));
+            // challenge is written, instead of halfway through a send.
+            //
+            // `your-gmail@gmail.com` passes FILTER_VALIDATE_EMAIL, so a
+            // syntactic check cannot see it. The sample forms are matched by
+            // substitution instead, the same way the sender check above rejects
+            // any @example.com address.
+            $username = strtolower(trim((string) config('mail.mailers.smtp.username')));
             if ($username === '' || ! filter_var($username, FILTER_VALIDATE_EMAIL)
-                || str_ends_with(strtolower($username), '@example.com')) {
+                || str_ends_with($username, '@example.com')
+                || str_contains($username, '@example.')
+                || (bool) preg_match('/\b(your[-._]?gmail|your[-._]?email|user|username|name|email|change[-._]?me|someone)\b/', $username)) {
                 throw new RuntimeException('Production SMTP username must be a real mailbox address.');
             }
 
