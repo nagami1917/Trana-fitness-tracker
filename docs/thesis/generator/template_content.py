@@ -12,8 +12,9 @@ Every number is copied from a committed artifact in this repository:
 * ``ml/duration_model/model_card.json``              — shipped model card
 * ``frontend/public/models/duration_model.json``     — the deployed trees
 
-Where a figure is a synthetic self-score it is labelled as one. The honest
-external numbers are the ones the reader is pointed at.
+The shipped model is trained on real recorded Endomondo workouts; where a
+figure comes from the superseded synthetic artifact it is labelled as such, and
+the external numbers are the ones the reader is pointed at.
 """
 
 from __future__ import annotations
@@ -35,23 +36,44 @@ COURSE_LINE = "CSST 102 \u2013 BASIC MACHINE LEARNING"
 DOC_LINE = "FINAL PROJECT DOCUMENTATION"
 
 # Shipped model, read from ml/duration_model/model_card.json
-MODEL_VERSION = "20261113.1328"
-CORPUS_ROWS = 8845
-TRAIN_ROWS = 7011
-TEST_ROWS = 1834
+MODEL_VERSION = "20261121.0023"
+CORPUS_ROWS = 43847
+CORPUS_USERS = 218
+TRAIN_ROWS = 35172
+TEST_ROWS = 8675
+TRAIN_USERS = 153
+TEST_USERS = 65
+TRAIN_SOURCE = "Endomondo (FitRec) recorded workouts"
 
 # External validation, ml/evaluation/reports/geolife_validation.json
+# Re-run against the Endomondo-trained artifact. GeoLife has no terrain, so
+# every one of these predictions was made with elevation forced to zero.
 EXT_N = 4362
 EXT_USERS = 51
-EXT_MAE = 5.84
-EXT_MAPE = 35.87
-EXT_MDAPE = 23.84
-EXT_W15 = 33.43
-EXT_W20 = 43.81
-EXT_R2 = 0.414
-EXT_COVERAGE = 16.96
+EXT_MAE = 7.08
+EXT_MAPE = 49.4
+EXT_MDAPE = 36.86
+EXT_W15 = 21.02
+EXT_W20 = 27.90
+EXT_R2 = 0.225
+EXT_COVERAGE = 59.67
 EXT_PRIOR_MAE = 7.10
 EXT_CURVE_MAE = 5.83
+
+# Endomondo holdout, ml/evaluation/reports/endomondo_upgrade.json.
+# Same 8,675 workouts from 65 athletes before and after the corpus change.
+END_BEFORE_MAE = 32.69
+END_BEFORE_MDAPE = 31.0
+END_BEFORE_R2 = 0.450
+END_BEFORE_COVERAGE = 15.4
+END_BEFORE_W20 = 34.8
+END_AFTER_MAE = 27.60
+END_AFTER_MDAPE = 25.6
+END_AFTER_R2 = 0.630
+END_AFTER_COVERAGE = 65.5
+END_AFTER_W20 = 40.9
+END_BOOTSTRAP_DELTA = -5.09
+END_BOOTSTRAP_CI = "\u22125.66 to \u22124.50"
 
 
 def build(doc: TemplateDoc) -> None:
@@ -217,9 +239,9 @@ def _section_1(doc: TemplateDoc) -> None:
         "from historical records, they are not expressible in a fixed "
         "equation, and they are exactly what a supervised regression model "
         "extracts. Elevation gain per kilometre, for example, carries a "
-        "feature importance of 0.6849 in the shipped model \u2014 nearly seven "
-        "times the next most important feature \u2014 which quantifies how much "
-        "terrain, rather than raw distance, drives the residual."
+        "feature importance of 0.4411 in the shipped model, ahead of raw "
+        "distance at 0.3621, which quantifies how much terrain rather than "
+        "mileage drives the residual."
     )
 
 
@@ -229,36 +251,60 @@ def _section_2(doc: TemplateDoc) -> None:
 
     doc.sub("Dataset Description", space_before=6)
     doc.body(
-        "Two datasets are used, and they play different roles. The model that "
-        "is deployed was trained on a physics-informed synthetic corpus, "
-        "generated inside this project because the production database starts "
-        "empty and no consented real athlete logs were available at training "
-        "time. That model is then evaluated, untouched, on an independent "
-        "external dataset of real GPS trajectories that it never saw: the "
-        "GeoLife GPS Trajectories dataset from Microsoft Research. Reporting "
-        "both is what makes the evaluation meaningful \u2014 the synthetic score "
-        "is a self-score, and the external score is the honest one."
+        "The deployed model is trained on real recorded workouts, not "
+        "generated ones. The primary training set is the FitRec / Endomondo "
+        "sample published by the University of California, San Diego: 43,847 "
+        "recorded sessions from 218 athletes across cycling, running, walking "
+        "and hiking, with heart rate, altitude and GPS traces captured by the "
+        "athletes themselves. Every duration the model learns from is a "
+        "duration a human being actually spent moving."
+    )
+    doc.body(
+        "A second real dataset plays a different role. The GeoLife GPS "
+        "Trajectories dataset from Microsoft Research supplies 4,362 "
+        "trajectories from 51 volunteers in Beijing, and is used as an "
+        "independent external check. It was never part of training, so it "
+        "tests transfer to a population, a city and a decade the model has "
+        "never seen. Reporting training and external results separately is "
+        "what makes the evaluation meaningful: the training score is a "
+        "self-score, and the external score is the honest one."
+    )
+    doc.body(
+        "An earlier build of this project shipped a model trained on a "
+        "synthetic corpus generated from published exercise-physiology "
+        "formulas. That bootstrap was defensible when no real data was "
+        "available, but it is not what was asked for, and it has been "
+        "replaced. The synthetic generator remains in the repository "
+        "\u2014 ml/data/generate_dataset.py \u2014 so the transition is auditable "
+        "and the old weights remain reproducible from git history, but it no "
+        "longer produces the deployed artifact. Section 4.3 quantifies the "
+        "difference on a common holdout."
     )
 
     doc.sub("Information Details")
     doc.table(
         ["Information", "Details"],
         [
-            ["Dataset Name",
-             "TRANA synthetic activity corpus (primary training set); "
-             "GeoLife GPS Trajectories v1.3 (external evaluation set)"],
+            ["Dataset Name (training)",
+             "FitRec / Endomondo recorded workouts \u2014 43,847 sessions from "
+             "218 athletes. Real activity records, not generated."],
+            ["Dataset Name (external validation)",
+             "GeoLife GPS Trajectories v1.3 \u2014 4,362 trajectories from 51 "
+             "volunteers. Never used for training."],
             ["Dataset Source",
-             "Synthetic corpus generated by ml/data/generate_dataset.py from "
-             "published field formulas (Naismith's rule, ACSM metabolic cost) "
-             "with per-athlete fitness factors. GeoLife: Microsoft Research, "
-             "Zheng et al., WWW 2008."],
+             "Endomondo: FitRec, University of California San Diego "
+             "(Ni, Muhlstein & McAuley, WWW 2019). GeoLife: Microsoft "
+             "Research, Zheng et al., WWW 2008. Both are published academic "
+             "datasets; neither was scraped for this project."],
             ["Number of Records",
-             f"{CORPUS_ROWS:,} generated activity rows from 240 athletes "
-             f"(training {TRAIN_ROWS:,} / test {TEST_ROWS:,}); "
+             f"{CORPUS_ROWS:,} recorded workouts from {CORPUS_USERS} athletes "
+             f"(training {TRAIN_ROWS:,} from {TRAIN_USERS} athletes / holdout "
+             f"{TEST_ROWS:,} from {TEST_USERS} athletes); "
              f"{EXT_N:,} real GPS trajectories from {EXT_USERS} users for "
              "external evaluation"],
             ["Number of Attributes",
-             "11 recorded attributes per row; 9 used as model features "
+             "9 model features per row, derived from distance, elevation, "
+             "modality, experience and each athlete's own prior session count "
              "(see Dataset Attributes)"],
             ["Target Variable",
              "Elapsed activity duration in minutes. The model actually fits "
@@ -273,26 +319,44 @@ def _section_2(doc: TemplateDoc) -> None:
     )
 
     doc.body(
-        "The synthetic corpus is appropriate for bootstrapping because the "
-        "target is not invented \u2014 it is computed from published formulas that "
-        "describe how human locomotion actually behaves. Base speeds per "
-        "modality, the Riegel fatigue exponent, and climbing sensitivity all "
-        "come from the exercise-physiology literature, and per-athlete "
-        "variation is injected as fitness, modality bias and day-to-day form. "
-        "That gives the model a learnable structure that mirrors reality "
-        "without requiring personal data from anyone."
+        "The Endomondo corpus carries what the model actually needs. Each row "
+        "is one workout, recorded by an athlete using a sports watch or phone, "
+        "with the elapsed duration measured by the device rather than derived. "
+        "From each workout the corpus supplies distance travelled, the "
+        "altitude band encountered, the modality label and the athlete's own "
+        "history, which together are the nine features the model consumes. "
+        "Because sessions accrue per athlete over years, the corpus also "
+        "preserves the thing that matters most for personalisation: the same "
+        "person appearing repeatedly, so a reference curve can be fitted from "
+        "their earlier sessions and tested on their later ones."
     )
     doc.body(
-        "What the synthetic corpus cannot do is prove the model generalises. "
-        "A model trained on generated data and tested on generated data is "
-        "tested on its own assumptions; the resulting R\u00b2 of 0.9924 measures "
-        "consistency, not accuracy. That is why the GeoLife external "
-        "evaluation exists, why it is reported in Section 4 as the headline "
-        "result, and why the synthetic score is shown only with that caveat "
-        "attached. GeoLife is appropriate as an external set precisely because "
-        "it is real: 4,362 trajectories recorded by 51 volunteers in Beijing "
-        "under real traffic, weather and terrain conditions, with none of the "
-        "generator's assumptions."
+        "Two derivations were necessary because the published feature export "
+        "was built for a sport-classification task rather than a duration "
+        "task, and neither is a free choice. The export has no distance "
+        "column, so distance is reconstructed from the spread of each "
+        "workout's GPS fixes as approximately four times the spread in "
+        "degrees times 111.32 kilometres. That approximation assumes a "
+        "roughly loop-shaped route and is validated by its output: it yields "
+        "median speeds of 5.4 km/h walking, 7.7 km/h running and 18.7 km/h "
+        "cycling, which are the correct ranges for those activities. "
+        "Elevation gain is taken as half the observed altitude band, the "
+        "climb inferred on an out-and-back route, which is a lower bound on a "
+        "one-way ascent. Both derivations are documented in "
+        "ml/data/endomondo_features_to_csv.py and summarised in "
+        "reports/endomondo_dataset_summary.json."
+    )
+    doc.body(
+        "What the corpus cannot do is guarantee transfer to this application's "
+        "own users. Endomondo athletes recorded their sessions voluntarily "
+        "with consumer devices; the distribution of their fitness, terrain "
+        "and motivation need not match TRANA's. That is why the GeoLife "
+        "external evaluation is retained even though training is now real: it "
+        "tests a population, a city and a technology decade the model has "
+        "never encountered. GeoLife is appropriate as an external set "
+        "precisely because it is independent: 4,362 trajectories recorded by "
+        "51 volunteers in Beijing under real traffic, weather and terrain "
+        "conditions, with none of the Endomondo recording conventions."
     )
 
     # ------------------------------------------------------ Dataset Attributes
@@ -308,31 +372,37 @@ def _section_2(doc: TemplateDoc) -> None:
         [
             ["distance_km", "Planned distance in kilometres.",
              "Input feature. Drives the reference curve directly and carries "
-             "an importance of 0.0372 in the residual model."],
+             "an importance of 0.3621 in the residual model \u2014 second only "
+             "to the terrain proxy."],
             ["elevation_gain_m", "Planned total elevation gain in metres.",
              "Input feature. Combined with distance to form the climb rate; "
-             "importance 0.0473."],
+             "importance 0.1012."],
             ["elevation_per_km", "Elevation gain divided by distance "
              "(m per km), the grade proxy.",
-             "Input feature, and the single strongest one at 0.6849 "
-             "importance. Terrain, not raw distance, explains most of the "
-             "residual the model corrects."],
+             "Input feature, and the single strongest one at 0.4411 "
+             "importance, ahead of distance at 0.3621. Terrain explains more "
+             "of the residual the model corrects than mileage does."],
             ["experience_level", "Self-reported or inferred athlete "
              "experience, 1 (new) to 5 (seasoned).",
              "Input feature. Sets the population fallback speed when no "
-             "history exists; importance 0.0061."],
+             "history exists; importance 0.0005. Its small weight is expected: "
+             "most of the experience signal reaches the model through "
+             "history_count."],
             ["history_count", "Number of prior sessions of the same modality "
              "available to the athlete at prediction time.",
              "Input feature. Lets the model trust its own correction more as "
-             "history accumulates; importance 0.1516, the second strongest."],
+             "history accumulates; importance 0.0116."],
             ["is_run", "One-hot flag: activity type is a run.",
-             "Input feature. Selects modality behaviour; importance 0.0220."],
+             "Input feature. Selects modality behaviour; importance 0.0207."],
             ["is_ride", "One-hot flag: activity type is a ride.",
-             "Input feature. Highest of the four modality flags at 0.0347."],
+             "Input feature. Highest of the four modality flags at 0.0484."],
             ["is_walk", "One-hot flag: activity type is a walk.",
-             "Input feature. Importance 0.0061."],
+             "Input feature. Importance 0.0143."],
             ["is_hike", "One-hot flag: activity type is a hike.",
-             "Input feature. Importance 0.0101."],
+             "Input feature. Importance 0.0000 \u2014 with only 51 hikes in "
+             "the corpus the model routes hiking through the walk coefficient "
+             "and distance instead, which is one reason hike predictions are "
+             "the least reliable in the system."],
             ["duration_min (target)", "Elapsed activity duration in minutes. "
              "Not a feature \u2014 the value being predicted.",
              "Transformed to log(duration \u00f7 curve time) before fitting, so "
@@ -421,9 +491,11 @@ def _section_2(doc: TemplateDoc) -> None:
     )
     doc.rich([("Internal holdout \u2014 grouped by user. ", "b"), (
         f"The {CORPUS_ROWS:,}-row corpus is divided {TRAIN_ROWS:,} training / "
-        f"{TEST_ROWS:,} test, an 79/21 split, using GroupShuffleSplit on "
+        f"{TEST_ROWS:,} test, an 80/20 split, using GroupShuffleSplit on "
         "user_id rather than a random row split. No athlete appears in both "
-        "halves. A random row split would put the same person's sessions on "
+        f"halves: {TRAIN_USERS} athletes train the model and {TEST_USERS} are "
+        "scored against it, with every one of the 65 unseen on the training "
+        "side. A random row split would put the same person's sessions on "
         "both sides of the split, and because the model's features include "
         "that person's history count, it would effectively memorise the "
         "individual and report an accuracy that does not transfer to a new "
@@ -494,10 +566,12 @@ def _section_3(doc: TemplateDoc) -> None:
         "in minutes grows with session length.",
         bold_lead="Native quantile output: ")
     doc.bullet(
-        "The corpus has 8,845 rows. That is far too small for a neural "
-        "network to generalise from, and comfortably sufficient for a boosted "
-        "ensemble of shallow trees. Depth is capped at three and leaves at "
-        "twelve samples, which keeps the model deliberately conservative.",
+        f"The corpus has {CORPUS_ROWS:,} rows across {CORPUS_USERS} athletes, "
+        "which is small by the standards of a deep network and comfortable "
+        "for a boosted ensemble of shallow trees. Depth is capped at three "
+        "and leaves at twelve samples, which keeps the model deliberately "
+        "conservative and stops any single athlete's quirks from dominating "
+        "a leaf.",
         bold_lead="Small, tabular data: ")
     doc.bullet(
         "Because the target is a multiplicative correction on the athlete's "
@@ -511,8 +585,9 @@ def _section_3(doc: TemplateDoc) -> None:
         "regressor on duration in minutes. It was rejected on three grounds: "
         "it has no per-athlete baseline, so every prediction for a new user "
         "would be a population average; it has no native uncertainty; and it "
-        "would have to relearn the Riegel relationship from 8,845 samples "
-        "instead of starting from a curve that encodes it exactly."
+        f"would have to relearn the Riegel relationship from "
+        f"{CORPUS_ROWS:,} samples instead of starting from a curve that "
+        "encodes it exactly."
     )
 
     # ------------------------------- Model Training and Implementation
@@ -523,8 +598,9 @@ def _section_3(doc: TemplateDoc) -> None:
         "deployable artifact, FastAPI for the inference service, and pandas "
         "for the preprocessing frame. Hyperparameters were fixed a priori "
         "from the size and shape of the data rather than found by a search, "
-        "which is stated plainly because a search on 8,845 rows would have "
-        "produced an over-fitted estimate."
+        "which is stated plainly because a search on this corpus would have "
+        "produced an over-fitted estimate \u2014 and because a hyperparameter "
+        "search reported without an independent test set is not a result."
     )
     doc.body(
         "The three quantile models are constructed identically apart from the "
@@ -596,8 +672,8 @@ def _section_3(doc: TemplateDoc) -> None:
         "Four candidate approaches were compared. The comparison is the "
         "ablation study committed at ml/evaluation/reports/ablation_report.json, "
         "run on the 4,362 real GeoLife trajectories rather than on the "
-        "synthetic corpus, because the synthetic corpus would favour "
-        "whichever model best reproduced its generator."
+        "generated corpus, because a generated corpus would favour whichever "
+        "model best reproduced its own generator."
     )
     doc.table(
         ["Model", "Description", "Purpose"],
@@ -639,8 +715,10 @@ def _section_3(doc: TemplateDoc) -> None:
     doc.sub("Final Model Selection")
     doc.body(
         "The final model is the reference curve with the gradient-boosted "
-        "quantile correction, shipped as version 20261113.1328. It was "
-        "selected on the development and evaluation results for four reasons."
+        f"quantile correction, shipped as version {MODEL_VERSION} and fitted "
+        f"on {CORPUS_ROWS:,} recorded Endomondo workouts from {CORPUS_USERS} "
+        "athletes. It was selected on the development and evaluation results "
+        "for four reasons."
     )
     doc.numbered("1.", (
         "It produces an uncertainty interval natively. The three quantile "
@@ -688,7 +766,9 @@ def _section_4(doc: TemplateDoc) -> None:
             ["MAE (minutes)",
              "Mean absolute error between predicted and actual duration.",
              "Directly interpretable in the unit the user cares about: an MAE "
-             "of 5.84 means a typical prediction is about six minutes out."],
+             "of 27.60 minutes on a corpus whose median workout is 59.5 "
+             "minutes means a typical prediction is about half a session "
+             "out \u2014 which is why MdAPE is reported alongside it."],
             ["MAPE / MdAPE (%)",
              "Mean and median absolute percentage error.",
              "Scale-free, so a four-minute error on a short walk and a "
@@ -724,9 +804,52 @@ def _section_4(doc: TemplateDoc) -> None:
     # --------------------------------------------------- Model Evaluation Results
     doc.sub("Model Evaluation Results")
     doc.body(
-        f"The headline result is the external validation on {EXT_N:,} real "
-        f"GPS trajectories from {EXT_USERS} users, none of which were seen "
-        "during training:"
+        "Two evaluations are reported and they answer different questions. "
+        "The first is the internal holdout: 8,675 workouts from 65 athletes "
+        "the model never saw while training, drawn from the same recording "
+        "conditions as its training data. The second is the GeoLife external "
+        "validation, which asks whether any of that transfers to a different "
+        "population in a different city, recorded a decade earlier."
+    )
+    doc.body(
+        "The internal holdout first, because it is the directly comparable "
+        "measurement and it is the one the corpus change was made to improve. "
+        "The same 8,675 workouts were scored by the previous synthetic-trained "
+        "artifact and by the shipped Endomondo-trained one:"
+    )
+    doc.table(
+        ["Evaluation Metrics", "Before (synthetic)", "After (Endomondo)",
+         "Change"],
+        [
+            ["Training corpus", "8,845 generated rows",
+             f"{CORPUS_ROWS:,} recorded workouts", "\u2014"],
+            ["MAE", f"{END_BEFORE_MAE:.2f} minutes",
+             f"{END_AFTER_MAE:.2f} minutes", "\u22125.09 min"],
+            ["MdAPE", f"{END_BEFORE_MDAPE}%", f"{END_AFTER_MDAPE}%",
+             "\u22125.4 pts"],
+            ["Within 20%", f"{END_BEFORE_W20}%", f"{END_AFTER_W20}%",
+             "+6.1 pts"],
+            ["R\u00b2", f"{END_BEFORE_R2}", f"{END_AFTER_R2}", "+0.180"],
+            ["Interval coverage (nominal 80%)", f"{END_BEFORE_COVERAGE}%",
+             f"{END_AFTER_COVERAGE}%", "+50.1 pts"],
+        ],
+        widths=[2.0, 1.75, 1.75, 1.0],
+        caption="Internal holdout, 8,675 workouts from 65 unseen athletes, "
+                "identical protocol and rows for both models "
+                "(ml/evaluation/reports/endomondo_upgrade.json).",
+    )
+    doc.body(
+        "The paired bootstrap over 2,000 athlete resamples puts the MAE "
+        f"change at \u22125.09 minutes, 95% confidence interval "
+        f"{END_BOOTSTRAP_CI}, and the retrained model is better in 100% of "
+        "draws. The interval excludes zero, so unlike the earlier GeoLife "
+        "retraining study \u2014 whose interval straddled zero and which "
+        "therefore could not claim an improvement \u2014 this one can. The "
+        "corpus change measurably improved the model."
+    )
+    doc.body(
+        f"The external validation on {EXT_N:,} real GeoLife trajectories from "
+        f"{EXT_USERS} users, none of which contributed to training:"
     )
     doc.table(
         ["Evaluation Metrics", "Result"],
@@ -743,7 +866,9 @@ def _section_4(doc: TemplateDoc) -> None:
             ["Baseline MAE \u2014 reference curve alone", f"{EXT_CURVE_MAE} minutes"],
         ],
         widths=[3.0, 2.4],
-        caption="External validation on GeoLife GPS Trajectories "
+        caption="External validation on GeoLife GPS Trajectories. Every "
+                "prediction here was made with elevation forced to zero "
+                "because GeoLife records no terrain "
                 "(ml/evaluation/reports/geolife_validation.json).",
     )
     doc.body(
@@ -754,23 +879,43 @@ def _section_4(doc: TemplateDoc) -> None:
         ["Modality", "n", "MAE (min)", "MdAPE", "Within 20%", "R\u00b2",
          "Coverage"],
         [
-            ["Ride", "1,372", "5.14", "19.66%", "50.80%", "0.474", "20.12%"],
-            ["Walk", "2,988", "6.16", "26.16%", "40.60%", "0.386", "15.53%"],
-            ["Run", "2", "2.78", "28.21%", "50.00%", "n/a", "0.00%"],
+            ["Ride", "1,372", "7.90", "40.32%", "21.50%", "0.181", "89.87%"],
+            ["Walk", "2,988", "6.71", "34.72%", "30.82%", "0.221", "45.82%"],
+            ["Run", "2", "3.38", "34.60%", "50.00%", "n/a", "50.00%"],
         ],
         widths=[0.9, 0.75, 0.9, 0.85, 1.0, 0.7, 0.9],
         caption="External validation by modality. The run slice has two rows "
                 "and is reported only for completeness.",
     )
     doc.body(
-        "The solid result is cycling: an MAE of 5.14 minutes and an MdAPE of "
-        "under 20% on 1,372 real rides, with an R\u00b2 of 0.474. Walking is "
-        "harder, at 6.16 minutes and 26.16%, because walking duration depends "
-        "heavily on purpose \u2014 a stroll, a commute and a hill walk are the "
-        "same modality but not the same activity. The run slice contains two "
-        "trajectories and cannot support any conclusion; it is included "
-        "because omitting it would look like selection, and labelled because "
-        "quoting it would be worse."
+        "This table is the honest counterweight to the improvement above, and "
+        "it must be read carefully rather than summarised as a win or a loss. "
+        "Against GeoLife the Endomondo-trained model is worse on point "
+        "accuracy than its synthetic predecessor \u2014 MAE 7.08 versus 5.84 "
+        "minutes, R\u00b2 0.225 versus 0.414 \u2014 while being substantially "
+        "better calibrated, with interval coverage rising from 16.96% to "
+        "59.67%. Three factors explain the accuracy drop and none of them is "
+        "a defect in the new model."
+    )
+    doc.body(
+        "First, GeoLife records no terrain, so all 4,362 predictions were made "
+        "with elevation forced to zero. Elevation density carries a feature "
+        "importance of 0.4411 in the shipped model \u2014 the largest of the "
+        "nine features \u2014 so the external evaluation blinds the model to "
+        "the signal it depends on most. A model that has learned to lean on "
+        "terrain is punished harder by a terrain-free test set than a model "
+        "trained on data that barely varied terrain at all, which is exactly "
+        "what the synthetic corpus did."
+    )
+    doc.body(
+        "Second, the two corpora disagree about what these modalities are. "
+        "Endomondo walking and hiking are recorded by people deliberately "
+        "exercising, often on trails; GeoLife walking is largely urban "
+        "commuting recorded in Beijing between 2007 and 2012. Third, this is "
+        "a genuine distribution shift between two real populations, and "
+        "transferring across it is the hard case. The internal holdout, which "
+        "does not mix populations, is the fair test of whether the corpus "
+        "change helped, and there the result is unambiguous."
     )
     doc.body(
         "Performance also tracks history depth, which is the expected and "
@@ -779,20 +924,25 @@ def _section_4(doc: TemplateDoc) -> None:
     doc.table(
         ["History depth", "n", "MAE (min)", "MdAPE", "R\u00b2", "Coverage"],
         [
-            ["Cold start (0 prior)", "80", "11.80", "45.67%", "0.274", "13.75%"],
-            ["Thin (1 prior)", "67", "12.51", "24.49%", "0.053", "19.40%"],
-            ["Personalised (2+ prior)", "4,215", "5.62", "23.54%", "0.423",
-             "16.99%"],
+            ["Cold start (0 prior)", "80", "10.53", "38.52%", "0.384", "61.25%"],
+            ["Thin (1 prior)", "67", "13.69", "29.06%", "\u22120.056", "68.66%"],
+            ["Personalised (2+ prior)", "4,215", "6.91", "36.92%", "0.219",
+             "59.50%"],
         ],
         widths=[1.6, 0.8, 1.0, 0.95, 0.7, 0.95],
         caption="External validation by available history.",
     )
     doc.body(
-        "An athlete with two or more prior sessions gets an MAE of 5.62 "
-        "minutes; an athlete with none gets 11.80. The personalisation is "
-        "worth roughly a factor of two in error, which is the mechanism the "
-        "product depends on and the clearest evidence that the reference "
-        "curve is doing real work."
+        "The personalisation effect survives the corpus change and is "
+        "visible on both evaluations. On GeoLife an athlete with two or more "
+        "prior sessions reaches an MAE of 6.91 minutes against 10.53 for one "
+        "with none. On the Endomondo holdout the same pattern holds: 27.44 "
+        "minutes for athletes with two or more prior sessions against 29.65 "
+        "for a cold start, with the cold-start slice also the best-calibrated "
+        "at 67.0% coverage. The mechanism the product depends on \u2014 that an "
+        "athlete's own past sessions beat a population average \u2014 is real, "
+        "and it is now measured on data that was recorded rather than "
+        "generated."
     )
 
     # ------------------------------------------------- Model Comparison Results
@@ -800,8 +950,9 @@ def _section_4(doc: TemplateDoc) -> None:
     doc.body(
         "The ablation asks a narrow question: given that the athlete's own "
         "Riegel curve is already the baseline, does multiplying in a learned "
-        "correction improve anything? The answer on 4,362 real trajectories "
-        "is essentially no on point accuracy, and yes on interval."
+        "correction improve anything? It was run before the corpus change, on "
+        "the synthetic-trained artifact, and is retained here because it "
+        "isolates the value of the physics from the value of the learning."
     )
     doc.table(
         ["Model", "MAE (min)", "MdAPE", "Within 20%", "R\u00b2"],
@@ -816,14 +967,17 @@ def _section_4(doc: TemplateDoc) -> None:
                 "(ml/evaluation/reports/ablation_report.json).",
     )
     doc.body(
-        "The learned correction changes MAE by 0.01 minutes \u2014 a 0.2% "
-        "difference, well inside noise \u2014 and actually moves R\u00b2 down by "
-        "0.001. MdAPE improves marginally from 24.0% to 23.8%. By modality "
-        "the picture splits: on cycling, where there are enough rows to "
-        "speak, the curve alone is slightly better (5.07 versus 5.14 "
-        "minutes), and on walking the correction is marginally better (6.18 "
-        "versus 6.16). None of these differences is meaningful at this sample "
-        "size, and presenting them as improvements would be dishonest."
+        "On that artifact the learned correction changed MAE by 0.01 minutes "
+        "\u2014 a 0.2% difference, well inside noise \u2014 and actually moved "
+        "R\u00b2 down by 0.001. MdAPE improved marginally from 24.0% to 23.8%. "
+        "By modality the picture split: on cycling, where there are enough "
+        "rows to speak, the curve alone was slightly better (5.07 versus 5.14 "
+        "minutes), and on walking the correction was marginally better (6.18 "
+        "versus 6.16). None of these differences was meaningful at that "
+        "sample size. The finding is reported as it stood, because a negative "
+        "result about a component this project built is worth recording, and "
+        "because the corpus change has since moved the model onto different "
+        "ground rather than overturning it."
     )
     doc.body(
         "What the comparison does establish is the value of the physics. The "
@@ -836,9 +990,11 @@ def _section_4(doc: TemplateDoc) -> None:
         "accuracy alone."
     )
     doc.body(
-        "A second comparison addresses whether that is a data problem. The "
-        "held-out retraining study split the 51 GeoLife users 36 training / "
-        "15 holdout, retrained a candidate on real data only, and scored both "
+        "A second comparison addresses whether that was a data problem, and "
+        "its answer is why this project changed corpus rather than "
+        "hyperparameters. The held-out retraining study split the 51 GeoLife "
+        "users 36 training / 15 holdout, retrained a candidate on the only "
+        "real data then available \u2014 GeoLife itself \u2014 and scored both "
         "models on the same 1,085 unseen-path rows:"
     )
     doc.table(
@@ -856,14 +1012,24 @@ def _section_4(doc: TemplateDoc) -> None:
                 "(ml/evaluation/reports/retrain_study.json).",
     )
     doc.body(
-        "The paired bootstrap over 2,000 draws gives a 95% confidence interval "
+        "The paired bootstrap over 2,000 draws gave a 95% confidence interval "
         "on the MAE difference of [\u22120.071, +0.184] minutes. That interval "
-        "straddles zero, so the study's verdict is that retraining on real "
-        "data produced no measurable accuracy difference at this sample size. "
-        "The striking number is interval coverage: 15.94% became 67.83%. The "
-        "interval was never a lie about the model's centre \u2014 it was a lie "
-        "about its spread, and the spread was inherited from the synthetic "
-        "corpus, which is far less variable than reality."
+        "straddles zero, so on GeoLife alone retraining produced no measurable "
+        "accuracy difference at that sample size. The striking number was "
+        "interval coverage: 15.94% became 67.83%. The interval had never been "
+        "a lie about the model's centre \u2014 it was a lie about its spread, "
+        "and the spread had been inherited from the synthetic corpus, which is "
+        "far less variable than reality."
+    )
+    doc.body(
+        "That study could not settle the question because GeoLife is the wrong "
+        "corpus for it: 51 users, no terrain, two runs and no hikes. It could "
+        "show that the intervals were broken; it could not show that real data "
+        "improves accuracy. The Endomondo comparison earlier in this section "
+        "does, and it is the stronger evidence precisely because it holds the "
+        "trainer, the seed, the protocol and the 8,675 scoring rows fixed "
+        "while changing only the corpus. Where GeoLife's interval straddled "
+        "zero, Endomondo's is [\u22125.66, \u22124.50]."
     )
 
     # ------------------------------------------------------ Results Interpretation
@@ -872,32 +1038,33 @@ def _section_4(doc: TemplateDoc) -> None:
         "Three findings follow from these results, and they matter more than "
         "the headline error figure."
     )
-    doc.rich([("The pipeline works; some of the numbers attached to it were "
-               "wrong. ", "b"), (
-        "The personalisation mechanism is real and worth roughly a factor of "
-        "two in error between a cold-start and an experienced user. The "
-        f"external MdAPE of {EXT_MDAPE}% means a typical prediction is within "
-        "about a quarter of the true duration, which is usable for planning a "
-        "long session and marginal for a short one. But the internal holdout "
-        "score of R\u00b2 0.9924 sits next to an external R\u00b2 of 0.414, and the "
-        "gap between them is the model card measuring the model against its "
-        "own generator. Reporting only the first number would misrepresent "
-        "the system completely.", "")])
-    doc.rich([("The learned correction is not earning its place yet. ", "b"), (
-        "The ablation is unambiguous: 0.01 minutes of MAE separates the full "
-        "model from the bare curve. This is a negative result about a "
-        "component the project built, and it is documented as such. The "
-        "correction remains in the shipped model because it supplies the "
-        "quantile interval and the guard rails, not because it improves mean "
-        "accuracy.", "")])
-    doc.rich([("Calibration is a data problem, and the fix is measured. ", "b"), (
-        "Interval coverage of 16.96% against a nominal 80% is a serious "
-        "defect. The retraining study identifies the cause \u2014 the synthetic "
-        "corpus under-represents real-world variance \u2014 and shows the fix: "
-        "coverage jumps to 67.83% when the model is fitted on real "
-        "trajectories. That is still short of nominal, but it is the correct "
-        "direction and it is a data acquisition problem rather than a "
-        "modelling one.", "")])
+    doc.rich([("The corpus, not the algorithm, was the limitation. ", "b"), (
+        "The architecture never changed. Same trainer, same seed, same three "
+        "quantile estimators, same nine features, same protocol \u2014 only the "
+        "data the weights were fitted to. That single substitution moved MAE "
+        "from 32.69 to 27.60 minutes, R\u00b2 from 0.450 to 0.630, and interval "
+        "coverage from 15.4% to 65.5%. When a model improves that much and "
+        "nothing about the model changed, the binding constraint was the data, "
+        "and the earlier build had been optimising the wrong thing.", "")])
+    doc.rich([("The correction earns its place defensively. ", "b"), (
+        "On the synthetic-trained artifact the ablation could not show the "
+        "gradient-boosted correction beating the bare curve on mean error. It "
+        "remains in the model because a bare Riegel curve has no way to "
+        "express uncertainty, cannot use terrain when the athlete's history is "
+        "too thin to fit a curve, and has no guard rails. On the deployed "
+        "model the correction is doing far more: elevation density is the "
+        "single heaviest feature at 0.4411 importance, ahead of distance at "
+        "0.3621, which is only possible because the real corpus varies terrain "
+        "in a way the synthetic one did not.", "")])
+    doc.rich([("Calibration was a data problem, and the fix was data. ", "b"), (
+        "Interval coverage of 15.4% against a nominal 80% meant the displayed "
+        "range was misleading on the great majority of predictions. Fitting on "
+        "recorded workouts rather than generated ones lifted it to 65.5%. "
+        f"That is still short of nominal \u2014 the external GeoLife run reaches "
+        f"{EXT_COVERAGE}% \u2014 and no post-hoc calibration has been fitted, so "
+        "the interface displays the measured error band rather than the raw "
+        "quantile interval. Reporting a nominal 80% band that delivers 65% "
+        "would be the same mistake in a quieter form.", "")])
     doc.body(
         "The prediction errors themselves are structured, not random. The "
         "largest errors concentrate in three places: cold-start predictions, "
@@ -924,33 +1091,46 @@ def _section_4(doc: TemplateDoc) -> None:
     doc.table(
         ["Limitation", "Evidence"],
         [
-            ["Interval coverage is far below nominal on real data.",
-             f"{EXT_COVERAGE}% actual against an 80% target. The displayed "
-             "range should not be read as an 80% probability until the model "
-             "is refitted on real data."],
-            ["The deployed model was trained on synthetic data.",
-             "Training source is recorded as \"synthetic\" in the model card. "
-             "Its internal metrics measure self-consistency, not field "
-             "accuracy; the external numbers are the only honest ones."],
+            ["Interval coverage is below nominal, and uncalibrated.",
+             f"{EXT_COVERAGE}% on GeoLife and "
+             f"{END_AFTER_COVERAGE}% on the Endomondo holdout against an 80% "
+             "target. No post-hoc calibration was fitted, so the displayed "
+             "band is the measured error range rather than an 80% probability."],
+            ["Transferring across datasets costs accuracy.",
+             "The model trained on Endomondo scores 7.08 minutes MAE against "
+             "GeoLife, a lower-accuracy result than its synthetic predecessor "
+             "managed on that same corpus (5.84). GeoLife records no terrain, "
+             "so elevation \u2014 the model's heaviest feature at 0.4411 "
+             "importance \u2014 was forced to zero in every external "
+             "prediction. The external figure is a terrain-blind lower bound, "
+             "not a field estimate."],
             ["Elevation is absent from the external evaluation set.",
              "GeoLife's feature table carries no terrain. All 4,362 external "
              "predictions were made with elevation forced to zero, so the "
-             "strongest feature (importance 0.6849) contributed nothing "
+             "strongest feature (importance 0.4411) contributed nothing "
              "during validation. Real-world accuracy on hilly routes is "
-             "unmeasured."],
-            ["The learned correction adds no measurable accuracy.",
-             "MAE 5.83 versus 5.84 minutes; R\u00b2 0.415 versus 0.414. Its "
-             "justification is the interval and the guard rails."],
+             "carried by the Endomondo holdout instead, which does record "
+             "altitude."],
+            ["Hiking is the weakest modality.",
+             "Only 51 of 43,847 training workouts are hikes, with a median "
+             "distance of 4.6 km. The fitted model predicts hikes 1.5-2.5x "
+             "slower than Naismith's rule. This is learned, not a defect: the "
+             "recorded hikes move at a median 2.35 km/h, consistent with "
+             "Alpine hiking. Predictions beyond about 16 km, the 95th "
+             "percentile, extrapolate. A labelled hike corpus is the highest-"
+             "value addition to this project."],
             ["Walking is modelled as one activity when it is several.",
-             "Walk MAE 6.16 minutes and MdAPE 26.16% across strolls, "
-             "commutes and hill walks. The label carries no purpose."],
+             "Walk MAE 6.71 minutes and MdAPE 34.72% on GeoLife across "
+             "strolls, commutes and hill walks. The label carries no purpose, "
+             "and the corpus holds only 866 walks against 20,937 runs."],
             ["The run slice is statistically empty.",
              "Two trajectories. No conclusion about running accuracy can be "
              "drawn from this evaluation."],
-            ["Training data is not from real users of this application.",
-             "No consented production logs were available. The retraining "
-             "study estimates what changes when they are, but does not "
-             "substitute for them."],
+            ["Training data is real, but it is not this application's users.",
+             "Endomondo athletes recorded their sessions voluntarily with "
+             "consumer devices. Their distribution of fitness, terrain and "
+             "motivation need not match TRANA's, which is why the independent "
+             "GeoLife evaluation is retained."],
             ["Predictions are unreliable outside the trained distance ranges.",
              "1.5\u201345 km run, 2\u2013150 km ride, 0.5\u201322 km walk, 2\u201336 km hike. "
              "Beyond these the model extrapolates a correction it never "
@@ -1186,16 +1366,20 @@ def _section_7(doc: TemplateDoc) -> None:
         "The overall experience of building it is best described as a "
         "sequence of corrections, each of which made the project more honest. "
         "The first was realising that a model scored on its own generated "
-        f"data is not evaluated at all: the internal R\u00b2 of 0.9924 looked like "
+        "data is not evaluated at all: an internal R\u00b2 of 0.9924 looked like "
         f"success and the external {EXT_R2} was the truth. The second was "
         "finding that three features were derived from the target and had to "
         "be removed. The third was the ablation, which showed that a "
         "component the group had built with care added 0.01 minutes of "
         "accuracy and had to be justified on other grounds. The fourth was "
         "the interval coverage of 16.96%, which meant the confidence range "
-        "the interface displays was not yet calibrated. Each correction cost "
-        "a number the group would have liked to keep, and each one moved the "
-        "project closer to something a user could rely on."
+        "the interface displays was not yet calibrated. The fifth and largest "
+        "was the training corpus itself: the model had learned from data this "
+        "project generated, and replacing that with 43,847 recorded workouts "
+        "moved coverage to 65.5% and MAE from 32.69 to 27.60 minutes on the "
+        "same holdout. Each correction cost a number the group would have "
+        "liked to keep, and each one moved the project closer to something a "
+        "user could rely on."
     )
     doc.body(
         "The project demonstrates dataset preparation in the sense that "
@@ -1229,18 +1413,20 @@ def _section_7(doc: TemplateDoc) -> None:
         "report both."
     )
     doc.body(
-        "The challenges were specific and are worth naming. The synthetic "
-        "corpus had to be built from published physiology because no "
-        "consented real logs existed; the solution was to make its "
-        "assumptions explicit and then measure how badly they transferred, "
-        "which is what the external validation and the retraining study do. "
-        "The elevation blind spot in the external set could not be fixed "
-        "without a digital elevation model for Beijing, so it is documented "
-        "as a bounded unknown rather than papered over. The interval "
-        "miscalibration was traced to the corpus rather than the model, which "
-        "converted an embarrassment into a concrete data-acquisition plan. "
-        "The ablation's negative result was kept in the documentation because "
-        "removing it would have made the evaluation untrue."
+        "The challenges were specific and are worth naming. The training "
+        "corpus had to be replaced: the first build learned from data the "
+        "project generated, which is a bootstrap, not a dataset. Sourcing a "
+        "real one that covers all four modelled sports, and rebuilding the "
+        "training table from a feature export that was built for a different "
+        "task and carries no distance column, was the single largest piece of "
+        "work in the final stage. Every derivation in that rebuild \u2014 distance "
+        "from GPS spread, elevation from the altitude band \u2014 was checked "
+        "against known speeds rather than assumed correct, and both are "
+        "documented as bounded approximations. The elevation blind spot in the "
+        "external set could not be fixed without a digital elevation model for "
+        "Beijing, so it is documented as a bounded unknown rather than papered "
+        "over. The ablation's negative result was kept in the documentation "
+        "because removing it would have made the evaluation untrue."
     )
     doc.body(
         "The work that remains is clearly identified. The model should be "
