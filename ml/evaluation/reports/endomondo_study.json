@@ -1,0 +1,248 @@
+{
+  "dataset": {
+    "source": "FitRec / Endomondo feature export",
+    "rows": 43847,
+    "users": 218,
+    "by_activity_type": {
+      "ride": 21993,
+      "run": 20937,
+      "walk": 866,
+      "hike": 51
+    },
+    "split": {
+      "strategy": "70/30 by user_id",
+      "seed": 7,
+      "train_users": 153,
+      "holdout_users": 65,
+      "train_rows": 35172,
+      "holdout_rows": 8675,
+      "user_overlap": 0
+    }
+  },
+  "candidate_card": {
+    "version": "20261121.0026",
+    "training_source": "csv",
+    "source_label": null,
+    "corpus_rows": 35172,
+    "metrics": {
+      "n": 8894,
+      "mae_min": 28.1,
+      "rmse_min": 49.24,
+      "r2": 0.5232,
+      "mape_pct": 41.21,
+      "within_15_pct": 24.48,
+      "interval_coverage_pct": 59.6,
+      "anchor_mae_min": 31.16,
+      "mae_improvement_vs_anchor_pct": 9.82,
+      "train_rows": 26278,
+      "test_rows": 8894
+    },
+    "note": "The benchmark candidate saw only the training split. The artifact shipped in ml/duration_model was later refit on the full corpus (training + holdout users) \u2014 see SHIPPING.md."
+  },
+  "shipped_card": {
+    "version": "20261121.0023",
+    "training_source": "csv",
+    "source_label": "Endomondo (FitRec) recorded workouts",
+    "corpus_rows": 43847
+  },
+  "notes": {
+    "holdout_scope": "Both models are scored on the same 65 holdout users. The shipped model had seen them during training, so its figures here are an upper bound and the honest generalisation estimate is the benchmark candidate's.",
+    "thin_modalities": "walk (n=7) and hike (n=7) holdouts are too small to support a claim; their error is reported but not relied on."
+  },
+  "shipped": {
+    "overall": {
+      "n": 8675,
+      "mae_min": 27.6,
+      "rmse_min": 52.13,
+      "mdape_pct": 25.6,
+      "mape_pct": 35.23,
+      "within_15_pct": 32.5,
+      "within_20_pct": 40.9,
+      "r2": 0.63,
+      "interval_coverage_pct": 65.5
+    },
+    "by_mode": {
+      "hike": {
+        "n": 7,
+        "mae_min": 115.89,
+        "rmse_min": 162.44,
+        "mdape_pct": 26.94,
+        "mape_pct": 45.59,
+        "within_15_pct": 14.3,
+        "within_20_pct": 28.6,
+        "r2": -2.595,
+        "interval_coverage_pct": 100.0
+      },
+      "ride": {
+        "n": 4895,
+        "mae_min": 35.32,
+        "rmse_min": 63.6,
+        "mdape_pct": 25.76,
+        "mape_pct": 34.96,
+        "within_15_pct": 32.7,
+        "within_20_pct": 41.0,
+        "r2": 0.579,
+        "interval_coverage_pct": 63.9
+      },
+      "run": {
+        "n": 3766,
+        "mae_min": 17.36,
+        "rmse_min": 30.72,
+        "mdape_pct": 25.42,
+        "mape_pct": 35.55,
+        "within_15_pct": 32.4,
+        "within_20_pct": 40.8,
+        "r2": 0.642,
+        "interval_coverage_pct": 67.7
+      },
+      "walk": {
+        "n": 7,
+        "mae_min": 47.22,
+        "rmse_min": 71.09,
+        "mdape_pct": 34.8,
+        "mape_pct": 46.96,
+        "within_15_pct": 28.6,
+        "within_20_pct": 42.9,
+        "r2": -0.539,
+        "interval_coverage_pct": 57.1
+      }
+    },
+    "by_history": {
+      "cold_start": {
+        "n": 106,
+        "mae_min": 29.65,
+        "rmse_min": 45.48,
+        "mdape_pct": 31.15,
+        "mape_pct": 45.52,
+        "within_15_pct": 29.2,
+        "within_20_pct": 37.7,
+        "r2": 0.732,
+        "interval_coverage_pct": 67.0
+      },
+      "thin_history_1": {
+        "n": 92,
+        "mae_min": 39.44,
+        "rmse_min": 76.38,
+        "mdape_pct": 32.06,
+        "mape_pct": 50.11,
+        "within_15_pct": 30.4,
+        "within_20_pct": 35.9,
+        "r2": 0.053,
+        "interval_coverage_pct": 68.5
+      },
+      "personalized_2plus": {
+        "n": 8477,
+        "mae_min": 27.44,
+        "rmse_min": 51.88,
+        "mdape_pct": 25.49,
+        "mape_pct": 34.94,
+        "within_15_pct": 32.6,
+        "within_20_pct": 41.0,
+        "r2": 0.634,
+        "interval_coverage_pct": 65.5
+      }
+    }
+  },
+  "retrained": {
+    "overall": {
+      "n": 8675,
+      "mae_min": 28.83,
+      "rmse_min": 53.73,
+      "mdape_pct": 27.24,
+      "mape_pct": 36.6,
+      "within_15_pct": 30.1,
+      "within_20_pct": 38.6,
+      "r2": 0.607,
+      "interval_coverage_pct": 65.2
+    },
+    "by_mode": {
+      "hike": {
+        "n": 7,
+        "mae_min": 74.6,
+        "rmse_min": 83.48,
+        "mdape_pct": 29.08,
+        "mape_pct": 28.82,
+        "within_15_pct": 0.0,
+        "within_20_pct": 28.6,
+        "r2": 0.05,
+        "interval_coverage_pct": 100.0
+      },
+      "ride": {
+        "n": 4895,
+        "mae_min": 35.72,
+        "rmse_min": 63.92,
+        "mdape_pct": 27.03,
+        "mape_pct": 36.14,
+        "within_15_pct": 30.3,
+        "within_20_pct": 38.7,
+        "r2": 0.575,
+        "interval_coverage_pct": 64.6
+      },
+      "run": {
+        "n": 3766,
+        "mae_min": 19.73,
+        "rmse_min": 36.28,
+        "mdape_pct": 27.55,
+        "mape_pct": 37.19,
+        "within_15_pct": 30.0,
+        "within_20_pct": 38.5,
+        "r2": 0.501,
+        "interval_coverage_pct": 65.9
+      },
+      "walk": {
+        "n": 7,
+        "mae_min": 52.35,
+        "rmse_min": 74.41,
+        "mdape_pct": 32.34,
+        "mape_pct": 49.6,
+        "within_15_pct": 0.0,
+        "within_20_pct": 28.6,
+        "r2": -0.687,
+        "interval_coverage_pct": 57.1
+      }
+    },
+    "by_history": {
+      "cold_start": {
+        "n": 106,
+        "mae_min": 30.58,
+        "rmse_min": 46.36,
+        "mdape_pct": 31.39,
+        "mape_pct": 45.36,
+        "within_15_pct": 25.5,
+        "within_20_pct": 33.0,
+        "r2": 0.722,
+        "interval_coverage_pct": 66.0
+      },
+      "thin_history_1": {
+        "n": 92,
+        "mae_min": 37.27,
+        "rmse_min": 75.84,
+        "mdape_pct": 29.36,
+        "mape_pct": 49.57,
+        "within_15_pct": 28.3,
+        "within_20_pct": 37.0,
+        "r2": 0.067,
+        "interval_coverage_pct": 69.6
+      },
+      "personalized_2plus": {
+        "n": 8477,
+        "mae_min": 28.71,
+        "rmse_min": 53.52,
+        "mdape_pct": 27.21,
+        "mape_pct": 36.35,
+        "within_15_pct": 30.2,
+        "within_20_pct": 38.6,
+        "r2": 0.61,
+        "interval_coverage_pct": 65.1
+      }
+    }
+  },
+  "paired_bootstrap": {
+    "delta_mae_retrained_minus_shipped_min": 1.229,
+    "ci95": [
+      0.968,
+      1.486
+    ],
+    "retrained_better_share": 0.0
+  }
+}

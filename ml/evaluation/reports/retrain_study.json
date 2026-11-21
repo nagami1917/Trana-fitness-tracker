@@ -1,6 +1,6 @@
 {
   "name": "TRANA held-out retraining study",
-  "generated_at": "2026-11-19T08:22:40.711372+00:00",
+  "generated_at": "2026-11-21T00:04:31.375464+00:00",
   "question": "Does training on real GPS data beat training on the synthetic corpus, measured on people neither model has seen?",
   "protocol": {
     "split": "by user \u2014 no person appears in both training and holdout",
@@ -23,7 +23,7 @@
     }
   },
   "candidate_card": {
-    "version": "20261119.0822",
+    "version": "20261121.0004",
     "training_source": "csv",
     "corpus_rows": 3235,
     "trainer_holdout_metrics": {

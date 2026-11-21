@@ -344,6 +344,7 @@ def train(
     activities: pd.DataFrame,
     seed: int = 7,
     training_source: str = "unknown",
+    source_label: str | None = None,
     calibrate: pd.DataFrame | None = None,
     target_coverage: float = 0.80,
     calibrate_on_holdout: bool = False,
@@ -466,6 +467,7 @@ def train(
         "trained_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "corpus_rows": int(len(clean)),
         "training_source": training_source,
+        "source_label": source_label,
         "data_requirements": {
             "minimum_valid_activities_for_full_retraining": MIN_TRAIN_ROWS,
             "minimum_distinct_pseudonymous_users_for_user_holdout": MIN_TRAIN_USERS,
@@ -512,6 +514,11 @@ def main() -> None:
     parser.add_argument("--source", choices=["synth", "csv", "supabase"], default="synth")
     parser.add_argument("--csv", default=None)
     parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument(
+        "--source-label",
+        default=None,
+        help="human-readable corpus name recorded in the model card, e.g. 'Endomondo (FitRec) workouts'",
+    )
     parser.add_argument(
         "--artifacts-dir",
         default=None,
@@ -569,6 +576,7 @@ def main() -> None:
         activities,
         seed=args.seed,
         training_source="synthetic" if args.source == "synth" else args.source,
+        source_label=args.source_label,
         calibrate=calibrate_frame,
         target_coverage=args.target_coverage,
         calibrate_on_holdout=calibrate_holdout,

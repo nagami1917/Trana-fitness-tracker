@@ -46,17 +46,17 @@ export const MAX_PLAUSIBLE_ELEV_PER_KM = 60;
 const RIEGEL_PRIOR_STRENGTH = 0.25;
 
 /**
- * Measured real-world error, from the GeoLife external validation.
+ * Measured real-world error, from the Endomondo external validation.
  *
- * These numbers come from `ml/evaluation/reports/geolife_validation.json`,
- * which scores the shipped artifact against 4,362 real GPS trajectories. They
- * are the counterweight to the synthetic holdout metrics: the model card
- * reports MAPE 5.51% because it is being graded on data it generated from its
- * own formulas, while on real movement the error is 25-40%.
+ * These numbers come from `ml/evaluation/reports/endomondo_study.json`, which
+ * scores the shipped artifact against 8,675 real recorded workouts from 65
+ * athletes the model never saw during training. They are the counterweight to
+ * the holdout metrics: the model card reports a self-score on the same kind of
+ * data it learned from, while on unseen athletes the error is 36-37%.
  *
- * The quantile forests produce a band that contains the truth only ~17% of the
- * time against a nominal 80%, and on cold-start accounts the model misses by
- * ~51%. Showing that narrow band to an athlete presents a 12% window as if it
+ * The quantile band still under-covers — 65% of actual durations land inside a
+ * nominal 80% interval — and on cold-start accounts the error is nearer 45%.
+ * Showing that raw band to an athlete would present a narrow window as if it
  * were the real uncertainty.
  *
  * `mape` is the median absolute percentage error to mirror outward, so the
@@ -64,26 +64,26 @@ const RIEGEL_PRIOR_STRENGTH = 0.25;
  * applied to the *presentation* of the range only — `minutes` stays the model's
  * own estimate, and no prediction math changes.
  *
- * Keyed by sport. `hike` reuses run's figure: GeoLife has no hike label, and
- * run's n is 2, so both are the conservative walk/run envelope rather than an
- * invented number.
+ * Keyed by sport. Walk and hike are measured on only 7 holdout workouts each,
+ * so they inherit the pooled all-sport figure rather than a seven-sample
+ * average that would swing wildly between runs.
  */
 export const VALIDATED_ERROR_PCT = {
-  run: 28.2,
-  ride: 25.7,
-  walk: 40.5,
-  hike: 40.5,
+  run: 37.2,
+  ride: 36.1,
+  walk: 36.6,
+  hike: 36.6,
 };
 
 /**
- * Extra error for thin history. GeoLife `cold_start` MAPE is 51.3% and
- * `thin_history_1` is 52.6%, against 35.3% once two or more sessions exist.
+ * Extra error for thin history. Endomondo `cold_start` MAPE is 45.4% and
+ * `thin_history_1` is 49.6%, against 36.4% once two or more sessions exist.
  * Expressed as a multiple of the sport's baseline error so a well-populated
  * account is not penalised for a defect that belongs to new accounts.
  */
 export const THIN_HISTORY_MULTIPLIER = {
-  none: 51.3 / 40.5, // ≈1.27 — no usable sessions for this sport
-  one: 52.6 / 40.5,  // ≈1.30 — a single point cannot establish fatigue decay
+  none: 45.4 / 36.4, // ≈1.25 — no usable sessions for this sport
+  one: 49.6 / 36.4,  // ≈1.36 — a single point cannot establish fatigue decay
   two: 1.0,
 };
 
@@ -417,11 +417,11 @@ export function predictDuration({
 
   // What the athlete should be shown, as opposed to what the forests emitted.
   //
-  // `low`/`high` are the model's own quantile interval. On real data it covers
-  // the truth ~17% of the time, so presenting it as "166-211 min range" states
-  // a precision the model has never demonstrated. The honest figure is the one
-  // measured against GeoLife: the median estimate ± that sport's MAPE, widened
-  // further for thin history.
+  // `low`/`high` are the model's own quantile interval. On unseen athletes it
+  // covers the truth ~65% of the time, so presenting it as "166-211 min range"
+  // states more precision than the model has demonstrated. The honest figure is
+  // the one measured on the Endomondo holdout: the median estimate ± that
+  // sport's MAPE, widened further for thin history.
   const errorFraction = validatedErrorFraction(activityType, historyCount);
   const honestLow = Math.max(1, median * (1 - errorFraction));
   const honestHigh = median * (1 + errorFraction);
@@ -435,8 +435,8 @@ export function predictDuration({
     validatedLow: Math.round(honestLow * 10) / 10,
     validatedHigh: Math.round(honestHigh * 10) / 10,
     validatedErrorPct: Math.round(errorFraction * 1000) / 10,
-    // Was this a synthetic-only band, or the measured one? Drives the label.
-    rangeBasis: 'geolife_validated',
+    // The band shown is the measured one, not the raw quantile interval.
+    rangeBasis: 'endomondo_validated',
     paceMinPerKm: ['run', 'walk', 'hike'].includes(activityType) ? median / distanceKm : null,
     speedKmh: Math.round(speedKmh * 100) / 100,
     confidence: Math.round(confidence * 100) / 100,

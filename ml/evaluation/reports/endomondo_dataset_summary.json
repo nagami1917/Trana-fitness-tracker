@@ -1,0 +1,25 @@
+{
+  "source_rows": 50018,
+  "kept_rows": 43847,
+  "users": 218,
+  "by_activity_type": {
+    "ride": 21993,
+    "run": 20937,
+    "walk": 866,
+    "hike": 51
+  },
+  "median_speed_kmh_by_activity_type": {
+    "hike": 3.02,
+    "ride": 18.69,
+    "run": 7.69,
+    "walk": 5.4
+  },
+  "median_duration_min": 59.5,
+  "median_distance_km": 10.03,
+  "median_elevation_gain_m": 22.6,
+  "derivation": {
+    "distance_km": "4 * gps_spread * 111.32",
+    "elevation_gain_m": "alt_range / 2",
+    "started_at": "synthetic epoch + 1 day per workout, ordered by id"
+  }
+}

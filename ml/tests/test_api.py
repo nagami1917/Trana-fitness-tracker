@@ -168,9 +168,17 @@ def test_laravel_accepted_prediction_boundaries_are_also_accepted_by_ml():
     assert response.status_code == 200, response.text
 
 
-def test_bundled_model_card_identifies_synthetic_training_data():
+def test_bundled_model_card_declares_its_training_source():
+    """The card must state where the weights came from.
+
+    It is ``csv`` for the shipped Endomondo-trained artifact and ``synthetic``
+    for a bootstrap build. What matters is that the field is present and
+    honest, never that it holds one particular value — the previous version of
+    this test hard-coded ``synthetic`` and broke the moment real data was used.
+    """
     body = client.get("/model/info").json()
-    assert body["training_source"] == "synthetic"
+    assert body["training_source"] in {"synthetic", "csv", "supabase"}
+    assert body["training_source"] is not None
 
 
 def test_fueling_kit_hr_intensity_and_carb_loading():
