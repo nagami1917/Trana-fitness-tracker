@@ -27,8 +27,24 @@
 
   $: if (mode !== 'verify' && mode !== 'reset') clearInterval(timer);
 
-  /** Set when an error has an obvious next step, e.g. "log in instead". */
-  let errorAction = null;
+  /**
+   * Errors that have an obvious next step attach it here, e.g. "log in
+   * instead". A list, because a failed password login has more than one
+   * equally good route out: try Google, reset the password, or sign up.
+   */
+  let errorActions = [];
+
+  /** Optional scannable detail under the message — long paragraphs are not. */
+  let errorPoints = [];
+
+  /** Reset everything the message box renders. Called on every fresh attempt
+   *  and on every mode change, so no stale button survives into a new screen. */
+  function clearMessages() {
+    error = '';
+    errorActions = [];
+    errorPoints = [];
+    fieldErrors = {};
+  }
 
   onMount(() => {
     if (typeof window !== 'undefined') {
@@ -36,23 +52,31 @@
       const status = url.searchParams.get('google');
       // Each backend outcome gets its own sentence. One catch-all message made
       // "wrong button", "expired session" and "Google is down" look identical.
+      //
+      // Rule for every line here: say which step failed and what to do next.
+      // None of these codes can report on a password account's existence, so
+      // none of them may hint that the athlete has or hasn't registered.
       const messages = {
-        account_exists: 'An account already exists for this Google address. Log in instead — your TRANA data is already there.',
-        session_expired: 'That sign-in link expired or was altered before it reached us. Start again.',
-        provider_error: 'Google could not confirm the sign-in just now. Try again in a moment.',
+        account_exists: 'You already have a TRANA account for this Google address — it was not created a second time. Use Log in instead, or sign in with your username or Gmail and password.',
+        // This is the OAuth handshake failing, NOT an emailed sign-in link.
+        // The old wording ("that sign-in link expired or was altered") sent
+        // people hunting for a link that was never sent, and read like a
+        // verdict on their account when it says nothing about it.
+        session_expired: 'Google sign-in was interrupted before it finished, so nothing was changed on your account. This usually means the Google redirect took longer than 30 minutes or was opened in a different browser. Try "Log in with Google" again above — or just use your username or Gmail and password.',
+        provider_error: 'Google could not confirm the sign-in just now. Google itself is usually back within a minute — try again, or use your password if you have one.',
         identity_conflict: 'That Google account is already linked to a different TRANA account. Sign in with the account you used before.',
-        failed: 'Google sign-in could not be completed. Please try again or use your password.',
-        cancelled: 'Google sign-in was cancelled.',
-        not_configured: 'Google sign-in is not configured yet. Please use your password for now.',
-        unverified_email: 'Google did not confirm this email address. Choose a verified Google account or use your password.',
+        failed: 'Google sign-in could not be completed. Nothing was changed on your account — try again, or use your password.',
+        cancelled: 'Google sign-in was cancelled. Nothing was changed on your account.',
+        not_configured: 'Google sign-in is not configured on this deployment yet. Please use your password.',
+        unverified_email: 'Google did not confirm that this address belongs to you, so TRANA did not use it. Choose a Google account whose email is verified, or use your password.',
         account_unavailable: 'This account cannot sign in right now. Please contact TRANA support.',
-        account_not_found: 'No TRANA account is linked to that Google address. Use Create account to register, or sign in with your username or Gmail and password.',
+        account_not_found: 'This Google address is not linked to any TRANA account, so nothing was signed in. If you have not registered yet, use Create account. If you did register, log in with the username or Gmail and password you chose — a Google account is not created automatically.',
       };
       if (status) {
         error = messages[status] || messages.failed;
         // "Already exists" is not a failure: offer the way in rather than
         // leaving the athlete to work out which tab they needed.
-        if (status === 'account_exists') errorAction = 'login';
+        if (status === 'account_exists') errorActions = ['login'];
         url.searchParams.delete('google');
         window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
       }
@@ -88,6 +112,10 @@
   }
 
   function applyApiError(err) {
+    // Any fresh failure replaces the previous message's next steps; a stale
+    // "Log in instead" button under a different error reads like a non-sequitur.
+    errorActions = [];
+    errorPoints = [];
     if (err?.status === 422) {
       fieldErrors = err.errors || {};
       error = Object.values(fieldErrors).flat()[0] || err.message;
@@ -121,8 +149,7 @@
   }
 
   async function submitLogin() {
-    error = '';
-    fieldErrors = {};
+    clearMessages();
     busy = true;
     try {
       await loginAndContinue(identifier, password);
@@ -138,6 +165,23 @@
         offerVerificationRoute(err);
         return;
       }
+      // 401 is deliberately one sentence for every cause — unknown address,
+      // wrong password, suspended account — because splitting them would let
+      // anyone test which Gmail addresses are registered. The athlete is not
+      // left stuck though: this is where "did I actually sign up?" gets
+      // answered, by naming the three states an account can be in and the
+      // route out of each. A registered-and-verified account signs in above,
+      // so anyone reading this is in one of the other three.
+      if (err?.status === 401) {
+        error = 'Those details did not match a TRANA account. Only you can tell which of these it is:';
+        errorPoints = [
+          'You have not finished creating it — check your Gmail for a six-digit TRANA code, or use Create account.',
+          'It was created with Google sign-in, so it has no password to type — use Log in with Google.',
+          'It exists but the password is different — use Forgot password.',
+        ];
+        errorActions = ['google', 'forgot', 'signup'];
+        return;
+      }
       applyApiError(err);
     } finally {
       busy = false;
@@ -145,8 +189,7 @@
   }
 
   async function submitSignup() {
-    error = '';
-    fieldErrors = {};
+    clearMessages();
     busy = true;
     try {
       const result = await api.auth.register({
@@ -179,8 +222,7 @@
   }
 
   async function submitCode() {
-    error = '';
-    fieldErrors = {};
+    clearMessages();
     busy = true;
     try {
       await api.auth.verifyEmail({ email, code });
@@ -199,7 +241,7 @@
   }
 
   async function resendCode() {
-    error = '';
+    clearMessages();
     busy = true;
     try {
       const result = await api.auth.resendVerification(email);
@@ -244,8 +286,7 @@
   }
 
   async function requestPasswordReset() {
-    error = '';
-    fieldErrors = {};
+    clearMessages();
     busy = true;
     try {
       const result = await api.auth.forgotPassword(email);
@@ -261,8 +302,7 @@
   }
 
   async function submitPasswordReset() {
-    error = '';
-    fieldErrors = {};
+    clearMessages();
     busy = true;
     try {
       await api.auth.resetPassword({
@@ -288,7 +328,7 @@
 
   async function resendResetCode() {
     busy = true;
-    error = '';
+    clearMessages();
     try {
       const result = await api.auth.forgotPassword(email);
       startCountdown(result.expires_in ?? 300, result.resend_after ?? 60);
@@ -336,7 +376,7 @@
       <div class="resend-row">
         {#if resendIn > 0}<span>Resend code in {formatTime(resendIn)}</span>
         {:else}<button class="text-button" type="button" disabled={busy} on:click={resendCode}>Resend code</button>{/if}
-        <button class="text-button" type="button" on:click={() => { mode = 'login'; error = ''; }}>Back to log in</button>
+        <button class="text-button" type="button" on:click={() => { mode = 'login'; clearMessages(); }}>Back to log in</button>
       </div>
       <div class="google-signin verify-google">
         <span class="verify-google-hint">No code arrived? Signing in with Google verifies <strong>{email}</strong> instead.</span>
@@ -360,7 +400,7 @@
         {#if fieldError('email')}<small class="field-error">{fieldError('email')}</small>{/if}
         <button class="primary-button" type="submit" disabled={busy}>{busy ? 'Sending…' : 'Send reset code'}</button>
       </form>
-      <button class="text-button back-link" type="button" on:click={() => { mode = 'login'; error = ''; }}>Back to log in</button>
+      <button class="text-button back-link" type="button" on:click={() => { mode = 'login'; clearMessages(); }}>Back to log in</button>
     {:else if mode === 'reset'}
       <div class="eyebrow">ACCOUNT RECOVERY</div>
       <h1>Choose a new password</h1>
@@ -400,8 +440,8 @@
       <h1>{mode === 'signup' ? 'Create your account' : 'Welcome back'}</h1>
       <p class="subtitle">{mode === 'signup' ? 'Use Google for verified sign-in, or create an account with email and verify it by code. No payment details required.' : 'Sign in to continue your training journey.'}</p>
       <div class="tabs" role="tablist" aria-label="Account access">
-        <button type="button" role="tab" aria-selected={mode === 'login'} class:active={mode === 'login'} on:click={() => { mode = 'login'; error = ''; fieldErrors = {}; }}>Log in</button>
-        <button type="button" role="tab" aria-selected={mode === 'signup'} class:active={mode === 'signup'} on:click={() => { mode = 'signup'; error = ''; fieldErrors = {}; }}>Create account</button>
+        <button type="button" role="tab" aria-selected={mode === 'login'} class:active={mode === 'login'} on:click={() => { mode = 'login'; clearMessages(); }}>Log in</button>
+        <button type="button" role="tab" aria-selected={mode === 'signup'} class:active={mode === 'signup'} on:click={() => { mode = 'signup'; clearMessages(); }}>Create account</button>
       </div>
       <div class="google-signin">
         <a class="google-button" href={api.auth.googleRedirectUrl(mode)}>
@@ -445,19 +485,40 @@
           <div class="password-wrap"><input id="login-password" bind:value={password} type={showPassword ? 'text' : 'password'} maxlength="72" autocomplete="current-password" required /><button type="button" aria-pressed={showPassword} on:click={() => showPassword = !showPassword}>{showPassword ? 'Hide' : 'Show'}</button></div>
           <button class="primary-button" type="submit" disabled={busy}>{busy ? 'Logging in…' : 'Log in'}</button>
         </form>
-        <button class="text-button forgot" type="button" on:click={() => { mode = 'forgot'; email = identifier.includes('@') ? identifier : ''; error = ''; }}>Forgot password?</button>
+        <button class="text-button forgot" type="button" on:click={() => { mode = 'forgot'; email = identifier.includes('@') ? identifier : ''; clearMessages(); }}>Forgot password?</button>
       {/if}
     {/if}
     {#if error}
       <div class:success-message={error.startsWith('If ')} class="form-message" role="alert">
         {error}
-        {#if errorAction === 'login'}
-          <button
-            type="button"
-            class="message-action"
-            on:click={() => { errorAction = null; mode = 'login'; error = ''; fieldErrors = {}; }}
-          >Log in instead</button>
+        {#if errorPoints.length}
+          <ul class="message-points">
+            {#each errorPoints as point}<li>{point}</li>{/each}
+          </ul>
         {/if}
+        {#each errorActions as action (action)}
+          {#if action === 'login'}
+            <button
+              type="button"
+              class="message-action"
+              on:click={() => { mode = 'login'; clearMessages(); }}
+            >Log in instead</button>
+          {:else if action === 'google'}
+            <a class="message-action" href={api.auth.googleRedirectUrl('login')}>Log in with Google</a>
+          {:else if action === 'forgot'}
+            <button
+              type="button"
+              class="message-action"
+              on:click={() => { email = identifier.includes('@') ? identifier : ''; mode = 'forgot'; clearMessages(); }}
+            >Forgot password?</button>
+          {:else if action === 'signup'}
+            <button
+              type="button"
+              class="message-action"
+              on:click={() => { if (identifier.includes('@')) email = identifier; mode = 'signup'; clearMessages(); }}
+            >Create account</button>
+          {/if}
+        {/each}
       </div>
     {/if}
     <p class="terms">By continuing, you agree to use TRANA responsibly and keep your account secure.</p>
@@ -476,7 +537,7 @@
   .brand{display:inline-block;margin-bottom:32px;color:#ffffff;text-decoration:none;font-weight:900;font-size:24px;letter-spacing:.08em;font-family:"Space Grotesk",Inter,sans-serif}.brand span{color:#b7f34a}
   .eyebrow{color:#b7f34a;font-size:11px;font-weight:800;letter-spacing:.14em}h1{margin:8px 0;font-size:30px;letter-spacing:-.04em;color:#ffffff;font-family:"Space Grotesk",Inter,sans-serif}.subtitle{margin:0 0 24px;color:#a6b3c2;font-size:14px;line-height:1.55}.subtitle strong{color:#eaf2fb;overflow-wrap:anywhere}
   .tabs{display:grid;grid-template-columns:1fr 1fr;padding:4px;margin:0 0 18px;background:#16233a;border:1px solid #26374f;border-radius:12px}.tabs button{min-height:44px;border:0;background:transparent;padding:11px;color:#a6b3c2;font-weight:700;border-radius:9px;cursor:pointer}.tabs button.active{background:#1f3049;color:#b7f34a;box-shadow:0 2px 8px rgba(0,0,0,.35)}
-  .form-message .message-action{margin-left:6px;padding:0;border:0;background:none;color:inherit;font:inherit;font-weight:800;text-decoration:underline;cursor:pointer}
+  .form-message .message-action{margin-left:6px;padding:0;border:0;background:none;color:inherit;font:inherit;font-weight:800;text-decoration:underline;cursor:pointer;display:inline}.form-message .message-points{margin:7px 0 2px;padding-left:17px;display:grid;gap:5px}.form-message .message-points li{padding-left:1px}
 .google-signin{display:grid;gap:8px}.google-button{display:flex;align-items:center;justify-content:center;gap:12px;min-height:48px;box-sizing:border-box;padding:10px 16px;border:1px solid #2a3d57;border-radius:10px;background:#1f3049;color:#ffffff;text-decoration:none;font-size:14px;font-weight:750;box-shadow:0 1px 2px rgba(0,0,0,.3);transition:background .15s,border-color .15s,box-shadow .15s}.google-button:hover{background:#26374f;border-color:#3a5175;box-shadow:0 2px 7px rgba(0,0,0,.4)}.google-button:focus-visible{outline:3px solid rgba(183,243,74,.55);outline-offset:2px}.google-button svg{width:20px;height:20px;flex:none}.google-signin p{margin:0;color:#8b9bb0;font-size:11px;text-align:center}.auth-divider{display:flex;align-items:center;gap:12px;margin:18px 0 10px;color:#8b9bb0;font-size:10px}.auth-divider::before,.auth-divider::after{content:"";height:1px;flex:1;background:#26374f}.verify-google{margin-top:18px;padding-top:16px;border-top:1px solid #26374f}.verify-google-hint{max-width:34ch;justify-self:center;color:#8b9bb0;font-size:11px;line-height:1.5;text-align:center}
   form{display:flex;flex-direction:column;gap:9px}label{font-size:13px;font-weight:700;color:#d3deea;margin-top:6px}input{width:100%;min-height:44px;box-sizing:border-box;padding:12px 13px;border:1px solid #2a3d57;border-radius:10px;background:#1f3049;color:#ffffff;font:inherit;outline:none}input::placeholder{color:#6b7c93}input:focus{border-color:#b7f34a;box-shadow:0 0 0 3px rgba(183,243,74,.18)}.hint{margin:-4px 0 3px;color:#8b9bb0;font-size:11px}.field-error{display:block;color:#ffb7c1;font-size:12px;margin-top:-4px}
   .password-wrap{position:relative}.password-wrap input{padding-right:62px}.password-wrap button{position:absolute;right:9px;top:50%;min-width:44px;min-height:44px;transform:translateY(-50%);border:0;background:transparent;color:#b7f34a;font-size:12px;font-weight:700;cursor:pointer}
