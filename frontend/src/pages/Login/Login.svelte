@@ -173,7 +173,9 @@
       // route out of each. A registered-and-verified account signs in above,
       // so anyone reading this is in one of the other three.
       if (err?.status === 401) {
-        error = 'Those details did not match a TRANA account. Only you can tell which of these it is:';
+        // Deliberately not "those details did not match": a suspended account
+        // also answers 401, and the details may have matched perfectly.
+        error = 'That login did not go through. TRANA gives the same answer for every cause, so it cannot tell you which one this is — but you can:';
         errorPoints = [
           'You have not finished creating it — check your Gmail for a six-digit TRANA code, or use Create account.',
           'It was created with Google sign-in, so it has no password to type — use Log in with Google.',

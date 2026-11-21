@@ -108,7 +108,16 @@ try {
   assert.match(cssBundle, /@media\(max-width:520px\)[\s\S]*?\.forgot[^}]*min-height:44px/, 'Forgot-password action should have a mobile-friendly tap target.');
   assert.match(document.body.textContent, /Welcome back/i);
   assert.match(document.body.textContent, /Create account/i);
-  assert.match(document.body.textContent, /No TRANA account is linked to that Google address/);
+  // The ?google= copy must name the Google outcome AND answer the question the
+  // athlete actually asks ("did I already create this account?"). It must not
+  // imply an emailed sign-in link — nothing is ever emailed by this flow.
+  assert.match(document.body.textContent, /not linked to any TRANA account/);
+  assert.match(document.body.textContent, /If you have not registered yet, use Create account/);
+  assert.doesNotMatch(
+    document.body.textContent,
+    /sign-in link|link expired|click the link/i,
+    'Google sign-in errors must not describe an emailed sign-in link.',
+  );
   assert.equal(window.location.search, '', 'Google callback status should be removed from the address bar.');
   assert.equal(document.querySelector('.google-button')?.getAttribute('href'), '/api/auth/google/redirect?intent=login');
   assert.equal(document.querySelector('.google-button')?.textContent.trim(), 'Log in with Google');
@@ -184,7 +193,41 @@ try {
   setInput('#identifier', 'athlete@gmail.com');
   setInput('#login-password', 'Wrong-pass-123');
   submit(document.querySelector('form'));
-  await waitFor(() => document.querySelector('[role="alert"]')?.textContent.includes('Invalid credentials.'), 'generic invalid-login feedback');
+  await waitFor(() => /That login did not go through/.test(document.querySelector('[role="alert"]')?.textContent || ''), 'generic invalid-login feedback');
+  // A 401 must stay one sentence for every cause (unknown address, wrong
+  // password, suspended account) so it cannot be used to probe for accounts.
+  // The three possible states belong in the bullets, not the headline.
+  assert.doesNotMatch(
+    document.querySelector('[role="alert"]')?.textContent || '',
+    /no account with|not registered|wrong password/i,
+    'The 401 headline must not disclose which cause applied.',
+  );
+  const failurePoints = [...document.querySelectorAll('.message-points li')].map((li) => li.textContent);
+  assert.equal(failurePoints.length, 3, 'a failed login should name all three account states');
+  assert.match(failurePoints.join(' '), /have not finished creating it/);
+  assert.match(failurePoints.join(' '), /created with Google sign-in/);
+  assert.match(failurePoints.join(' '), /password is different/);
+  // Each bullet needs a route out, and the Google route must be a real link
+  // (the landing page reuses this component as a modal, where only an href works).
+  const failureActions = [...document.querySelectorAll('.message-action')];
+  assert.deepEqual(
+    failureActions.map((action) => action.textContent.trim()),
+    ['Log in with Google', 'Forgot password?', 'Create account'],
+  );
+  assert.equal(failureActions[0].getAttribute('href'), '/api/auth/google/redirect?intent=login');
+  // "Create account" should carry the address that was just typed, not make
+  // the athlete retype it.
+  click(failureActions[2]);
+  assert.equal(document.querySelector('#signup-email')?.value, 'athlete@gmail.com');
+  assert.equal(document.querySelector('[role="alert"]'), null, 'the old failure must not follow into the signup form');
+  assert.equal(document.querySelector('.google-button')?.getAttribute('href'), '/api/auth/google/redirect?intent=signup');
+  // Back to Log in for the successful sign-in below; the switch must not
+  // resurrect the previous alert or its action links.
+  const loginTab = [...document.querySelectorAll('button[role="tab"]')].find((tab) => tab.textContent.trim() === 'Log in');
+  click(loginTab);
+  assert.equal(document.querySelector('.google-button')?.getAttribute('href'), '/api/auth/google/redirect?intent=login');
+  assert.equal(document.querySelector('[role="alert"]'), null);
+  assert.equal(document.querySelectorAll('.message-action').length, 0);
 
   setInput('#login-password', 'Strong-pass-123');
   submit(document.querySelector('form'));
@@ -216,7 +259,7 @@ try {
   }
   assert.equal(window.localStorage.getItem('trana.token'), null, 'Auth tokens must never be stored in localStorage.');
   assert.equal(requests.some((request) => JSON.stringify(request.body || {}).includes('google')), false);
-  console.log('Mobile auth sizing, mode-specific Google labels, signup, OTP verification, login and cookie/CSRF UI checks passed');
+  console.log('Mobile auth sizing, mode-specific Google labels, signup, OTP verification, login, Google-error copy, failed-login guidance and cookie/CSRF UI checks passed');
 } finally {
   await window.destroyLoginTest();
   await window.happyDOM.abort();
