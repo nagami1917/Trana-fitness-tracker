@@ -357,4 +357,83 @@ class EmailPasswordAuthTest extends TestCase
             'password_confirmation' => 'Runner-pass-123',
         ])->assertAccepted();
     }
+
+    /**
+     * The transport guard used to check only the host and the sender address.
+     * Production shipped with `MAIL_USERNAME=your-gmail@gmail.com` and an empty
+     * MAIL_PASSWORD, which satisfies both of those and authenticates as nobody,
+     * so every send failed.
+     *
+     * The account is deliberately written before the send. That is not the
+     * failure it looks like: the registration response explains what happened,
+     * and logging in without verifying answers EMAIL_NOT_VERIFIED with
+     * expires_in 0, which the login page turns into "use Log in with Google" -
+     * the callback links that identity onto this row and marks it verified. So
+     * the row is the rescue path. Production stranded nobody with it: the table
+     * never held a single challenge.
+     *
+     * What the widened guard buys is a clear failure before any of that.
+     */
+    public function test_registration_refuses_when_smtp_credentials_are_unusable(): void
+    {
+        // assertRealProductionMailer() returns early outside production, so this
+        // asserts the guard on its production path. app()->instance('env', ...)
+        // is how the rest of this suite does that (see the cookie tests).
+        //
+        // Notifications are faked so the last case, whose configuration is
+        // valid, stops at the guard's idea of a working transport instead of
+        // opening a real SMTP connection to smtp.gmail.com from CI.
+        Notification::fake();
+        config(['services.trana.allow_password_signup' => true]);
+        $previousEnvironment = app()->environment();
+        $previousMail = config('mail');
+        app()->instance('env', 'production');
+
+        $attempt = 0;
+        $register = function () use (&$attempt) {
+            $attempt++;
+
+            return $this->postJson('/api/auth/register', [
+                'name' => 'Guard Athlete',
+                'username' => 'guard_athlete'.$attempt,
+                'email' => 'guard_athlete'.$attempt.'@gmail.com',
+                'password' => 'Runner-pass-123',
+                'password_confirmation' => 'Runner-pass-123',
+            ]);
+        };
+
+        try {
+            config(['mail.default' => 'smtp']);
+            config(['mail.mailers.smtp.host' => 'smtp.gmail.com']);
+            config(['mail.from.address' => 'operator@gmail.com']);
+
+            // 1. The exact production defect: the documentation sample value.
+            config(['mail.mailers.smtp.username' => 'your-gmail@gmail.com']);
+            config(['mail.mailers.smtp.password' => 'an-app-password']);
+            $register()->assertStatus(503)
+                ->assertJsonPath('code', 'EMAIL_VERIFICATION_UNAVAILABLE')
+                ->assertJsonPath('email', 'guard_athlete1@gmail.com')
+                ->assertJsonPath('expires_in', 0);
+            $this->assertDatabaseMissing('email_otp_challenges', ['email' => 'guard_athlete1@gmail.com']);
+
+            // 2. An empty username is not a mailbox either.
+            config(['mail.mailers.smtp.username' => '']);
+            $register()->assertStatus(503)
+                ->assertJsonPath('code', 'EMAIL_VERIFICATION_UNAVAILABLE');
+
+            // 3. Correct mailbox, no password: still cannot authenticate.
+            config(['mail.mailers.smtp.username' => 'operator@gmail.com']);
+            config(['mail.mailers.smtp.password' => '']);
+            $register()->assertStatus(503)
+                ->assertJsonPath('code', 'EMAIL_VERIFICATION_UNAVAILABLE');
+
+            // 4. A complete configuration gets past the guard and registers.
+            config(['mail.mailers.smtp.password' => 'an-app-password']);
+            $register()->assertAccepted()
+                ->assertJsonPath('email', 'guard_athlete4@gmail.com');
+        } finally {
+            app()->instance('env', $previousEnvironment);
+            config(['mail' => $previousMail]);
+        }
+    }
 }
