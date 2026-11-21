@@ -357,4 +357,59 @@ class EmailPasswordAuthTest extends TestCase
             'password_confirmation' => 'Runner-pass-123',
         ])->assertAccepted();
     }
+
+    /**
+     * The transport guard used to check only the host and the sender address.
+     * Production shipped with `MAIL_USERNAME=your-gmail@gmail.com` and an empty
+     * MAIL_PASSWORD, which satisfies both of those and authenticates as nobody,
+     * so every send failed after the user row already existed.
+     */
+    public function test_registration_refuses_before_writing_a_user_when_smtp_credentials_are_unusable(): void
+    {
+        // Route A: the transport is the real one and the values are usable.
+        // The defects below are the values, not the environment, and they have
+        // to be caught here too - not only when APP_ENV says production.
+        config(['services.trana.allow_password_signup' => true]);
+        $previousMail = config('mail');
+
+        $register = fn (string $email, string $username) => $this->postJson('/api/auth/register', [
+            'name' => 'Stranded Athlete',
+            'username' => $username,
+            'email' => $email,
+            'password' => 'Runner-pass-123',
+            'password_confirmation' => 'Runner-pass-123',
+        ]);
+
+        try {
+            config(['mail.default' => 'smtp']);
+            config(['mail.mailers.smtp.host' => 'smtp.gmail.com']);
+            config(['mail.from.address' => 'operator@gmail.com']);
+
+            // 1. The exact production defect: the documentation sample value.
+            config(['mail.mailers.smtp.username' => 'your-gmail@gmail.com']);
+            config(['mail.mailers.smtp.password' => 'an-app-password']);
+            $register('stranded-sample@gmail.com', 'stranded_sample')
+                ->assertStatus(503)
+                ->assertJsonPath('code', 'EMAIL_VERIFICATION_UNAVAILABLE');
+            $this->assertDatabaseMissing('users', ['email' => 'stranded-sample@gmail.com']);
+
+            // 2. An empty username is not a mailbox either.
+            config(['mail.mailers.smtp.username' => '']);
+            $register('stranded-empty@gmail.com', 'stranded_empty')->assertStatus(503);
+            $this->assertDatabaseMissing('users', ['email' => 'stranded-empty@gmail.com']);
+
+            // 3. Correct mailbox, no password: still cannot authenticate.
+            config(['mail.mailers.smtp.username' => 'operator@gmail.com']);
+            config(['mail.mailers.smtp.password' => '']);
+            $register('stranded-nopass@gmail.com', 'stranded_nopass')->assertStatus(503);
+            $this->assertDatabaseMissing('users', ['email' => 'stranded-nopass@gmail.com']);
+
+            // 4. A complete configuration gets past the guard and registers.
+            config(['mail.mailers.smtp.password' => 'an-app-password']);
+            $register('configured@gmail.com', 'configured_mailer')->assertAccepted();
+            $this->assertDatabaseHas('users', ['email' => 'configured@gmail.com']);
+        } finally {
+            config(['mail' => $previousMail]);
+        }
+    }
 }

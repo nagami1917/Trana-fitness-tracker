@@ -216,6 +216,19 @@ class EmailOtpService
         return hash_hmac('sha256', $email."\0".$purpose."\0".$code, $key);
     }
 
+    /**
+     * Fail early when this deployment could not deliver a code at all.
+     *
+     * `issue()` calls this before it writes anything, so a broken transport
+     * never leaves a challenge behind. AuthController::register() calls it
+     * before it creates a user, so a broken transport never leaves an account
+     * that cannot be verified and cannot be registered again.
+     */
+    public function assertCanDeliver(): void
+    {
+        $this->assertRealProductionMailer();
+    }
+
     private function assertRealProductionMailer(): void
     {
         if (! app()->environment('production')) {
@@ -233,6 +246,22 @@ class EmailOtpService
             if ($host === '' || in_array($host, ['127.0.0.1', 'localhost', 'smtp.example.com'], true)
                 || ! filter_var($from, FILTER_VALIDATE_EMAIL) || str_ends_with($from, '@example.com')) {
                 throw new RuntimeException('Production SMTP host and sender address must be configured.');
+            }
+
+            // A correct host and sender still authenticate as nobody. Both of
+            // these shipped broken once: MAIL_USERNAME held the documentation
+            // sample `your-gmail@gmail.com` and MAIL_PASSWORD was empty, so
+            // every send failed at auth while the two checks above passed.
+            // Catching it here fails the same way a bad host does - before a
+            // user row exists - instead of after.
+            $username = trim((string) config('mail.mailers.smtp.username'));
+            if ($username === '' || ! filter_var($username, FILTER_VALIDATE_EMAIL)
+                || str_ends_with(strtolower($username), '@example.com')) {
+                throw new RuntimeException('Production SMTP username must be a real mailbox address.');
+            }
+
+            if (trim((string) config('mail.mailers.smtp.password')) === '') {
+                throw new RuntimeException('Production SMTP password must be configured.');
             }
         }
     }
