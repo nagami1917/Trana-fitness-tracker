@@ -379,6 +379,11 @@ class EmailPasswordAuthTest extends TestCase
         // assertRealProductionMailer() returns early outside production, so this
         // asserts the guard on its production path. app()->instance('env', ...)
         // is how the rest of this suite does that (see the cookie tests).
+        //
+        // Notifications are faked so the last case, whose configuration is
+        // valid, stops at the guard's idea of a working transport instead of
+        // opening a real SMTP connection to smtp.gmail.com from CI.
+        Notification::fake();
         config(['services.trana.allow_password_signup' => true]);
         $previousEnvironment = app()->environment();
         $previousMail = config('mail');
