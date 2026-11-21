@@ -16,11 +16,20 @@ return [
         // Signing up from the marketing/login page always requires the emailed
         // code. Google sign-in stays open, so this only closes the password
         // registration form (useful while a deployment has no working mailer).
+        //
+        // Closed by default. The failure path when this is open and the mailer
+        // is not working is unrecoverable for the visitor: registration creates
+        // the user row, the code fails to send, and the API answers 503 with
+        // `email_verified_at` still null. That account can never sign in, and
+        // the address is now taken, so the same person cannot retry. A closed
+        // form answers 403 with a usable message instead. Set
+        // TRANA_ALLOW_PASSWORD_SIGNUP=true only on a deployment whose mail
+        // transport is verified to deliver.
         'allow_password_signup' => filter_var(
-            env('TRANA_ALLOW_PASSWORD_SIGNUP', true),
+            env('TRANA_ALLOW_PASSWORD_SIGNUP', false),
             FILTER_VALIDATE_BOOL,
             FILTER_NULL_ON_FAILURE,
-        ) ?? true,
+        ) ?? false,
         // Sanctum's opaque personal-access token lives only in this HttpOnly
         // cookie. It is never serialized into a browser-readable response.
         'auth_cookie' => env('TRANA_AUTH_COOKIE', 'trana_session'),

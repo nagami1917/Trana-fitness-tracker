@@ -208,6 +208,13 @@ def main():
             "MAIL_PORT": str(smtp_server.server_address[1]),
             "MAIL_FROM_ADDRESS": "test@example.com",
             "MAIL_FROM_NAME": "TRANA HTTP test",
+            # Password signup ships closed, because a deployment whose mailer
+            # cannot deliver leaves an account that can never be verified and an
+            # address that can never be reused. This run has a working transport
+            # - the loopback SMTP capture above - so it opts back in. Without
+            # this the register probe below answers 403 before validation and
+            # never reaches the 422 it expects.
+            "TRANA_ALLOW_PASSWORD_SIGNUP": "true",
             "BCRYPT_ROUNDS": "4",
             "SANCTUM_STATEFUL_DOMAINS": "localhost:5173,127.0.0.1:5173",
         })

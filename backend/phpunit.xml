@@ -27,6 +27,15 @@
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="LOG_CHANNEL" value="null"/>
+        <!-- Password signup ships closed (config/services.php defaults it to
+             false), because a deployment whose mailer cannot deliver leaves an
+             account that can never be verified and an address that can never be
+             reused. The suites that exercise the registration flow do have a
+             working transport - the array mailer here, a loopback SMTP capture
+             in scripts/test_stateless_api_http.py - so they opt back in
+             explicitly. Removing this line would make every registration test
+             assert 403 instead of reaching validation. -->
+        <env name="TRANA_ALLOW_PASSWORD_SIGNUP" value="true"/>
         <!-- The FastAPI service is faked at the HTTP boundary; see tests/Feature -->
         <env name="ML_API_URL" value="https://ml.test"/>
         <env name="ML_TIMEOUT" value="5"/>
